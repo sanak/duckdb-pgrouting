@@ -25,3 +25,25 @@ SELECT * FROM dijkstra(
 4	4	6	10	16	16	1	3
 5	5	6	10	15	3	1	4
 6	6	6	10	10	-1	0	5
+
+# A long chain, so that both the materialized input and the result cross STANDARD_VECTOR_SIZE.
+# path_seq is a counter carried across output chunks, so it must keep agreeing with seq past the
+# first chunk. cost is DECIMAL here: the whole list child vector is cast to DOUBLE in one go, and
+# that cast has to cover every chunk of the input as well.
+statement ok
+CREATE TABLE chain AS
+SELECT i AS id, i AS source, i + 1 AS target,
+       1.0::DECIMAL(10,2) AS cost, 1.0::DECIMAL(10,2) AS reverse_cost
+FROM range(1, 6001) t(i);
+
+query IIIR
+SELECT count(*), max(seq), max(path_seq), max(agg_cost)
+FROM dijkstra('SELECT id, source, target, cost, reverse_cost FROM chain', 1, 6001);
+----
+6001	6001	6001	6000
+
+query I
+SELECT count(*) FROM dijkstra('SELECT id, source, target, cost, reverse_cost FROM chain', 1, 6001)
+WHERE seq <> path_seq;
+----
+0
