@@ -26,6 +26,10 @@ namespace detail {
 // actually fetched by anything this extension currently calls, so the empty default is dead code,
 // not a latent bug; a new family that starts calling get_data<SomeType> for a genuinely new input
 // kind adds a specialization here alongside the new KIND_* constant and DuckDB-side registration.
+// This is a hand-written trait rather than typeid(Data_type).name(): duckdb/CMakeLists.txt has a
+// DISABLE_RTTI option (-fno-rtti) that is off in this build but is documented as something "a
+// dependency that cannot build this way can re-enable ... for its own targets", i.e. a real
+// configuration this project could end up building under, and typeid() would stop compiling then.
 template <typename Data_type> inline std::string InputKind() {
 	return std::string();
 }

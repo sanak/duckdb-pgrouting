@@ -65,24 +65,52 @@ SELECT * FROM dijkstra(
 10	4	6	17	16	15	1	3
 11	5	6	17	17	-1	0	4
 
-# many to one (upstream q4). Note the driver reverses the graph for this signature
-# (normal = false): the search is actually rooted at 17 in the reversed graph, and the resulting
-# paths are then reversed back so they read as if built from 6 or 1 towards 17.
+# ------------------------------------------------------------------------------------------------
+# Boost-version-dependent ties, affecting several blocks below
 #
-# From 17, node 12 is reached at distance 2 in the reversed graph, and it has two equal-cost
-# predecessors there: node 11 (reversed edge 11) and node 8 (reversed edge 12), both at cost 2.
-# Upstream's docqueries/dijkstra/dijkstra.result (generated on a different Boost release) resolves
-# this predecessor tie towards node 11; the Boost 1.89 dijkstra_shortest_paths this extension
-# vendors via vcpkg resolves it towards node 8 instead. Because normal = false folds both
-# departures (starts 6 and 1) into the single combinations entry {17: {1, 6}}
-# (cpp_common/combinations.cpp), and pgrouting::algorithms::dijkstra allocates one shared
-# predecessors/distances array per departure (dijkstra.hpp's dijkstra_1_to_many), the tie at node
-# 12 is resolved once for the whole search tree: both q4 paths necessarily move together, which is
-# why every row from node 12 onward differs in both of them. Calling _pgr_shortestpath_exec
-# directly with the same request, bypassing bind_replace entirely, reproduces the same route, so
-# the tie-break happens inside pgRouting's own unmodified dijkstra_shortest_paths call, not in this
-# extension's argument wiring. The rows below are this extension's actually observed (and
-# hand-verified valid, equal-cost) output rather than the upstream transcription.
+# The queries below that carry a "tie-insensitive companion" each compute at least one path
+# through a small equal-cost region of this graph. Every divergence from upstream's transcribed
+# docqueries/dijkstra/dijkstra.result output in this file has the same shape: identical
+# start_vid/end_vid, identical row count, identical total cost (agg_cost) - only a different
+# equal-cost intermediate route. This extension links boost-graph:arm64-osx@1.89.0 (vcpkg);
+# upstream's fixture was almost certainly generated against a different Boost release, and Boost's
+# dijkstra_shortest_paths has changed its default priority-queue implementation across releases,
+# which is documented to change only tie-breaking among equal-weight edges. Each case was verified
+# by calling _pgr_shortestpath_exec directly, bypassing bind_replace entirely, which reproduces the
+# same route: the tie-break happens inside pgRouting's own unmodified dijkstra_shortest_paths call,
+# not in this extension's argument wiring.
+#
+#   q4 (both paths; the search is rooted at 17 in the reversed graph, normal = false): node 12,
+#     distance 2 from 17, has two equal-cost predecessors; upstream picks node 11 (edge 11), this
+#     build picks node 8 (edge 12). Because normal = false folds both departures (6 and 1) into
+#     the single combinations entry {17: {1, 6}} (cpp_common/combinations.cpp), and
+#     pgrouting::algorithms::dijkstra allocates one shared predecessors/distances array per
+#     departure (dijkstra.hpp's dijkstra_1_to_many), this one tie is resolved once for the whole
+#     search tree, so both q4 paths necessarily move together. Total cost 5 (path to 1) / 4 (path
+#     to 6) either way.
+#   q5 (the 6-to-17 path only; the 1-to-17 path is a separate per-departure run, sharing no
+#     predecessors/distances array with the 6-to-17 one, and is unaffected): node 12, distance 3
+#     from 6, has the same two equal-cost predecessors as q4; upstream picks node 11, this build
+#     picks node 8. Total cost 4 either way.
+#   q96 (the (12, 7) pair only): node 7, distance 2 from departure 12, has two equal-cost
+#     predecessors; upstream picks node 8 (edge 12, then edge 10), this build picks node 11 (edge
+#     11, then edge 8). Total cost 2 either way. The very same (12, 7) pair matches upstream when
+#     computed alone, with 7 as departure 12's only destination (q95, above), and only flips once
+#     departure 12 also has destination 10 in the same combinations entry (q96) - direct evidence
+#     that pgRouting decides the route once per departure's shared search tree, not once per
+#     (start, end) pair. That is upstream's own algorithm structure, not this extension's wiring.
+#   q6 / q7 (the (10, 7) pair): node 7, distance 2 from departure 10, has two equal-cost
+#     predecessors; upstream picks node 11 (edge 8), this build picks node 6 (edge 4). Total cost 2
+#     either way.
+#   q6 / q7 (the (15, 7) pair): node 11, distance 2 from departure 15, has two equal-cost
+#     predecessors; upstream picks node 16 (edge 9), this build picks node 10 (edge 5); both then
+#     continue identically via edge 8 to node 7. Total cost 3 either way.
+# ------------------------------------------------------------------------------------------------
+
+# many to one (upstream q4). Note the driver reverses the graph for this signature (normal =
+# false): the search is rooted at 17 in the reversed graph, and the resulting paths are reversed
+# back so they read as if built from 6 or 1 towards 17. The rows below diverge from upstream at
+# node 12 onward in both paths; see the tie-break summary above for why.
 query IIIIIIRR
 SELECT * FROM dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', ARRAY[6, 1], 17);
@@ -113,16 +141,10 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 1	17	6	5
 6	17	5	4
 
-# many to many, undirected (upstream q5)
-#
-# The 6-to-17 path (rows 14-18) hits an equal-cost predecessor tie structurally identical to the
-# many-to-one block above, just reached by an undirected search rooted at 6 instead of a reversed
-# directed one rooted at 17: node 7 has a unique predecessor from 6 (node 6 itself, via edge 4),
-# but node 12, at distance 3 from 6, has two equal-cost predecessors, node 11 (edge 11) and node 8
-# (edge 12), both at cost 3. The 1-to-17 path (rows 6-11) never reaches node 12 at all (its route
-# goes through node 16 instead) and matches upstream exactly; it is a separate per-source run
-# (pgrouting::algorithms::dijkstra allocates one predecessors/distances array per departure), so it
-# cannot be affected by a tie in the 6-rooted run regardless of which way that tie resolves.
+# many to many, undirected (upstream q5). The 6-to-17 path (rows 14-18) diverges from upstream at
+# node 12 onward, the same tie described in the summary above, reached this time by an undirected
+# search rooted at 6. The 1-to-17 path (rows 6-11) never reaches node 12 (its route goes through
+# node 16 instead) and matches upstream exactly.
 query IIIIIIRR
 SELECT * FROM dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
@@ -233,19 +255,10 @@ SELECT * FROM dijkstra(
 4	2	12	7	8	10	1	1
 5	3	12	7	7	-1	0	2
 
-# many to many, positional directed (upstream q96).
-#
-# The (12, 7) combination hits another instance of the same class of equal-cost predecessor tie as
-# the many-to-one and many-to-many-undirected blocks above: from 12, node 7 is reached at distance
-# 2 via two equal-cost routes, through node 11 (edge 11, then edge 8) or through node 8 (edge 12,
-# then edge 10). Notably, the very same (12, 7) pair resolves towards the node-8 route (matching
-# upstream) in q95's block above, where 7 is the only destination for departure 12; here, where
-# departure 12 also has 10 as a destination in the same combinations entry (both pgrouting's own
-# code, cpp_common/combinations.cpp and dijkstra.hpp's dijkstra_1_to_many, so the two destinations
-# share one predecessors/distances array), the extra destination changes the traversal enough to
-# flip this particular tie towards node 11 instead. This is this extension's actually observed (and
-# hand-verified valid, equal-cost) output for that one pair, not the upstream transcription; every
-# other row here, including the rest of this same query, matches upstream exactly.
+# many to many, positional directed (upstream q96). The (12, 7) pair diverges from upstream at
+# node 7 - see the tie-break summary above, including why this same pair matches upstream exactly
+# when computed alone in q95. Every other row here, including the rest of this same query, matches
+# upstream exactly.
 query IIIIIIRR
 SELECT * FROM dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', ARRAY[6, 12], ARRAY[10, 7], false);
@@ -272,6 +285,116 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 6	10	2	1
 12	7	3	2
 12	10	3	2
+
+# many to many (upstream q6). The start array is deliberately duplicated and unsorted
+# (ARRAY[7,10,15,10,10,15]) to exercise get_pgset's uniquing; q7 below passes the clean,
+# deduplicated array directly, and the two must agree cell for cell regardless of how any tie
+# resolves (see the equivalence check after q7). The (10, 7) and (15, 7) pairs diverge from
+# upstream - see the tie-break summary above; the other four pairs match upstream exactly.
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15]);
+----
+1	1	7	10	7	8	1	0
+2	2	7	10	11	9	1	1
+3	3	7	10	16	16	1	2
+4	4	7	10	15	3	1	3
+5	5	7	10	10	-1	0	4
+6	1	7	15	7	8	1	0
+7	2	7	15	11	9	1	1
+8	3	7	15	16	16	1	2
+9	4	7	15	15	-1	0	3
+10	1	10	7	10	2	1	0
+11	2	10	7	6	4	1	1
+12	3	10	7	7	-1	0	2
+13	1	10	15	10	5	1	0
+14	2	10	15	11	9	1	1
+15	3	10	15	16	16	1	2
+16	4	10	15	15	-1	0	3
+17	1	15	7	15	3	1	0
+18	2	15	7	10	5	1	1
+19	3	15	7	11	8	1	2
+20	4	15	7	7	-1	0	3
+21	1	15	10	15	3	1	0
+22	2	15	10	10	-1	0	1
+
+# Tie-insensitive companion for q6, covering all six pairs: this is the "genuinely
+# upstream-verified many-to-many expectation" that the exact-row block above can no longer supply
+# on its own for the (10, 7) and (15, 7) pairs, but still can for every pair here.
+query IIIR
+SELECT start_vid, end_vid, count(*), max(agg_cost)
+FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15])
+GROUP BY start_vid, end_vid ORDER BY 1, 2;
+----
+7	10	5	4
+7	15	4	3
+10	7	3	2
+10	15	4	3
+15	7	4	3
+15	10	2	1
+
+# many to many (upstream q7): the same six pairs as q6, from a clean, deduplicated start array.
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[7, 10, 15], ARRAY[7, 10, 15]);
+----
+1	1	7	10	7	8	1	0
+2	2	7	10	11	9	1	1
+3	3	7	10	16	16	1	2
+4	4	7	10	15	3	1	3
+5	5	7	10	10	-1	0	4
+6	1	7	15	7	8	1	0
+7	2	7	15	11	9	1	1
+8	3	7	15	16	16	1	2
+9	4	7	15	15	-1	0	3
+10	1	10	7	10	2	1	0
+11	2	10	7	6	4	1	1
+12	3	10	7	7	-1	0	2
+13	1	10	15	10	5	1	0
+14	2	10	15	11	9	1	1
+15	3	10	15	16	16	1	2
+16	4	10	15	15	-1	0	3
+17	1	15	7	15	3	1	0
+18	2	15	7	10	5	1	1
+19	3	15	7	11	8	1	2
+20	4	15	7	7	-1	0	3
+21	1	15	10	15	3	1	0
+22	2	15	10	10	-1	0	1
+
+# Tie-insensitive companion for q7, same rationale as q6's.
+query IIIR
+SELECT start_vid, end_vid, count(*), max(agg_cost)
+FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[7, 10, 15], ARRAY[7, 10, 15])
+GROUP BY start_vid, end_vid ORDER BY 1, 2;
+----
+7	10	5	4
+7	15	4	3
+10	7	3	2
+10	15	4	3
+15	7	4	3
+15	10	2	1
+
+# q6 and q7 must agree cell for cell regardless of how any tie resolves: this is the actual check
+# that get_pgset's uniquing of the duplicated, unsorted start array is correct, independent of
+# either of the exact-row blocks above happening to carry identical literals.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM dijkstra(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15])
+  EXCEPT ALL
+  SELECT * FROM dijkstra(
+    'SELECT id, source, target, cost, reverse_cost FROM edges',
+    ARRAY[7, 10, 15], ARRAY[7, 10, 15])
+);
+----
+0
 
 # The combinations fetcher only reads `source` and `target`, so pgRouting allows edges_sql and
 # combinations_sql to be textually identical (every edge's own endpoints become one combination);
