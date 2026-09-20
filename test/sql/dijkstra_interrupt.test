@@ -1,0 +1,47 @@
+# name: test/sql/dijkstra_interrupt.test
+# description: dijkstra honours DuckDB's query deadline
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require routing
+
+# A directed chain of 400 edges (1->2->...->401): a search from a low-numbered start vertex to
+# vertex 400 has to walk most of the chain, while a search from a start vertex near 400 finishes
+# almost immediately. dijkstra(sql, starts, ends) with both `starts` and `ends` given as lists
+# takes the many-to-many driver path, which calls CHECK_FOR_INTERRUPTS() once per start vertex
+# (third_party/pgrouting/include/dijkstra/dijkstra.hpp, via the combinations map in
+# get_combinations()) - one opportunity to observe the deadline per start vertex, in ascending
+# start-vertex order.
+#
+# A single scalar END_VID (dijkstra(sql, starts, end_vid), the other many-to-one signature) is
+# NOT usable for this test: pgRouting implements that overload by reversing the graph and
+# swapping starts/ends, which collapses all requested start vertices into a single combinations-map
+# entry (one departure, many destinations) and therefore calls CHECK_FOR_INTERRUPTS() exactly once
+# for the whole query, regardless of how many start vertices are requested - measured directly
+# (temporary call-count instrumentation) at 4000 start vertices, a single check right at the very
+# start of the search means the ~4s search below can never be aborted early this way.
+#
+# DuckDB's InterruptCheck() re-reads the query deadline only on every 256th call to it, and that
+# call counter is per-thread and never reset between queries, so this test uses 400 start
+# vertices - comfortably more than 256 - so the deadline is certain to be observed regardless of
+# how many InterruptCheck() calls other statements in this session already made on this thread.
+# Measured directly: 20/20 runs interrupted after 242-250 CHECK_FOR_INTERRUPTS calls (always
+# < 256, as expected), in 0.69-0.73s wall time per run.
+statement ok
+CREATE TABLE big_edges AS
+SELECT i AS id, i AS source, i + 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost
+FROM range(1, 401) t(i);
+
+statement ok
+SET max_execution_time = 100;
+
+statement error
+SELECT count(*) FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM big_edges',
+  range(1, 401)::BIGINT[], [400]::BIGINT[]);
+----
+INTERRUPT Error: Interrupted!
+
+statement ok
+SET max_execution_time = 0;
