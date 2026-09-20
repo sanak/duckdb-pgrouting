@@ -22,9 +22,6 @@ jobs:
       duckdb_version: main
       ci_tools_version: main
       extension_name: routing
-      # TEMPORARY: forces every platform to report independently on this first full-matrix run,
-      # instead of hiding eight platforms behind the linux job. Remove this line once CI is green.
-      reduced_ci_mode: disabled
       # Pinned to duckdb-spatial's vcpkg commit on purpose, not extension-ci-tools' newer default:
       # this is the commit every local build here was validated against. Do not "fix" it.
       vcpkg_commit: 84bab45d415d22042bd0b9081aea57f362da3f35
