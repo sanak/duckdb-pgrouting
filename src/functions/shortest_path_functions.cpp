@@ -81,13 +81,21 @@ unique_ptr<SubqueryExpression> ScalarSubquery(unique_ptr<SelectNode> node) {
 	return sub;
 }
 
-// (SELECT list(t) FROM (<sql>) t)
+// (SELECT list(_pgr_row) FROM (<sql>) _pgr_row)
+//
+// The subquery alias must not collide with a column name the user's SQL can produce: DuckDB only
+// falls back to struct_pack (giving `list(...)` a LIST(STRUCT) to work with) when the alias does
+// not itself resolve as a column reference. A short, generic alias like `t` collides with any user
+// query that happens to select a column named `t` (e.g. `SELECT id AS t, ...`), silently turning
+// the whole call into a LIST(BIGINT) input instead of failing loudly - the "_pgr_" prefix makes an
+// accidental collision with a real column name unlikely.
 unique_ptr<ParsedExpression> ListOfRows(ClientContext &context, const string &sql) {
+	static constexpr const char *ROW_ALIAS = "_pgr_row";
 	auto node = make_uniq<SelectNode>();
 	vector<unique_ptr<ParsedExpression>> args;
-	args.push_back(make_uniq<ColumnRefExpression>(Identifier("t")));
+	args.push_back(make_uniq<ColumnRefExpression>(Identifier(ROW_ALIAS)));
 	node->select_list.push_back(make_uniq<FunctionExpression>(Identifier("list"), std::move(args)));
-	node->from_table = make_uniq<SubqueryRef>(ParseSingleSelect(context, sql), Identifier("t"));
+	node->from_table = make_uniq<SubqueryRef>(ParseSingleSelect(context, sql), Identifier(ROW_ALIAS));
 	return ScalarSubquery(std::move(node));
 }
 
