@@ -184,8 +184,13 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	string edges_sql;
 	string combinations_sql;
 
-	// One row carrying every input the driver needs, as a column each. Columns this overload does
-	// not use stay typed NULL constants, so the exec function always sees the same four columns.
+	// One row carrying every input the driver needs, as a column each, so the exec function always
+	// sees the same four columns. A column this overload does not use gets either an untyped NULL
+	// constant ('edges'/'combinations') or an empty but LIST(BIGINT)-typed id list
+	// ('starts'/'ends' default to EmptyIdList() below, never a bare NULL). That typing is
+	// load-bearing: _pgr_shortestpath_exec's own bind rejects 'starts'/'ends' unless they are
+	// SQLNULL or LIST(BIGINT), so emitting an untyped NULL there instead would break every
+	// NULL-input call.
 	auto row = make_uniq<SelectNode>();
 	// A SELECT without FROM still needs a table reference.
 	row->from_table = make_uniq<EmptyTableRef>();

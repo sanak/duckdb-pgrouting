@@ -108,7 +108,9 @@ bool Unpack(ClientContext &context, Vector &list_column, idx_t row, duckdb_routi
 	return true;
 }
 
-vector<int64_t> ReadIdList(DataChunk &input, idx_t column, bool &present) {
+// `name` is the column ('starts'/'ends') this list came from, needed only to name it in the
+// exception below.
+vector<int64_t> ReadIdList(DataChunk &input, idx_t column, const char *name, bool &present) {
 	vector<int64_t> ids;
 	present = false;
 	if (column == DConstants::INVALID_INDEX) {
@@ -120,6 +122,16 @@ vector<int64_t> ReadIdList(DataChunk &input, idx_t column, bool &present) {
 	}
 	present = true;
 	for (auto &child : ListValue::GetChildren(value)) {
+		if (child.IsNull()) {
+			// A NULL element inside an otherwise well-typed LIST(BIGINT) is reachable from the
+			// public API too (dijkstra(sql, [1, NULL]::BIGINT[], 3)), not only from a direct call.
+			// BigIntValue::Get on a NULL Value does not assert -- the Value still carries the
+			// BIGINT physical type, only its payload is unset -- so it would silently read
+			// whatever bytes happen to sit in that union and use them as a vertex id. PostgreSQL
+			// and pgRouting reject a NULL array element outright; match that instead of returning
+			// an answer that depends on uninitialized memory.
+			throw InvalidInputException("_pgr_shortestpath_exec: column '%s' contains a NULL id", name);
+		}
 		ids.push_back(BigIntValue::Get(child));
 	}
 	return ids;
@@ -152,17 +164,46 @@ idx_t FindInputColumn(TableFunctionBindInput &input, const char *name) {
 }
 
 // `_pgr_shortestpath_exec` is catalogued and callable by any user, not only through the public
-// overloads' bind_replace (which always produces LIST(BIGINT) for 'starts'/'ends'). ReadIdList
-// reaches ListValue::GetChildren/BigIntValue::Get, which raise InternalException on a type
-// mismatch -- a class that invalidates the whole database instance. Checking the column type once,
-// here at bind time, turns a wrong-typed argument into an ordinary user-input error instead.
+// overloads' bind_replace. Unpack and ReadIdList reach ListVector::GetChildMutable /
+// StructVector::GetEntries / ListValue::GetChildren / BigIntValue::Get, all of which raise
+// InternalException (via D_ASSERT) on a type mismatch -- a class that invalidates the whole
+// database instance. Checking each column's shape once, here at bind time, turns a wrong-typed
+// argument into an ordinary user-input error instead, before any cell is ever read.
+//
+// An SQLNULL-typed column is exempt from both checks below: every value in it is NULL by
+// construction, and both Unpack and ReadIdList already return early on a NULL cell without
+// touching a LIST/STRUCT accessor. This matters because bind_replace itself emits an untyped NULL
+// constant (SQLNULL) for 'edges'/'combinations' whenever the calling overload does not use them
+// (see the row-building comment in shortest_path_functions.cpp) -- rejecting SQLNULL here would
+// break that legitimate call shape, not just a hypothetical direct one.
+bool IsAlwaysNull(const LogicalType &type) {
+	return type.id() == LogicalTypeId::SQLNULL;
+}
+
 void CheckIdListColumn(TableFunctionBindInput &input, idx_t column, const char *name) {
 	if (column == DConstants::INVALID_INDEX) {
 		return;
 	}
 	const auto &type = input.input_table_types[column];
+	if (IsAlwaysNull(type)) {
+		return;
+	}
 	if (ClassOf(type) != duckdb_routing::ColumnClass::INTEGER_ARRAY) {
 		throw InvalidInputException("_pgr_shortestpath_exec: column '%s' must be LIST(BIGINT), got %s", name,
+		                            type.ToString());
+	}
+}
+
+void CheckRowListColumn(TableFunctionBindInput &input, idx_t column, const char *name) {
+	if (column == DConstants::INVALID_INDEX) {
+		return;
+	}
+	const auto &type = input.input_table_types[column];
+	if (IsAlwaysNull(type)) {
+		return;
+	}
+	if (type.id() != LogicalTypeId::LIST || ListType::GetChildType(type).id() != LogicalTypeId::STRUCT) {
+		throw InvalidInputException("_pgr_shortestpath_exec: column '%s' must be LIST(STRUCT), got %s", name,
 		                            type.ToString());
 	}
 }
@@ -196,6 +237,8 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	if (data->edges_column == DConstants::INVALID_INDEX) {
 		throw InvalidInputException("_pgr_shortestpath_exec: the input table has no 'edges' column");
 	}
+	CheckRowListColumn(input, data->edges_column, "edges");
+	CheckRowListColumn(input, data->combinations_column, "combinations");
 	CheckIdListColumn(input, data->starts_column, "starts");
 	CheckIdListColumn(input, data->ends_column, "ends");
 
@@ -233,8 +276,8 @@ void RunOnce(ClientContext &context, const ShortestPathExecBindData &bind, Short
 			                        std::move(combinations));
 		}
 	}
-	request.starts = ReadIdList(input, bind.starts_column, request.has_starts);
-	request.ends = ReadIdList(input, bind.ends_column, request.has_ends);
+	request.starts = ReadIdList(input, bind.starts_column, "starts", request.has_starts);
+	request.ends = ReadIdList(input, bind.ends_column, "ends", request.has_ends);
 
 	state.result = duckdb_routing::RunShortestPath(context, state.registry, request);
 }

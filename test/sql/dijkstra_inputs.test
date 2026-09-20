@@ -38,16 +38,18 @@ SELECT count(*) FROM dijkstra(
 ----
 3
 
-# The input must be exactly one SELECT statement.
+# The input must be exactly one SELECT statement. The "Invalid Input Error: " prefix pins the
+# exception class as InvalidInputException, not ParserException: a bare-text block would pass for
+# either, and the whole point of this check is that the caller sees one consistent class.
 statement error
 SELECT * FROM dijkstra('DELETE FROM edges', 1, 3);
 ----
-Expected a single SELECT statement
+Invalid Input Error: Expected a single SELECT statement
 
 statement error
 SELECT * FROM dijkstra('SELECT 1; SELECT 2', 1, 3);
 ----
-Expected a single SELECT statement
+Invalid Input Error: Expected a single SELECT statement
 
 # Every integer class pgRouting accepts for ANY-INTEGER works.
 query I
@@ -69,7 +71,7 @@ statement error
 SELECT * FROM dijkstra(
   'SELECT id, source::UBIGINT AS source, target, cost FROM edges', 1, 3);
 ----
-Unexpected Column 'source' type. Expected ANY-INTEGER
+Invalid Input Error: Unexpected Column 'source' type. Expected ANY-INTEGER
 
 # Inputs are evaluated in the caller's transaction: TEMP tables are visible.
 statement ok
@@ -117,10 +119,43 @@ EXECUTE q(2);
 # condition any caller can trigger from SQL.
 statement error
 SELECT * FROM _pgr_shortestpath_exec(
-  (SELECT NULL::VARCHAR AS edges, NULL::VARCHAR AS combinations, 'bad'::VARCHAR AS starts,
+  (SELECT NULL AS edges, NULL AS combinations, 'bad'::VARCHAR AS starts,
           [3]::BIGINT[] AS ends),
   edges_sql := '', combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := false, which := 0, driving_side := ' ', details := true,
   null_input := false, result_kind := 'path');
 ----
 Invalid Input Error: _pgr_shortestpath_exec: column 'starts' must be LIST(BIGINT), got VARCHAR
+
+# Same class of check, same reason, for 'edges'/'combinations': a non-LIST cell reaches
+# ListVector::GetChildMutable, and a LIST-but-not-STRUCT cell clears that check and dies one line
+# later in StructVector::GetEntries. Both are D_ASSERT failures in this build, i.e. InternalException.
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT 'x'::VARCHAR AS edges, NULL AS combinations, []::BIGINT[] AS starts,
+          []::BIGINT[] AS ends),
+  edges_sql := '', combinations_sql := '', directed := true, only_cost := false, normal := true,
+  n_goals := 0, global := false, which := 0, driving_side := ' ', details := true,
+  null_input := false, result_kind := 'path');
+----
+Invalid Input Error: _pgr_shortestpath_exec: column 'edges' must be LIST(STRUCT), got VARCHAR
+
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT [1, 2]::BIGINT[] AS edges, NULL AS combinations, []::BIGINT[] AS starts,
+          []::BIGINT[] AS ends),
+  edges_sql := '', combinations_sql := '', directed := true, only_cost := false, normal := true,
+  n_goals := 0, global := false, which := 0, driving_side := ' ', details := true,
+  null_input := false, result_kind := 'path');
+----
+Invalid Input Error: _pgr_shortestpath_exec: column 'edges' must be LIST(STRUCT), got BIGINT[]
+
+# A NULL element inside an otherwise well-typed id list is reachable from the public API, not only
+# from a direct call: BigIntValue::Get does not assert on a NULL Value (it still carries the BIGINT
+# physical type, only its payload is unset), so without this check it would silently use whatever
+# bytes happen to be there as a vertex id instead of raising.
+statement error
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges', [1, NULL]::BIGINT[], 3);
+----
+Invalid Input Error: _pgr_shortestpath_exec: column 'starts' contains a NULL id
