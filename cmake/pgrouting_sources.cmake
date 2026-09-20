@@ -32,3 +32,11 @@ set(PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/cpp_common/messages.cpp
     ${PGROUTING_DIR}/src/cpp_common/rule.cpp
     ${PGROUTING_DIR}/src/withPoints/withPoints.cpp)
+
+# Sources that reach PostgreSQL only through symbols this extension replaces
+# (src/pg_compat provides the stub headers and the replaced definitions).
+list(APPEND PGROUTING_SOURCES
+    ${PGROUTING_DIR}/src/cpp_common/combinations.cpp
+    ${PGROUTING_DIR}/src/cpp_common/pgdata_fetchers.cpp
+    ${PGROUTING_DIR}/src/cpp_common/pgdata_getters.cpp
+    ${PGROUTING_DIR}/src/dijkstra/shortestPath_driver.cpp)

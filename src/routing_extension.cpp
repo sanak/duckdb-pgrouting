@@ -4,12 +4,14 @@
 #include "routing_extension.hpp"
 
 #include "duckdb.hpp"
+#include "routing/register.hpp"
 
 namespace duckdb {
 
 static void LoadInternal(ExtensionLoader &loader) {
-	// Function families are registered here as they are ported from pgRouting.
-	(void)loader;
+	RegisterMetaFunctions(loader);
+	RegisterShortestPathExec(loader);
+	RegisterShortestPathFunctions(loader);
 }
 
 void RoutingExtension::Load(ExtensionLoader &loader) {

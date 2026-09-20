@@ -16,9 +16,21 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pgrouting_sources.cmake)
 find_package(Boost CONFIG REQUIRED)
 
 include_directories(src/include)
+# Must precede pgRouting's include/: these headers shadow the PostgreSQL-dependent upstream ones.
+include_directories(src/pg_compat/include)
 include_directories(${PGROUTING_DIR}/include)
 
-set(EXTENSION_SOURCES src/routing_extension.cpp ${PGROUTING_SOURCES})
+set(ROUTING_SOURCES
+    src/routing_extension.cpp
+    src/exec/exec_common.cpp
+    src/exec/input_registry.cpp
+    src/exec/shortest_path_exec.cpp
+    src/functions/meta_functions.cpp
+    src/functions/shortest_path_functions.cpp
+    src/pg_compat/src/get_check_data.cpp
+    src/pg_compat/src/pg_types.cpp)
+
+set(EXTENSION_SOURCES ${ROUTING_SOURCES} ${PGROUTING_SOURCES})
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})

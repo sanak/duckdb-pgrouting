@@ -1,0 +1,18 @@
+# name: test/sql/meta.test
+# description: Meta functions of the routing extension
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require routing
+
+query T
+SELECT DuckDB_pgRouting_Version();
+----
+4.0.2
+
+query T
+SELECT list_contains(list(function_name), 'dijkstra')
+FROM duckdb_functions() WHERE function_name = 'dijkstra';
+----
+true
