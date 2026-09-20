@@ -35,22 +35,29 @@ duckdb::idx_t PhysicalRow(const MaterializedInput &input, std::size_t row, int c
 	return format.sel->get_index(input.offset + duckdb::NumericCast<duckdb::idx_t>(row));
 }
 
-} // namespace
-
-void InputRegistry::Register(const duckdb::string &sql, MaterializedInput input) {
-	if (inputs.find(sql) != inputs.end()) {
-		// The registry is keyed by the exact SQL string handed to the driver, and the edges and
-		// combinations queries of a single call could be textually identical (or, in a future
-		// family, any two of the queries this registry ever holds at once). Silently overwriting
-		// the first registration would make the driver read the wrong rows for one of them.
-		throw duckdb::InvalidInputException(
-		    "routing: two inputs of the same call are registered under the same query text: %s", sql);
-	}
-	inputs[sql] = std::move(input);
+// The kind tag is not itself SQL text, so a 1-byte separator that cannot appear in `kind` (a
+// literal like "edges" or "combinations") is enough to keep the two halves from colliding.
+duckdb::string CompositeKey(const duckdb::string &sql, const duckdb::string &kind) {
+	return kind + '\x1f' + sql;
 }
 
-const MaterializedInput *InputRegistry::Find(const duckdb::string &sql) const {
-	auto it = inputs.find(sql);
+} // namespace
+
+void InputRegistry::Register(const duckdb::string &sql, const duckdb::string &kind, MaterializedInput input) {
+	auto key = CompositeKey(sql, kind);
+	if (inputs.find(key) != inputs.end()) {
+		// Two different SQL strings can legitimately map to the same kind only if this exact
+		// (sql, kind) pair is registered twice, which is a bug in this extension's wiring, not a
+		// query the caller wrote (edges_sql == combinations_sql, the actually-legal case, differs
+		// in kind and therefore in key).
+		throw duckdb::InvalidInputException(
+		    "routing: input of kind '%s' is registered twice for the same query: %s", kind, sql);
+	}
+	inputs[key] = std::move(input);
+}
+
+const MaterializedInput *InputRegistry::Find(const duckdb::string &sql, const duckdb::string &kind) const {
+	auto it = inputs.find(CompositeKey(sql, kind));
 	return it == inputs.end() ? nullptr : &it->second;
 }
 
@@ -66,14 +73,14 @@ ScopedRoutingContext::~ScopedRoutingContext() {
 	state.interrupted = false;
 }
 
-const InputHandle &LookupInput(const std::string &sql) {
+const InputHandle &LookupInput(const std::string &sql, const std::string &kind) {
 	if (!state.registry) {
 		throw std::string("Internal error: no routing context is active");
 	}
-	auto *found = state.registry->Find(sql);
+	auto *found = state.registry->Find(sql, kind);
 	if (!found) {
 		// The driver asked for an input the DuckDB layer never registered.
-		throw std::string("Internal error: no input registered for query: ") + sql;
+		throw std::string("Internal error: no '") + kind + "' input registered for query: " + sql;
 	}
 	return *found;
 }

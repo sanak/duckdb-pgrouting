@@ -19,10 +19,18 @@ struct InputHandle;
 // The class of a column, as pgRouting's expectType sees it.
 enum class ColumnClass : uint8_t { INTEGER, NUMERIC, TEXT, CHAR1, INTEGER_ARRAY, UNSUPPORTED };
 
-// Looks up the input registered for this exact SQL string.
+// Discriminates two registrations that share the same SQL text but feed different pgRouting row
+// shapes. pgRouting itself allows edges_sql and combinations_sql to be textually identical (the
+// combinations fetcher only reads `source`/`target` and ignores the rest), so the SQL string alone
+// is not a safe registry key. Every input this extension ever registers has exactly one kind; a
+// future family that registers a new kind of input adds a new constant here.
+constexpr const char *KIND_EDGES = "edges";
+constexpr const char *KIND_COMBINATIONS = "combinations";
+
+// Looks up the input registered for this exact (sql, kind) pair.
 // Throws std::string when the key is unknown: that means the driver asked for an input the
 // DuckDB layer did not provide, which is a bug in this extension.
-const InputHandle &LookupInput(const std::string &sql);
+const InputHandle &LookupInput(const std::string &sql, const std::string &kind);
 
 std::size_t InputRowCount(const InputHandle &input);
 

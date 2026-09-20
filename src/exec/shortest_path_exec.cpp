@@ -206,12 +206,13 @@ void RunOnce(ClientContext &context, const ShortestPathExecBindData &bind, Short
 	state.registry = duckdb_routing::InputRegistry();
 	duckdb_routing::MaterializedInput edges;
 	if (Unpack(context, input.data[bind.edges_column], 0, edges)) {
-		state.registry.Register(request.edges_sql, std::move(edges));
+		state.registry.Register(request.edges_sql, duckdb_routing::KIND_EDGES, std::move(edges));
 	}
 	if (bind.combinations_column != DConstants::INVALID_INDEX) {
 		duckdb_routing::MaterializedInput combinations;
 		if (Unpack(context, input.data[bind.combinations_column], 0, combinations)) {
-			state.registry.Register(request.combinations_sql, std::move(combinations));
+			state.registry.Register(request.combinations_sql, duckdb_routing::KIND_COMBINATIONS,
+			                        std::move(combinations));
 		}
 	}
 	request.starts = ReadIdList(input, bind.starts_column, request.has_starts);

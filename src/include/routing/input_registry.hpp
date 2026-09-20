@@ -29,9 +29,11 @@ using MaterializedInput = InputHandle;
 
 class InputRegistry {
 public:
-	// The key is the exact SQL string that will be handed to the driver.
-	void Register(const duckdb::string &sql, MaterializedInput input);
-	const MaterializedInput *Find(const duckdb::string &sql) const;
+	// The key is the SQL string that will be handed to the driver plus a kind tag (KIND_EDGES,
+	// KIND_COMBINATIONS, ...; see input_access.hpp) distinguishing two registrations that share
+	// the same SQL text but feed different pgRouting row shapes.
+	void Register(const duckdb::string &sql, const duckdb::string &kind, MaterializedInput input);
+	const MaterializedInput *Find(const duckdb::string &sql, const duckdb::string &kind) const;
 
 private:
 	duckdb::unordered_map<duckdb::string, MaterializedInput> inputs;

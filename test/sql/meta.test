@@ -24,3 +24,13 @@ WHERE tags['ext'] = 'routing' AND tags['pgrouting_name'] IS NOT NULL
 GROUP BY ALL ORDER BY 1, 2;
 ----
 dijkstra	pgr_dijkstra
+
+# The GROUP BY ALL query above collapses every overload's tags to one row and so cannot catch a
+# dropped variant. pgr_dijkstra's five signatures are each registered twice (once with `directed`
+# as a named parameter, once with it appended as a trailing positional BOOLEAN, since DuckDB never
+# matches a named parameter positionally), so this catalog must carry exactly ten "dijkstra"
+# entries.
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dijkstra';
+----
+10
