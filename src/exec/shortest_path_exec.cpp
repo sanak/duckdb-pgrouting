@@ -6,7 +6,12 @@
 
 #include "routing/register.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/function_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -261,6 +266,23 @@ OperatorResultType ShortestPathExecFunction(ExecutionContext &context, TableFunc
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
+// Tags this one internal function the same way TagFunctions (shortest_path_functions.cpp) tags
+// every public overload, so both are found by `WHERE tags['ext'] = 'routing'`.
+void TagExecFunction(ExtensionLoader &loader) {
+	auto &db = loader.GetDatabaseInstance();
+	auto &catalog = Catalog::GetSystemCatalog(db);
+	auto transaction = CatalogTransaction::GetSystemTransaction(db);
+	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
+	auto entry =
+	    schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier("_pgr_shortestpath_exec"));
+	if (!entry) {
+		throw InternalException("routing: _pgr_shortestpath_exec was not registered");
+	}
+	auto &function_entry = entry->Cast<FunctionEntry>();
+	function_entry.tags.insert("ext", "routing");
+	function_entry.tags.insert("category", "internal");
+}
+
 } // namespace
 
 void RegisterShortestPathExec(ExtensionLoader &loader) {
@@ -280,6 +302,7 @@ void RegisterShortestPathExec(ExtensionLoader &loader) {
 	exec.named_parameters["null_input"] = LogicalType::BOOLEAN;
 	exec.named_parameters["result_kind"] = LogicalType::VARCHAR;
 	loader.RegisterFunction(exec);
+	TagExecFunction(loader);
 }
 
 } // namespace duckdb

@@ -16,3 +16,11 @@ SELECT list_contains(list(function_name), 'dijkstra')
 FROM duckdb_functions() WHERE function_name = 'dijkstra';
 ----
 true
+
+query TT
+SELECT function_name, tags['pgrouting_name']
+FROM duckdb_functions()
+WHERE tags['ext'] = 'routing' AND tags['pgrouting_name'] IS NOT NULL
+GROUP BY ALL ORDER BY 1, 2;
+----
+dijkstra	pgr_dijkstra

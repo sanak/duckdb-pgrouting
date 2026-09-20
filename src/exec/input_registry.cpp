@@ -4,6 +4,8 @@
 
 #include <cctype>
 
+#include "duckdb/common/exception.hpp"
+
 namespace duckdb_routing {
 
 namespace {
@@ -36,6 +38,14 @@ duckdb::idx_t PhysicalRow(const MaterializedInput &input, std::size_t row, int c
 } // namespace
 
 void InputRegistry::Register(const duckdb::string &sql, MaterializedInput input) {
+	if (inputs.find(sql) != inputs.end()) {
+		// The registry is keyed by the exact SQL string handed to the driver, and the edges and
+		// combinations queries of a single call could be textually identical (or, in a future
+		// family, any two of the queries this registry ever holds at once). Silently overwriting
+		// the first registration would make the driver read the wrong rows for one of them.
+		throw duckdb::InvalidInputException(
+		    "routing: two inputs of the same call are registered under the same query text: %s", sql);
+	}
 	inputs[sql] = std::move(input);
 }
 

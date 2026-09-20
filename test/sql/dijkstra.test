@@ -47,3 +47,110 @@ SELECT count(*) FROM dijkstra('SELECT id, source, target, cost, reverse_cost FRO
 WHERE seq <> path_seq;
 ----
 0
+
+# one to many (upstream q3)
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges', 6, ARRAY[10, 17]);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5
+7	1	6	17	6	4	1	0
+8	2	6	17	7	8	1	1
+9	3	6	17	11	9	1	2
+10	4	6	17	16	15	1	3
+11	5	6	17	17	-1	0	4
+
+# many to one (upstream q4). Note the driver reverses the graph for this signature
+# (normal = false), which is why the paths are built from the ends backwards.
+#
+# From node 7 there are two equal-cost (4) routes to 17: via node 11 then 12, or via node 8 then
+# 12. Upstream's docqueries/dijkstra/dijkstra.result (generated on a different Boost release)
+# picks the node-11 route; the Boost 1.89 dijkstra_shortest_paths this extension vendors via vcpkg
+# breaks the tie towards the node-8 route instead. Calling _pgr_shortestpath_exec directly with the
+# same request, bypassing bind_replace entirely, reproduces the same route, so the tie-break
+# happens inside pgRouting's own unmodified dijkstra_shortest_paths call, not in this extension's
+# argument wiring. The rows below are this extension's actually observed (and hand-verified valid,
+# equal-cost) output rather than the upstream transcription.
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges', ARRAY[6, 1], 17);
+----
+1	1	1	17	1	6	1	0
+2	2	1	17	3	7	1	1
+3	3	1	17	7	10	1	2
+4	4	1	17	8	12	1	3
+5	5	1	17	12	13	1	4
+6	6	1	17	17	-1	0	5
+7	1	6	17	6	4	1	0
+8	2	6	17	7	10	1	1
+9	3	6	17	8	12	1	2
+10	4	6	17	12	13	1	3
+11	5	6	17	17	-1	0	4
+
+# many to many, undirected (upstream q5)
+#
+# The 6-to-17 path (rows 14-18) hits the same node-7 tie described above for the many-to-one
+# block, this time in an undirected dijkstra run starting at 6 rather than a reversed directed
+# one; the 1-to-17 path (rows 6-11), which reaches node 7 with a different queue history, matches
+# upstream exactly. Both are separate per-source runs (pgrouting::algorithms::dijkstra loops over
+# each departure), so only the run whose heap state actually collides with the tie is affected.
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[6, 1], ARRAY[10, 17], directed => false);
+----
+1	1	1	10	1	6	1	0
+2	2	1	10	3	7	1	1
+3	3	1	10	7	4	1	2
+4	4	1	10	6	2	1	3
+5	5	1	10	10	-1	0	4
+6	1	1	17	1	6	1	0
+7	2	1	17	3	7	1	1
+8	3	1	17	7	8	1	2
+9	4	1	17	11	9	1	3
+10	5	1	17	16	15	1	4
+11	6	1	17	17	-1	0	5
+12	1	6	10	6	2	1	0
+13	2	6	10	10	-1	0	1
+14	1	6	17	6	4	1	0
+15	2	6	17	7	10	1	1
+16	3	6	17	8	12	1	2
+17	4	6	17	12	13	1	3
+18	5	6	17	17	-1	0	4
+
+# combinations (upstream q8)
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS combinations (source, target)');
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	6	10	6	4	1	0
+4	2	6	10	7	8	1	1
+5	3	6	10	11	9	1	2
+6	4	6	10	16	16	1	3
+7	5	6	10	15	3	1	4
+8	6	6	10	10	-1	0	5
+9	1	12	10	12	13	1	0
+10	2	12	10	17	15	1	1
+11	3	12	10	16	16	1	2
+12	4	12	10	15	3	1	3
+13	5	12	10	10	-1	0	4
+
+# positional directed, as PostgreSQL allows (upstream q2)
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10, true);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5

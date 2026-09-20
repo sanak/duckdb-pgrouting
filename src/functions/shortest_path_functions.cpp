@@ -3,10 +3,21 @@
 // The public shortest-path functions. Each one is a bind_replace-only table function: it rewrites
 // its call into a query over _pgr_shortestpath_exec, so that the user's edge query is executed by
 // DuckDB itself and handed to pgRouting already materialized.
+//
+// Every overload is declared as data in SHORTEST_PATH_SPECS (function_spec.hpp): a spec row's
+// upstream name and positional argument kinds are registered as a DuckDB TableFunction, and
+// ShortestPathBindReplace walks the same spec back at call time to build the row that
+// _pgr_shortestpath_exec expects.
 
 #include "routing/register.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/function_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
@@ -20,6 +31,23 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+
+#include "function_spec.hpp"
+
+namespace duckdb_routing {
+
+// See function_spec.hpp for what each field means.
+const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
+    {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {}},
+    {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {}},
+    {"pgr_dijkstra",
+     {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID},
+     {false, false, 0, false, ' ', true, 0, "path"}},
+    {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {}},
+    {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {}},
+};
+
+} // namespace duckdb_routing
 
 namespace duckdb {
 
@@ -81,6 +109,13 @@ unique_ptr<ParsedExpression> EmptyIdList() {
 	return Constant(Value::LIST(LogicalType::BIGINT, {}));
 }
 
+// START_VIDS / END_VIDS arrive as a Value the caller wrote as e.g. ARRAY[10, 17]; casting it
+// explicitly to LIST(BIGINT) means the exec function never has to deal with any other list child
+// type.
+unique_ptr<ParsedExpression> IdListCast(const Value &value) {
+	return make_uniq<CastExpression>(LogicalType::LIST(LogicalType::BIGINT), Constant(value));
+}
+
 bool NamedFlagOr(TableFunctionBindInput &input, const char *name, bool fallback) {
 	auto it = input.named_parameters.find(name);
 	if (it == input.named_parameters.end() || it->second.IsNull()) {
@@ -90,47 +125,124 @@ bool NamedFlagOr(TableFunctionBindInput &input, const char *name, bool fallback)
 }
 
 //===--------------------------------------------------------------------===//
-// dijkstra(edges_sql, start_vid, end_vid)
+// The spec index a bound function carries, so bind_replace knows which overload it serves.
 //===--------------------------------------------------------------------===//
-unique_ptr<TableRef> DijkstraBindReplace(ClientContext &context, TableFunctionBindInput &input) {
+
+struct ShortestPathFunctionInfo : public TableFunctionInfo {
+	explicit ShortestPathFunctionInfo(idx_t spec_index) : spec_index(spec_index) {
+	}
+	idx_t spec_index;
+};
+
+LogicalType TypeOf(duckdb_routing::ArgKind kind) {
+	using duckdb_routing::ArgKind;
+	switch (kind) {
+	case ArgKind::EDGES_SQL:
+	case ArgKind::COMBINATIONS_SQL:
+		return LogicalType::VARCHAR;
+	case ArgKind::START_VID:
+	case ArgKind::END_VID:
+		return LogicalType::BIGINT;
+	case ArgKind::START_VIDS:
+	case ArgKind::END_VIDS:
+		return LogicalType::LIST(LogicalType::BIGINT);
+	case ArgKind::DIRECTED:
+		return LogicalType::BOOLEAN;
+	}
+	throw InternalException("Unhandled ArgKind");
+}
+
+//===--------------------------------------------------------------------===//
+// <public overload>(...) -> _pgr_shortestpath_exec(...)
+//===--------------------------------------------------------------------===//
+unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFunctionBindInput &input) {
+	auto &function_info = input.info->Cast<ShortestPathFunctionInfo>();
+	const auto &spec = duckdb_routing::SHORTEST_PATH_SPECS[function_info.spec_index];
+
 	bool null_input = false;
 	for (auto &value : input.inputs) {
 		null_input = null_input || value.IsNull();
 	}
-	const auto directed = NamedFlagOr(input, "directed", true);
 
-	// One row carrying every input the driver needs, as a column each.
+	// The second registered variant of every spec (fact 3) appends `directed` as a trailing
+	// positional BOOLEAN; it is present whenever there is one more input than the spec declares,
+	// and it overrides the named `directed` parameter.
+	const bool has_positional_directed = input.inputs.size() > spec.args.size();
+	bool directed;
+	if (has_positional_directed) {
+		auto &value = input.inputs.back();
+		// A NULL here already made null_input true above, so this value is never read back.
+		directed = value.IsNull() ? true : BooleanValue::Get(value);
+	} else {
+		// A NULL named `directed` falls back to true rather than making the whole call NULL:
+		// Task 2.1 left this undecided (Phase 0), and this is where it is decided, in favour of
+		// keeping the pre-existing behaviour of dijkstra(sql, 6, 10, directed := NULL) rather than
+		// matching PostgreSQL's STRICT semantics for this one named parameter.
+		directed = NamedFlagOr(input, "directed", true);
+	}
+
+	string edges_sql;
+	string combinations_sql;
+
+	// One row carrying every input the driver needs, as a column each. Columns this overload does
+	// not use stay typed NULL constants, so the exec function always sees the same four columns.
 	auto row = make_uniq<SelectNode>();
 	// A SELECT without FROM still needs a table reference.
 	row->from_table = make_uniq<EmptyTableRef>();
-	string edges_sql;
-	if (null_input) {
-		row->select_list.push_back(Named(ConstantExpression::Null(), "edges"));
-		row->select_list.push_back(Named(ConstantExpression::Null(), "combinations"));
-		row->select_list.push_back(Named(EmptyIdList(), "starts"));
-		row->select_list.push_back(Named(EmptyIdList(), "ends"));
-	} else {
-		edges_sql = StringValue::Get(input.inputs[0]);
-		row->select_list.push_back(Named(ListOfRows(context, edges_sql), "edges"));
-		row->select_list.push_back(Named(ConstantExpression::Null(), "combinations"));
-		row->select_list.push_back(Named(IdList(input.inputs[1]), "starts"));
-		row->select_list.push_back(Named(IdList(input.inputs[2]), "ends"));
+
+	unique_ptr<ParsedExpression> edges_expr = Named(ConstantExpression::Null(), "edges");
+	unique_ptr<ParsedExpression> combinations_expr = Named(ConstantExpression::Null(), "combinations");
+	unique_ptr<ParsedExpression> starts_expr = Named(EmptyIdList(), "starts");
+	unique_ptr<ParsedExpression> ends_expr = Named(EmptyIdList(), "ends");
+
+	if (!null_input) {
+		for (idx_t i = 0; i < spec.args.size(); i++) {
+			switch (spec.args[i]) {
+			case duckdb_routing::ArgKind::EDGES_SQL:
+				edges_sql = StringValue::Get(input.inputs[i]);
+				edges_expr = Named(ListOfRows(context, edges_sql), "edges");
+				break;
+			case duckdb_routing::ArgKind::COMBINATIONS_SQL:
+				combinations_sql = StringValue::Get(input.inputs[i]);
+				combinations_expr = Named(ListOfRows(context, combinations_sql), "combinations");
+				break;
+			case duckdb_routing::ArgKind::START_VID:
+				starts_expr = Named(IdList(input.inputs[i]), "starts");
+				break;
+			case duckdb_routing::ArgKind::END_VID:
+				ends_expr = Named(IdList(input.inputs[i]), "ends");
+				break;
+			case duckdb_routing::ArgKind::START_VIDS:
+				starts_expr = Named(IdListCast(input.inputs[i]), "starts");
+				break;
+			case duckdb_routing::ArgKind::END_VIDS:
+				ends_expr = Named(IdListCast(input.inputs[i]), "ends");
+				break;
+			case duckdb_routing::ArgKind::DIRECTED:
+				throw InternalException("routing: ArgKind::DIRECTED must not appear in spec.args");
+			}
+		}
 	}
+
+	row->select_list.push_back(std::move(edges_expr));
+	row->select_list.push_back(std::move(combinations_expr));
+	row->select_list.push_back(std::move(starts_expr));
+	row->select_list.push_back(std::move(ends_expr));
 
 	vector<unique_ptr<ParsedExpression>> args;
 	args.push_back(ScalarSubquery(std::move(row))); // the TABLE argument
 	args.push_back(Named(Constant(Value(edges_sql)), "edges_sql"));
-	args.push_back(Named(Constant(Value("")), "combinations_sql"));
+	args.push_back(Named(Constant(Value(combinations_sql)), "combinations_sql"));
 	args.push_back(Named(Constant(Value::BOOLEAN(directed)), "directed"));
-	args.push_back(Named(Constant(Value::BOOLEAN(false)), "only_cost"));
-	args.push_back(Named(Constant(Value::BOOLEAN(true)), "normal"));
-	args.push_back(Named(Constant(Value::BIGINT(0)), "n_goals"));
-	args.push_back(Named(Constant(Value::BOOLEAN(false)), "global"));
-	args.push_back(Named(Constant(Value::INTEGER(0)), "which"));
-	args.push_back(Named(Constant(Value(" ")), "driving_side"));
-	args.push_back(Named(Constant(Value::BOOLEAN(true)), "details"));
+	args.push_back(Named(Constant(Value::BOOLEAN(spec.flags.only_cost)), "only_cost"));
+	args.push_back(Named(Constant(Value::BOOLEAN(spec.flags.normal)), "normal"));
+	args.push_back(Named(Constant(Value::BIGINT(spec.flags.n_goals)), "n_goals"));
+	args.push_back(Named(Constant(Value::BOOLEAN(spec.flags.global)), "global"));
+	args.push_back(Named(Constant(Value::INTEGER(spec.flags.which)), "which"));
+	args.push_back(Named(Constant(Value(string(1, spec.flags.driving_side))), "driving_side"));
+	args.push_back(Named(Constant(Value::BOOLEAN(spec.flags.details)), "details"));
 	args.push_back(Named(Constant(Value::BOOLEAN(null_input)), "null_input"));
-	args.push_back(Named(Constant(Value("path")), "result_kind"));
+	args.push_back(Named(Constant(Value(spec.flags.result_kind)), "result_kind"));
 
 	auto fref = make_uniq<TableFunctionRef>();
 	fref->function = make_uniq<FunctionExpression>(Identifier("_pgr_shortestpath_exec"), std::move(args));
@@ -143,15 +255,63 @@ unique_ptr<TableRef> DijkstraBindReplace(ClientContext &context, TableFunctionBi
 	return make_uniq<SubqueryRef>(WrapNode(std::move(outer)));
 }
 
+//===--------------------------------------------------------------------===//
+// Catalog tags: the single source of the upstream <-> public name mapping.
+//===--------------------------------------------------------------------===//
+void TagFunctions(ExtensionLoader &loader) {
+	auto &db = loader.GetDatabaseInstance();
+	auto &catalog = Catalog::GetSystemCatalog(db);
+	auto transaction = CatalogTransaction::GetSystemTransaction(db);
+	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
+	for (auto &spec : duckdb_routing::SHORTEST_PATH_SPECS) {
+		const auto public_name = duckdb_routing::PublicName(spec.upstream_name);
+		auto entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier(public_name));
+		if (!entry) {
+			throw InternalException("routing: function %s was not registered", public_name);
+		}
+		auto &function_entry = entry->Cast<FunctionEntry>();
+		// The tooling reads this back from duckdb_functions() instead of keeping a second copy of
+		// the upstream <-> public name mapping in a script.
+		function_entry.tags.insert("ext", "routing");
+		function_entry.tags.insert("pgrouting_name", spec.upstream_name);
+	}
+}
+
 } // namespace
 
 void RegisterShortestPathFunctions(ExtensionLoader &loader) {
-	TableFunctionSet dijkstra_set("dijkstra");
-	TableFunction one_to_one({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT}, nullptr, nullptr);
-	one_to_one.bind_replace = DijkstraBindReplace;
-	one_to_one.named_parameters["directed"] = LogicalType::BOOLEAN;
-	dijkstra_set.AddFunction(one_to_one);
-	loader.RegisterFunction(dijkstra_set);
+	unordered_map<string, TableFunctionSet> sets;
+	for (idx_t i = 0; i < duckdb_routing::SHORTEST_PATH_SPECS.size(); i++) {
+		auto &spec = duckdb_routing::SHORTEST_PATH_SPECS[i];
+		const auto public_name = duckdb_routing::PublicName(spec.upstream_name);
+		auto entry = sets.find(public_name);
+		if (entry == sets.end()) {
+			entry = sets.emplace(public_name, TableFunctionSet(Identifier(public_name))).first;
+		}
+		vector<LogicalType> types;
+		for (auto kind : spec.args) {
+			types.push_back(TypeOf(kind));
+		}
+		for (idx_t variant = 0; variant < 2; variant++) {
+			auto variant_types = types;
+			if (variant == 1) {
+				// PostgreSQL lets `directed` be passed positionally; DuckDB never matches a named
+				// parameter positionally, so upstream's own SQL needs this second variant.
+				variant_types.push_back(LogicalType::BOOLEAN);
+			}
+			TableFunction fn(variant_types, nullptr, nullptr);
+			fn.bind_replace = ShortestPathBindReplace;
+			fn.named_parameters["directed"] = LogicalType::BOOLEAN;
+			// The spec index travels in the function's extra_info so bind_replace knows which
+			// overload it is serving without re-deriving it from the argument types.
+			fn.function_info = make_shared_ptr<ShortestPathFunctionInfo>(i);
+			entry->second.AddFunction(fn);
+		}
+	}
+	for (auto &pair : sets) {
+		loader.RegisterFunction(pair.second);
+	}
+	TagFunctions(loader);
 }
 
 } // namespace duckdb
