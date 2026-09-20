@@ -31,6 +31,14 @@ W1_VARIANTS = wasm_eh wasm_mvp wasm_threads
 # the first line of the W1 recipes, i.e. only when a W1 target actually runs.
 W1_REQUIRE_VARIANT = $(if $(filter $(W1_VARIANT),$(W1_VARIANTS)),,\
 	$(error W1_VARIANT='$(W1_VARIANT)' is not supported; use one of: $(W1_VARIANTS)))
+# emsdk's `upstream/emscripten` directory is prepended to PATH by the environment setup, and it
+# contains a subdirectory literally named `cmake`. A recipe line with no shell metacharacters is
+# exec'd by make directly, and its PATH search accepts that directory because the execute bit is
+# set, so a bare `cmake` dies with "Permission denied". Resolving through the shell skips matches
+# that are not executable files. Do not simplify this back to a bare `cmake`.
+W1_CMAKE := $(shell command -v cmake 2>/dev/null)
+W1_REQUIRE_CMAKE = $(if $(W1_CMAKE),,\
+	$(error cmake was not found in PATH; install it or add it to PATH))
 W1_BUILD_DIR = build/$(W1_VARIANT)_unittest
 W1_CXX_FLAGS_wasm_eh = -fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_NO_THREADS=1
 W1_LINK_FLAGS_wasm_eh = -fwasm-exceptions
@@ -43,6 +51,8 @@ W1_COMMON_LINK_FLAGS = -sNODERAWFS=1 -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4G
 
 wasm_unittest:
 	$(W1_REQUIRE_VARIANT)
+	$(W1_REQUIRE_CMAKE)
+	@echo "W1: building $(W1_VARIANT) with cmake at $(W1_CMAKE)"
 	mkdir -p $(W1_BUILD_DIR)
 	emcmake cmake $(GENERATOR) $(BUILD_FLAGS) $(VCPKG_MANIFEST_FLAGS) $(VCPKG_EMSDK_FLAGS) \
 		-DVCPKG_TARGET_TRIPLET=wasm32-emscripten -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_SHELL=FALSE \
@@ -54,7 +64,7 @@ wasm_unittest:
 # --parallel keeps the build parallel with Make generators too, not only with GEN=ninja. The job
 # count is explicit because a bare --parallel becomes an unbounded `make -j`; 8 is what the
 # inherited duckdb_extension.Makefile uses for its own wasm targets.
-	cmake --build $(W1_BUILD_DIR) --target unittest --parallel 8
+	$(W1_CMAKE) --build $(W1_BUILD_DIR) --target unittest --parallel 8
 
 # Not depending on wasm_unittest on purpose: CI keeps build and test as separate steps so a
 # failure is attributed to the right one.
