@@ -10,12 +10,35 @@ project(${TARGET_NAME})
 set(CMAKE_CXX_STANDARD "17" CACHE STRING "C++ standard to enforce")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include_directories(src/include)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pgrouting_sources.cmake)
 
-set(EXTENSION_SOURCES src/routing_extension.cpp)
+# pgRouting only uses header-only Boost libraries (Graph, Geometry).
+find_package(Boost CONFIG REQUIRED)
+
+include_directories(src/include)
+include_directories(${PGROUTING_DIR}/include)
+
+set(EXTENSION_SOURCES src/routing_extension.cpp ${PGROUTING_SOURCES})
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
+
+# Upstream code is compiled unmodified; its warnings are not ours to fix here.
+set_source_files_properties(${PGROUTING_SOURCES} PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/w,-w>")
+
+foreach(target ${EXTENSION_NAME} ${LOADABLE_EXTENSION_NAME})
+  target_link_libraries(${target} Boost::headers)
+  # Same definitions upstream's build uses.
+  target_compile_definitions(${target} PRIVATE BOOST_ALLOW_DEPRECATED_HEADERS
+                                               PROJECT_VERSION="${PGROUTING_VERSION}")
+  # pgRouting relies on catching C++ exceptions (e.g. its Dijkstra stops the search by throwing).
+  # Emscripten disables exception catching unless -fexceptions or -fwasm-exceptions is given,
+  # and the wasm_mvp build passes neither.
+  if(EMSCRIPTEN AND NOT CMAKE_CXX_FLAGS MATCHES "-fwasm-exceptions")
+    target_compile_options(${target} PRIVATE -fexceptions)
+    target_link_options(${target} PRIVATE -fexceptions)
+  endif()
+endforeach()
 
 install(
   TARGETS ${EXTENSION_NAME}
