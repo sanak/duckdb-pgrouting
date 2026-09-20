@@ -8,14 +8,22 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+# Same expression as MainDistributionPipeline.yml: it never cancels an in-flight run on main, so
+# two quick pushes cannot drop the run that carries the all-three-variants guarantee.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 jobs:
   w1:
     name: W1 (${{ matrix.variant }})
     runs-on: ubuntu-latest
+    # Well above the slowest local run (~20 min with a warm ccache) with room for a cold runner,
+    # but far below the 6-hour default, so a hung Emscripten link fails instead of idling.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -24,6 +32,8 @@ jobs:
       GEN: ninja
       VCPKG_TARGET_TRIPLET: wasm32-emscripten
       VCPKG_HOST_TRIPLET: x64-linux
+      # Pinned to duckdb-spatial's vcpkg commit on purpose, not extension-ci-tools' newer default:
+      # this is the commit every local build here was validated against. Do not "fix" it.
       VCPKG_COMMIT: 84bab45d415d22042bd0b9081aea57f362da3f35
     steps:
       - uses: actions/checkout@v7
@@ -39,8 +49,9 @@ jobs:
         with:
           node-version: 24
 
+      # ubuntu-latest normally ships ninja already; skip the flake-prone apt-get update when it does.
       - name: Install Ninja
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: command -v ninja || { sudo apt-get update && sudo apt-get install -y ninja-build; }
 
       - name: Setup vcpkg
         run: |

@@ -28,7 +28,8 @@ set_source_files_properties(${PGROUTING_SOURCES} PROPERTIES COMPILE_OPTIONS "$<I
 
 foreach(target ${EXTENSION_NAME} ${LOADABLE_EXTENSION_NAME})
   target_link_libraries(${target} Boost::headers)
-  # Same definitions upstream's build uses.
+  # Same definitions upstream's build uses. PRIVATE, not PUBLIC: PROJECT_VERSION is a very generic
+  # macro name and PUBLIC would leak it to every target that links the extension.
   target_compile_definitions(${target} PRIVATE BOOST_ALLOW_DEPRECATED_HEADERS
                                                PROJECT_VERSION="${PGROUTING_VERSION}")
   # pgRouting relies on catching C++ exceptions (e.g. its Dijkstra stops the search by throwing).

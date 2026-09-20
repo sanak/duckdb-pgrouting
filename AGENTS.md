@@ -36,13 +36,21 @@ make test_debug                # all sqllogictests
 build/debug/test/unittest test/sql/routing.test   # a single test file
 ```
 
-Wasm (requires `source <emsdk>/emsdk_env.sh`):
+Wasm (requires `source <emsdk>/emsdk_env.sh`, and `VCPKG_TOOLCHAIN_PATH` exported as above):
 
 ```bash
-VCPKG_TARGET_TRIPLET=wasm32-emscripten DUCKDB_PLATFORM=wasm_eh make wasm_eh   # loadable extension
+GEN=ninja VCPKG_TARGET_TRIPLET=wasm32-emscripten make wasm_eh   # loadable extension
 GEN=ninja make wasm_unittest W1_VARIANT=wasm_eh   # unittest compiled to Wasm (also wasm_mvp, wasm_threads)
 make test_wasm_unittest W1_VARIANT=wasm_eh        # run test/* under Node
 ```
+
+Do not pass `DUCKDB_PLATFORM=` to the Wasm targets: the inherited
+`extension-ci-tools/makefiles/duckdb_extension.Makefile` appends its own
+`-DDUCKDB_EXPLICIT_PLATFORM=<variant>` later on the same cmake command line, which wins.
+
+sqllogictest `query` directives accept only the column-type characters `T` (text), `I` (integer)
+and `R` (floating point). There is no `B` for boolean, so a boolean column is declared `T` and
+asserted against `true` / `false`.
 
 ## Architecture rules
 
@@ -64,6 +72,11 @@ make test_wasm_unittest W1_VARIANT=wasm_eh        # run test/* under Node
 4. Commit messages: one-line conventional commits, imperative mood, under 72 characters, no
    trailing period.
 5. The default branch is `main`.
+6. Every new source file carries an SPDX header (`# SPDX-License-Identifier: GPL-2.0-or-later`
+   for the `#`-comment class). Deliberate exemptions: `vcpkg.json` (JSON has no comment syntax),
+   the Markdown documentation (`README.md`, `AGENTS.md`, `CLAUDE.md`) and `LICENSE`, and
+   `.gitignore` / `.gitmodules` (git metadata, not source). In a sqllogictest the header goes
+   *after* the `# name:` / `# description:` / `# group:` block, which is parsed positionally.
 
 `make install-hooks` installs commit-msg/pre-commit hooks that reject messages, paths or added
 lines matching the extended regular expressions listed in the untracked file

@@ -25,6 +25,12 @@ install-hooks:
 # builds the test runner itself. A per-triplet VCPKG_INSTALLED_DIR keeps the wasm32-emscripten
 # packages from being pruned by a native configure sharing one installed root.
 W1_VARIANT ?= wasm_eh
+W1_VARIANTS = wasm_eh wasm_mvp wasm_threads
+# An unknown variant would expand the per-variant flag variables to empty and DuckDB does not
+# validate DUCKDB_EXPLICIT_PLATFORM, so a typo would silently build the wrong thing. Expanded as
+# the first line of the W1 recipes, i.e. only when a W1 target actually runs.
+W1_REQUIRE_VARIANT = $(if $(filter $(W1_VARIANT),$(W1_VARIANTS)),,\
+	$(error W1_VARIANT='$(W1_VARIANT)' is not supported; use one of: $(W1_VARIANTS)))
 W1_BUILD_DIR = build/$(W1_VARIANT)_unittest
 W1_CXX_FLAGS_wasm_eh = -fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_NO_THREADS=1
 W1_LINK_FLAGS_wasm_eh = -fwasm-exceptions
@@ -36,6 +42,7 @@ W1_C_FLAGS_wasm_threads = -pthread
 W1_COMMON_LINK_FLAGS = -sNODERAWFS=1 -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB -sSTACK_SIZE=8MB -sEXIT_RUNTIME=1 --pre-js $(CURDIR)/scripts/wasm_unittest_pre.js
 
 wasm_unittest:
+	$(W1_REQUIRE_VARIANT)
 	mkdir -p $(W1_BUILD_DIR)
 	emcmake cmake $(GENERATOR) $(BUILD_FLAGS) $(VCPKG_MANIFEST_FLAGS) $(VCPKG_EMSDK_FLAGS) \
 		-DVCPKG_TARGET_TRIPLET=wasm32-emscripten -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_SHELL=FALSE \
@@ -44,9 +51,19 @@ wasm_unittest:
 		-DCMAKE_EXE_LINKER_FLAGS="$(W1_LINK_FLAGS_$(W1_VARIANT)) $(W1_COMMON_LINK_FLAGS)" \
 		-DVCPKG_INSTALLED_DIR=$(CURDIR)/build/vcpkg_installed_wasm \
 		-S $(DUCKDB_SRCDIR) -B $(W1_BUILD_DIR)
-	cmake --build $(W1_BUILD_DIR) --target unittest
+# --parallel keeps the build parallel with Make generators too, not only with GEN=ninja. The job
+# count is explicit because a bare --parallel becomes an unbounded `make -j`; 8 is what the
+# inherited duckdb_extension.Makefile uses for its own wasm targets.
+	cmake --build $(W1_BUILD_DIR) --target unittest --parallel 8
 
+# Not depending on wasm_unittest on purpose: CI keeps build and test as separate steps so a
+# failure is attributed to the right one.
 test_wasm_unittest:
+	$(W1_REQUIRE_VARIANT)
+	@test -f $(W1_BUILD_DIR)/test/unittest.js || { \
+		echo "error: $(W1_BUILD_DIR)/test/unittest.js not found."; \
+		echo "       Build it first: make wasm_unittest W1_VARIANT=$(W1_VARIANT)"; \
+		exit 1; }
 	node $(W1_BUILD_DIR)/test/unittest.js "test/*"
 
 .PHONY: wasm_unittest test_wasm_unittest

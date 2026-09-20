@@ -2,6 +2,8 @@
 # description: The routing extension loads
 # group: [sql]
 
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 require routing
 
 query T
