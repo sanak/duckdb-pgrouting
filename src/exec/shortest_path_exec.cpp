@@ -151,6 +151,22 @@ idx_t FindInputColumn(TableFunctionBindInput &input, const char *name) {
 	return DConstants::INVALID_INDEX;
 }
 
+// `_pgr_shortestpath_exec` is catalogued and callable by any user, not only through the public
+// overloads' bind_replace (which always produces LIST(BIGINT) for 'starts'/'ends'). ReadIdList
+// reaches ListValue::GetChildren/BigIntValue::Get, which raise InternalException on a type
+// mismatch -- a class that invalidates the whole database instance. Checking the column type once,
+// here at bind time, turns a wrong-typed argument into an ordinary user-input error instead.
+void CheckIdListColumn(TableFunctionBindInput &input, idx_t column, const char *name) {
+	if (column == DConstants::INVALID_INDEX) {
+		return;
+	}
+	const auto &type = input.input_table_types[column];
+	if (ClassOf(type) != duckdb_routing::ColumnClass::INTEGER_ARRAY) {
+		throw InvalidInputException("_pgr_shortestpath_exec: column '%s' must be LIST(BIGINT), got %s", name,
+		                            type.ToString());
+	}
+}
+
 unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBindInput &input,
                                               vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto data = make_uniq<ShortestPathExecBindData>();
@@ -180,6 +196,8 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	if (data->edges_column == DConstants::INVALID_INDEX) {
 		throw InvalidInputException("_pgr_shortestpath_exec: the input table has no 'edges' column");
 	}
+	CheckIdListColumn(input, data->starts_column, "starts");
+	CheckIdListColumn(input, data->ends_column, "ends");
 
 	return_types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT,
 	                LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::DOUBLE, LogicalType::DOUBLE};
