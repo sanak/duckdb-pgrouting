@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Runs the sqllogictest suite under Node with DuckDB's unittest compiled to WebAssembly and the
+# extension statically linked (the distribution pipeline only builds the Wasm extensions).
+name: Wasm Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  w1:
+    name: W1 (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [wasm_eh, wasm_mvp, wasm_threads]
+    env:
+      GEN: ninja
+      VCPKG_TARGET_TRIPLET: wasm32-emscripten
+      VCPKG_HOST_TRIPLET: x64-linux
+      VCPKG_COMMIT: 84bab45d415d22042bd0b9081aea57f362da3f35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: 3.1.71
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$RUNNER_TEMP/vcpkg"
+          git -C "$RUNNER_TEMP/vcpkg" checkout "$VCPKG_COMMIT"
+          "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+          echo "VCPKG_ROOT=$RUNNER_TEMP/vcpkg" >> "$GITHUB_ENV"
+          echo "VCPKG_TOOLCHAIN_PATH=$RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake" >> "$GITHUB_ENV"
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: w1-${{ matrix.variant }}
+
+      - name: Build unittest (${{ matrix.variant }})
+        run: make wasm_unittest W1_VARIANT=${{ matrix.variant }}
+
+      - name: Run sqllogictests under Node
+        run: make test_wasm_unittest W1_VARIANT=${{ matrix.variant }}
