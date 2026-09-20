@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Rejects a commit whose staged paths or added lines match any extended regular expression listed
+# in .git/info/forbidden-patterns (same format as the commit-msg hook).
+patterns="$(git rev-parse --git-path info/forbidden-patterns)"
+[ -f "$patterns" ] || exit 0
+list="$(mktemp)"
+trap 'rm -f "$list"' EXIT
+grep -v -E '^[[:space:]]*(#|$)' "$patterns" > "$list" || exit 0
+status=0
+if git diff --cached --name-only | LC_ALL=C grep -E -f "$list" > /dev/null; then
+	echo "pre-commit: a staged path matches a forbidden pattern:" >&2
+	git diff --cached --name-only | LC_ALL=C grep -E -f "$list" >&2
+	status=1
+fi
+if git diff --cached --no-color -U0 --diff-filter=ACMR -- . ':(exclude).gitmodules' \
+	| grep -E '^\+' | grep -v -E '^\+\+\+ ' | LC_ALL=C grep -n -E -f "$list" > /dev/null; then
+	echo "pre-commit: an added line matches a forbidden pattern:" >&2
+	git diff --cached --no-color -U0 --diff-filter=ACMR | grep -E '^\+' | grep -v -E '^\+\+\+ ' \
+		| LC_ALL=C grep -n -E -f "$list" >&2
+	status=1
+fi
+exit $status

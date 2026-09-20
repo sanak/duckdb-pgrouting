@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Rejects a commit message that matches any extended regular expression listed in
+# .git/info/forbidden-patterns (one per line; blank lines and lines starting with # are ignored).
+# The pattern list is deliberately local and never committed.
+patterns="$(git rev-parse --git-path info/forbidden-patterns)"
+[ -f "$patterns" ] || exit 0
+list="$(mktemp)"
+trap 'rm -f "$list"' EXIT
+grep -v -E '^[[:space:]]*(#|$)' "$patterns" > "$list" || exit 0
+if LC_ALL=C grep -n -E -f "$list" "$1" > /dev/null; then
+	echo "commit-msg: the message matches a forbidden pattern:" >&2
+	LC_ALL=C grep -n -E -f "$list" "$1" >&2
+	exit 1
+fi
+exit 0
