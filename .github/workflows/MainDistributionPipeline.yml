@@ -15,8 +15,9 @@ concurrency:
 jobs:
   duckdb-latest-build:
     name: Build extension binaries
-    # On pull_request the reusable workflow reduces its matrix and builds only wasm_eh of the three
-    # Wasm variants; WasmTests.yml builds and tests all three on every pull request.
+    # reduced_ci_mode is left at its upstream default, which gates osx/windows/wasm on the linux
+    # job and turns fail-fast on: a broken build then reports as one job instead of nine.
+    # WasmTests.yml separately builds and runs the tests for all three Wasm variants.
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
       duckdb_version: main
