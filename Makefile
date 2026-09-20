@@ -45,7 +45,13 @@ W1_LINK_FLAGS_wasm_eh = -fwasm-exceptions
 W1_CXX_FLAGS_wasm_mvp = -fexceptions -DDUCKDB_NO_THREADS=1
 W1_LINK_FLAGS_wasm_mvp = -fexceptions
 W1_CXX_FLAGS_wasm_threads = -fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -pthread
-W1_LINK_FLAGS_wasm_threads = -fwasm-exceptions -pthread -sPTHREAD_POOL_SIZE=8
+# -sPROXY_TO_PTHREAD moves main() off the Node main thread. DuckDB's unittest blocks there (the
+# task scheduler joins its workers, queries wait on condition variables), and Emscripten's manual
+# is explicit that "if the main thread blocks while a worker attempts to proxy to it, a deadlock
+# can occur" and recommends PROXY_TO_PTHREAD to avoid it. Without it this variant deadlocked in
+# CI after printing the Catch2 banner and produced no further output; it is timing-dependent, so
+# a passing run does not mean the flag is unnecessary.
+W1_LINK_FLAGS_wasm_threads = -fwasm-exceptions -pthread -sPTHREAD_POOL_SIZE=8 -sPROXY_TO_PTHREAD
 W1_C_FLAGS_wasm_threads = -pthread
 W1_COMMON_LINK_FLAGS = -sNODERAWFS=1 -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB -sSTACK_SIZE=8MB -sEXIT_RUNTIME=1 --pre-js $(CURDIR)/scripts/wasm_unittest_pre.js
 
