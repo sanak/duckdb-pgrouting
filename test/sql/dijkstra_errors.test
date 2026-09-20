@@ -1,0 +1,44 @@
+# name: test/sql/dijkstra_errors.test
+# description: dijkstra error and message mapping
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require routing
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES (1, 1, 2, 1, 1), (2, 2, 3, 1, 1);
+
+# A required column is missing: upstream's wording, verbatim.
+statement error
+SELECT * FROM dijkstra('SELECT id, source, target FROM edges', 1, 3);
+----
+Column 'cost' not Found
+
+# A required column has the wrong class.
+statement error
+SELECT * FROM dijkstra('SELECT id, source, target, ''x'' AS cost FROM edges', 1, 3);
+----
+Unexpected Column 'cost' type. Expected ANY-NUMERICAL
+
+# A required column is NULL in some row.
+statement error
+SELECT * FROM dijkstra('SELECT id, source, NULL::BIGINT AS target, cost FROM edges', 1, 3);
+----
+Unexpected Null value in column target
+
+# The HINT carries the offending query, as pgRouting's err/log pair does.
+statement error
+SELECT * FROM dijkstra('SELECT id, source, target FROM edges', 1, 3);
+----
+HINT: SELECT id, source, target FROM edges
+
+# No path: an empty result, not an error.
+query I
+SELECT count(*) FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges', 1, 99);
+----
+0
