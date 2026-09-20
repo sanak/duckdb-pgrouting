@@ -21,9 +21,10 @@ jobs:
   w1:
     name: W1 (${{ matrix.variant }})
     runs-on: ubuntu-latest
-    # Well above the slowest local run (~20 min with a warm ccache) with room for a cold runner,
-    # but far below the 6-hour default, so a hung Emscripten link fails instead of idling.
-    timeout-minutes: 120
+    # Well above the slowest observed build (~22 min on a cold runner), but low enough that a
+    # hung test run is killed in reasonable time: the wasm_threads test has deadlocked under
+    # Node before, and at 120 minutes each occurrence burned two hours of runner time.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
