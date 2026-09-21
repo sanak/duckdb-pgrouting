@@ -86,9 +86,12 @@ unique_ptr<SubqueryExpression> ScalarSubquery(unique_ptr<SelectNode> node) {
 // The subquery alias must not collide with a column name the user's SQL can produce: DuckDB only
 // falls back to struct_pack (giving `list(...)` a LIST(STRUCT) to work with) when the alias does
 // not itself resolve as a column reference. A short, generic alias like `t` collides with any user
-// query that happens to select a column named `t` (e.g. `SELECT id AS t, ...`), silently turning
-// the whole call into a LIST(BIGINT) input instead of failing loudly - the "_pgr_" prefix makes an
-// accidental collision with a real column name unlikely.
+// query that happens to select a column named `t` (e.g. `SELECT id AS t, ...`): `list(t)` then
+// returns a list of that column's own type instead of struct-packing the whole row. Unless that
+// column is itself a STRUCT, this fails loudly (CheckRowListColumn rejects the resulting
+// `edges`/`combinations` argument as not LIST(STRUCT)) but with a message about internals rather
+// than about the real cause, an alias collision. The "_pgr_" prefix makes an accidental collision
+// with a real column name unlikely.
 unique_ptr<ParsedExpression> ListOfRows(ClientContext &context, const string &sql) {
 	static constexpr const char *ROW_ALIAS = "_pgr_row";
 	auto node = make_uniq<SelectNode>();
@@ -172,9 +175,11 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 		null_input = null_input || value.IsNull();
 	}
 
-	// The second registered variant of every spec (fact 3) appends `directed` as a trailing
-	// positional BOOLEAN; it is present whenever there is one more input than the spec declares,
-	// and it overrides the named `directed` parameter.
+	// The second registered variant of every spec (see the `variant == 1` case in
+	// RegisterShortestPathFunctions below, added because DuckDB never matches a named parameter
+	// positionally while upstream's own pgr_dijkstra SQL passes `directed` positionally) appends
+	// `directed` as a trailing positional BOOLEAN; it is present whenever there is one more input
+	// than the spec declares, and it overrides the named `directed` parameter.
 	const bool has_positional_directed = input.inputs.size() > spec.args.size();
 	bool directed;
 	if (has_positional_directed) {
