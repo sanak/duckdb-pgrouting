@@ -44,6 +44,14 @@ foreach(target ${EXTENSION_NAME} ${LOADABLE_EXTENSION_NAME})
   # macro name and PUBLIC would leak it to every target that links the extension.
   target_compile_definitions(${target} PRIVATE BOOST_ALLOW_DEPRECATED_HEADERS
                                                PROJECT_VERSION="${PGROUTING_VERSION}")
+  # base_graph.hpp's get_V builds an error string from __PRETTY_FUNCTION__, a GCC/Clang extension
+  # MSVC does not provide. Upstream guards that identifier for MSVC everywhere else it appears
+  # (interruption.hpp maps it to __FUNCSIG__, messages.hpp compiles its uses away), but uses it raw
+  # there; upstream builds for Windows with MinGW, where it exists, so that line is never exercised.
+  # Supplying upstream's own MSVC spelling from the build keeps the source unmodified.
+  if(MSVC)
+    target_compile_definitions(${target} PRIVATE __PRETTY_FUNCTION__=__FUNCSIG__)
+  endif()
   # pgRouting relies on catching C++ exceptions (e.g. its Dijkstra stops the search by throwing).
   # Emscripten disables exception catching unless -fexceptions or -fwasm-exceptions is given,
   # and the wasm_mvp build passes neither.

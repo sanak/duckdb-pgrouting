@@ -71,6 +71,11 @@ asserted against `true` / `false`.
 - Add upstream files to `cmake/pgrouting_sources.cmake` one by one; no globbing.
 - Emscripten builds must keep C++ exception catching enabled: pgRouting's algorithms throw and
   catch internally.
+- Upstream is written for GCC and Clang, and MSVC compiles it here for the first time. Where an
+  upstream header uses a compiler extension MSVC lacks, supply the equivalent spelling as a
+  compile definition from `CMakeLists.txt` rather than editing the header: `__PRETTY_FUNCTION__`
+  is mapped to `__FUNCSIG__` that way, matching what upstream itself does for the same identifier
+  in the headers where it did guard it.
 - `src/pg_compat/include` must precede `third_party/pgrouting/include` on the include path; that
   ordering is what replaces upstream's PostgreSQL-dependent headers.
 - PostgreSQL allows a parameter with a default to be passed positionally or by name; DuckDB never
