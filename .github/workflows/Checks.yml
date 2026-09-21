@@ -1,0 +1,112 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# The checks that the distribution pipeline has no place for: MainDistributionPipeline.yml's only
+# job is a `uses:` of DuckDB's reusable extension workflow, and a `uses:` job cannot carry steps.
+# One release build on one platform serves all of them - none of these checks is
+# platform-dependent, and the other two workflows already cover the nine build platforms and the
+# three Wasm variants.
+name: Checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Same expression as MainDistributionPipeline.yml: it never cancels an in-flight run on main, so
+# two quick pushes cannot drop the run that carries the all-three-variants guarantee.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks (linux_amd64)
+    runs-on: ubuntu-latest
+    # The native release build dominates the wall time; the checks themselves are seconds. The
+    # comparable Wasm build takes ~22 min on a cold runner, so 60 leaves real headroom while
+    # still killing a hung run inside the hour.
+    timeout-minutes: 60
+    env:
+      GEN: ninja
+      # Pinned to duckdb-spatial's vcpkg commit on purpose, not extension-ci-tools' newer default:
+      # this is the commit every local build here was validated against. Do not "fix" it.
+      VCPKG_COMMIT: 84bab45d415d22042bd0b9081aea57f362da3f35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      # The Python tooling here is standard-library only, so the runner's own interpreter is all
+      # it needs and this workflow deliberately installs nothing with pip. Printing the version
+      # keeps the interpreter the checks actually ran on visible in the log.
+      - name: Show the Python version
+        run: python3 --version
+
+      # ubuntu-latest normally ships ninja already; skip the flake-prone apt-get update when it does.
+      - name: Install Ninja
+        run: command -v ninja || { sudo apt-get update && sudo apt-get install -y ninja-build; }
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$RUNNER_TEMP/vcpkg"
+          git -C "$RUNNER_TEMP/vcpkg" checkout "$VCPKG_COMMIT"
+          "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+          echo "VCPKG_ROOT=$RUNNER_TEMP/vcpkg" >> "$GITHUB_ENV"
+          echo "VCPKG_TOOLCHAIN_PATH=$RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake" >> "$GITHUB_ENV"
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: checks-linux-amd64
+
+      # Every step below runs against build/release. That shell has the extension statically
+      # linked (duckdb_functions() lists dijkstra with no LOAD), so the generators exercise the
+      # build this commit produces rather than a separately installed one, and the same build tree
+      # carries test/unittest for the layer 5 sqllogictest.
+      - name: Build (release)
+        run: make release
+
+      # Layer 2. The sample-data CSVs under test/data/pgrouting_sample/ are rebuilt from upstream's
+      # committed tools/testers/sampledata.pg and docqueries/src/sampledata.result; --check fails
+      # when what is committed no longer matches what those two upstream files say. This is how a
+      # pgRouting submodule bump that changes the sample data is caught.
+      - name: Layer 2 - sample-data fixtures match upstream
+        run: python3 scripts/export_sampledata.py --check
+
+      # Layer 1 staleness. This is not a text diff: the generator executes every translated query
+      # against the binary built above and compares the rows with upstream's committed .result
+      # fixture, so a difference here has exactly three possible causes, and all three deserve a
+      # human look because the right response differs in each case.
+      #   1. The committed tests under test/sql/pgrouting/ are stale - the generator, a translation
+      #      rule or a fixture changed and nobody regenerated. Response: regenerate and commit.
+      #   2. An equal-cost Boost tie has flipped to the other side, which is exactly what a Boost
+      #      or vcpkg bump does: the route through a tied node changes while the endpoints, the
+      #      row count and the total agg_cost stay identical. Response: re-review the tie and
+      #      accept the new side deliberately, not by reflex.
+      #   3. A real regression in the extension. Response: revert or fix.
+      # Only a failing build separates them; a check that passed quietly would hide (2) and (3)
+      # behind (1).
+      # --category dijkstra: without it the generator globs all 31 upstream docquery categories,
+      # including ones with no pgr_ call for the translator to rewrite (e.g. contraction's plain
+      # `SELECT id, is_contracted FROM vertices`), which then fails to bind against this
+      # repository's five-table fixture. dijkstra is the only category this extension implements.
+      - name: Layer 1 - generated docqueries tests are up to date
+        run: python3 scripts/gen_docqueries_tests.py --category dijkstra --check
+
+      - name: Unit tests for the tooling
+        run: python3 -m unittest discover -s scripts/tests
+
+      # Layer 4. Upstream's sql/sigs/pgrouting--<ver>.sig against duckdb_functions(), matched
+      # through the pgrouting_name tag rather than by row count: one upstream signature is
+      # intentionally registered as two DuckDB variants.
+      - name: Layer 4 - signature coverage
+        run: python3 scripts/check_signatures.py
+
+      # Layer 5. Loads the core extensions beside routing and asserts no public name is shared.
+      # Run directly rather than through `make test_release`, which would re-run the whole suite
+      # that MainDistributionPipeline.yml already runs.
+      - name: Layer 5 - no public name collides with another extension
+        run: build/release/test/unittest test/sql/collisions.test
