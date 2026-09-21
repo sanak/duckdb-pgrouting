@@ -76,6 +76,13 @@ asserted against `true` / `false`.
 - PostgreSQL allows a parameter with a default to be passed positionally or by name; DuckDB never
   matches a named parameter positionally. Every upstream signature is therefore registered twice,
   with and without a trailing positional `directed`.
+- The order in which an input query's rows reach pgRouting is not guaranteed stable: DuckDB's
+  `list()` does not preserve scan order once the scan runs on several threads, and `ORDER BY` in
+  the caller's own SQL does not change that. Boost breaks an equal-cost predecessor tie by
+  adjacency-list insertion order and pgRouting inserts edges in fetch order, so on a large enough
+  edge set the same query on the same data may return different equal-cost routes between runs.
+  Every answer is still cost-optimal, and PostgreSQL's unordered scans give pgRouting the same
+  property.
 
 ## Conventions
 
@@ -89,9 +96,11 @@ asserted against `true` / `false`.
 5. The default branch is `main`.
 6. Every new source file carries an SPDX header (`# SPDX-License-Identifier: GPL-2.0-or-later`
    for the `#`-comment class). Deliberate exemptions: `vcpkg.json` (JSON has no comment syntax),
-   the Markdown documentation (`README.md`, `AGENTS.md`, `CLAUDE.md`) and `LICENSE`, and
-   `.gitignore` / `.gitmodules` (git metadata, not source). In a sqllogictest the header goes
-   *after* the `# name:` / `# description:` / `# group:` block, which is parsed positionally.
+   the CSV test fixtures under `test/data/` (CSV has no comment syntax either, and a `#` line
+   would be read as data), the Markdown documentation (`README.md`, `AGENTS.md`, `CLAUDE.md`) and
+   `LICENSE`, and `.gitignore` / `.gitmodules` (git metadata, not source). In a sqllogictest the
+   header goes *after* the `# name:` / `# description:` / `# group:` block, which is parsed
+   positionally.
 7. The upstream↔public function name mapping (`pgr_dijkstra` ↔ `dijkstra`, and so on) lives only
    in the `pgrouting_name` function tag, read back from `duckdb_functions()`; never duplicate it
    in a script.

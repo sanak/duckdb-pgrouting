@@ -66,19 +66,32 @@ SELECT * FROM dijkstra(
 11	5	6	17	17	-1	0	4
 
 # ------------------------------------------------------------------------------------------------
-# Boost-version-dependent ties, affecting several blocks below
+# Equal-cost ties, affecting several blocks below
 #
 # The queries below that carry a "tie-insensitive companion" each compute at least one path
 # through a small equal-cost region of this graph. Every divergence from upstream's transcribed
 # docqueries/dijkstra/dijkstra.result output in this file has the same shape: identical
 # start_vid/end_vid, identical row count, identical total cost (agg_cost) - only a different
-# equal-cost intermediate route. This extension links boost-graph:arm64-osx@1.89.0 (vcpkg);
+# equal-cost intermediate route. Two independent things decide which of the tied routes comes out.
+#
+# The first is the Boost release. This extension links boost-graph:arm64-osx@1.89.0 (vcpkg);
 # upstream's fixture was almost certainly generated against a different Boost release, and Boost's
 # dijkstra_shortest_paths has changed its default priority-queue implementation across releases,
 # which is documented to change only tie-breaking among equal-weight edges. Each case was verified
 # by calling _pgr_shortestpath_exec directly, bypassing bind_replace entirely, which reproduces the
 # same route: the tie-break happens inside pgRouting's own unmodified dijkstra_shortest_paths call,
-# not in this extension's argument wiring.
+# not in this extension's argument wiring. That is what the amended rows below record, and it
+# changes only when the Boost dependency moves.
+#
+# The second is the order in which the edges reach the graph. Boost breaks an equal-cost
+# predecessor tie by adjacency-list insertion order, and pgRouting's insert_edges inserts in fetch
+# order, so the order this extension materializes the user's edges query in propagates straight
+# through. DuckDB's list() does not preserve scan order once the scan runs on several threads, and
+# adding ORDER BY to the user's own SQL does not change that, so on a large enough edges query the
+# same query on the same data can return different equal-cost routes on different runs. Every
+# answer is still cost-optimal, and PostgreSQL's own unordered scans give pgr_dijkstra the same
+# property. This graph is far too small for it: its 18 rows sit in one row group and scan
+# single-threaded, so the exact rows below are stable.
 #
 #   q4 (both paths; the search is rooted at 17 in the reversed graph, normal = false): node 12,
 #     distance 2 from 17, has two equal-cost predecessors; upstream picks node 11 (edge 11), this

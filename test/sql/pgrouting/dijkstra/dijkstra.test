@@ -18,8 +18,8 @@
 # (id, source, target, cost, reverse_cost) that calls pgr_Dijkstra/pgr_dijkstra: q2, q3, q4, q5,
 # q51, q52, q6, q7, q8 and q70-q73 (q9 is empty upstream and is skipped). It does not cover the
 # remaining pgr_dijkstra documentation queries built on edges tables with no reverse_cost column,
-# or with a directed flag or vertex list passed differently from those ten; converting those is
-# later work, not part of what this file promises to check.
+# or with a directed flag or vertex list passed differently from those thirteen; converting those
+# is later work, not part of what this file promises to check.
 
 require routing
 
