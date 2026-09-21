@@ -29,12 +29,18 @@ unified `do_shortestPath` driver.
   and includes neither.
 - `src/exec/` — input registry, driver invocation and the internal in-out table function.
 - `src/functions/` — the declarative overload table and the public function registration.
-- `test/sql/` — sqllogictests.
+- `test/sql/` — sqllogictests. `test/sql/pgrouting/<category>/<name>.test` is generated from
+  upstream's documentation queries and is never hand-edited.
+- `test/data/pgrouting_sample/` — CSV fixtures rebuilt from upstream's committed sample data.
+- `test/pgrouting_skip.json`, `test/pgrouting_ties.json`, `test/pgrouting_not_ported.json` — the
+  three control files the test tooling reads; see *Test tooling* for who owns each.
+- `scripts/` — the Python test tooling and its `unittest` suite under `scripts/tests/`.
 - `scripts/git-hooks/` — optional local commit guards (`make install-hooks`).
 
 ## Build and test
 
-Prerequisites: CMake, Ninja, a C++17 compiler, vcpkg (for Boost), and for Wasm: Emscripten
+Prerequisites: CMake, Ninja, a C++17 compiler, Python 3.9 or newer, vcpkg (for Boost), and for
+Wasm: Emscripten
 3.1.71 and Node 24 (the version CI pins for the Wasm test workflow; Node 22.22.0 is also known to
 run all three Wasm unittest variants locally).
 
@@ -61,6 +67,51 @@ Do not pass `DUCKDB_PLATFORM=` to the Wasm targets: the inherited
 sqllogictest `query` directives accept only the column-type characters `T` (text), `I` (integer)
 and `R` (floating point). There is no `B` for boolean, so a boolean column is declared `T` and
 asserted against `true` / `false`.
+
+## Test tooling
+
+`scripts/` holds four Python tools over two shared modules, plus their `unittest` suite. They read
+upstream's committed fixtures and drive the built `duckdb` binary; none of them needs PostgreSQL,
+and none of them ever writes under `third_party/pgrouting`.
+
+- `scripts/pgparse.py` — upstream's two fixture formats only: the `/* -- <name> */` blocks of a
+  `.pg` file, and the psql aligned-output tables, notices and errors of a `.result` file.
+- `scripts/duckdbcli.py` — runs SQL through `build/release/duckdb` and returns typed rows. That
+  binary already has the extension statically linked, so nothing is `LOAD`ed and no Python DuckDB
+  package is involved; a pip-installed driver would exercise a different build than the one CI
+  ships.
+- `scripts/export_sampledata.py` — rebuilds `test/data/pgrouting_sample/*.csv` from upstream's
+  `tools/testers/sampledata.pg` and `docqueries/src/sampledata.result`. `--check` fails when the
+  committed fixtures no longer match what those upstream files say.
+- `scripts/gen_docqueries_tests.py` — translates upstream's documentation queries into
+  `test/sql/pgrouting/<category>/<name>.test`, executing every translated query so it can tell an
+  equal-cost tie from a defect. `--check` regenerates and fails on any difference.
+- `scripts/check_signatures.py` — compares upstream's `sql/sigs/pgrouting--<ver>.sig` against
+  `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
+  signature is intentionally registered as two DuckDB variants.
+
+The generators execute queries against the release binary, so build it first:
+
+```bash
+GEN=ninja make release && python3 scripts/gen_docqueries_tests.py --category dijkstra
+GEN=ninja make release && python3 scripts/export_sampledata.py
+python3 -m unittest discover -s scripts/tests
+```
+
+Three JSON control files live under `test/`:
+
+| file | owner | content |
+|---|---|---|
+| `test/pgrouting_skip.json` | human | documentation blocks skipped entirely, each with a reason |
+| `test/pgrouting_ties.json` | the generator | blocks downgraded to tie-insensitive assertions, each with the observed difference — never hand-edited; regenerate instead |
+| `test/pgrouting_not_ported.json` | human | upstream functions deliberately not ported, each with a reason |
+
+CI has three workflows. `MainDistributionPipeline.yml` builds every DuckDB platform through
+DuckDB's reusable extension workflow. `WasmTests.yml` builds DuckDB's `unittest` for all three Wasm
+variants and runs the sqllogictests under Node. `Checks.yml` builds release on linux_amd64 and runs
+the two generators in `--check` mode, the tooling's unit tests, the signature comparison and
+`test/sql/collisions.test`; a `--check` failure means the committed artifact is stale, an
+equal-cost tie has flipped, or something regressed, and all three want a human.
 
 ## Architecture rules
 
@@ -109,6 +160,9 @@ asserted against `true` / `false`.
 7. The upstream↔public function name mapping (`pgr_dijkstra` ↔ `dijkstra`, and so on) lives only
    in the `pgrouting_name` function tag, read back from `duckdb_functions()`; never duplicate it
    in a script.
+8. The Python tooling under `scripts/` uses the standard library only. No `pip install` step exists
+   in CI or in the developer prerequisites, and its tests use `unittest`, not `pytest`. A
+   dependency that would need one is a reason to change the approach, not to add the dependency.
 
 `make install-hooks` installs commit-msg/pre-commit hooks that reject messages, paths or added
 lines matching the extended regular expressions listed in the untracked file

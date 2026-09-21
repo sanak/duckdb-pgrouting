@@ -2,3 +2,4 @@ build/
 .cache/
 duckdb_unittest_tempdir/
 tmp/
+__pycache__/
