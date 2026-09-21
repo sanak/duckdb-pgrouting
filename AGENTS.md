@@ -9,8 +9,10 @@ with pgRouting's SQL API minus the `pgr_` prefix (`pgr_dijkstra` → `dijkstra`)
 code (`third_party/pgrouting`, a submodule pinned to a release tag) is compiled **unmodified** and
 statically linked; only its PostgreSQL-specific layers are replaced. License: GPL-2.0-or-later.
 
-Current state: the extension loads and compiles the PostgreSQL-free part of pgRouting, but
-registers no SQL functions yet.
+Current state: the extension registers `dijkstra` — pgRouting's five `pgr_dijkstra` signatures,
+each in a short form and a positional-`directed` form, ten DuckDB table functions in total — and
+`DuckDB_pgRouting_Version()`. Every `dijkstra` call is rewritten into a call to pgRouting's own
+unified `do_shortestPath` driver.
 
 ## Layout
 
@@ -20,13 +22,21 @@ registers no SQL functions yet.
 - `cmake/pgrouting_sources.cmake` — explicit list of compiled upstream files; also reads the
   pgRouting version from upstream's `CMakeLists.txt`.
 - `src/routing_extension.cpp` — extension entry point (`LoadInternal`).
+- `src/pg_compat/` — PostgreSQL stub headers and the replaced upstream definitions. Compiled
+  only into pg_compat and pgRouting translation units: the stub `postgres.h` defines `ERROR` as
+  a macro and DuckDB has an enumerator of that name, so the two must never meet in one
+  translation unit. `src/include/routing/input_access.hpp` is the seam between the two worlds
+  and includes neither.
+- `src/exec/` — input registry, driver invocation and the internal in-out table function.
+- `src/functions/` — the declarative overload table and the public function registration.
 - `test/sql/` — sqllogictests.
 - `scripts/git-hooks/` — optional local commit guards (`make install-hooks`).
 
 ## Build and test
 
 Prerequisites: CMake, Ninja, a C++17 compiler, vcpkg (for Boost), and for Wasm: Emscripten
-3.1.71 and Node 24.
+3.1.71 and Node 24 (the version CI pins for the Wasm test workflow; Node 22.22.0 is also known to
+run all three Wasm unittest variants locally).
 
 ```bash
 git submodule update --init --recursive
@@ -61,6 +71,11 @@ asserted against `true` / `false`.
 - Add upstream files to `cmake/pgrouting_sources.cmake` one by one; no globbing.
 - Emscripten builds must keep C++ exception catching enabled: pgRouting's algorithms throw and
   catch internally.
+- `src/pg_compat/include` must precede `third_party/pgrouting/include` on the include path; that
+  ordering is what replaces upstream's PostgreSQL-dependent headers.
+- PostgreSQL allows a parameter with a default to be passed positionally or by name; DuckDB never
+  matches a named parameter positionally. Every upstream signature is therefore registered twice,
+  with and without a trailing positional `directed`.
 
 ## Conventions
 
@@ -77,6 +92,9 @@ asserted against `true` / `false`.
    the Markdown documentation (`README.md`, `AGENTS.md`, `CLAUDE.md`) and `LICENSE`, and
    `.gitignore` / `.gitmodules` (git metadata, not source). In a sqllogictest the header goes
    *after* the `# name:` / `# description:` / `# group:` block, which is parsed positionally.
+7. The upstream↔public function name mapping (`pgr_dijkstra` ↔ `dijkstra`, and so on) lives only
+   in the `pgrouting_name` function tag, read back from `duckdb_functions()`; never duplicate it
+   in a script.
 
 `make install-hooks` installs commit-msg/pre-commit hooks that reject messages, paths or added
 lines matching the extended regular expressions listed in the untracked file
