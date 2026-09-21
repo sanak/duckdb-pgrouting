@@ -75,9 +75,10 @@ Each of these would be a change no test could observe, so none of them is made:
   `dijkstra` documentation query returns a list-typed column today, so nothing exercises this, but
   the first category that does will meet it and the comparison in `gen_docqueries_tests.py` will
   need to normalize both sides first.
-- **`to_list_literal`'s empty-array case is unexercised.** `export_sampledata.py`'s
-  `to_list_literal` turns PostgreSQL's `{}` into `""` by construction, but no row in the current
-  fixture set actually carries an empty-but-present array, so that branch is not pinned by any test.
+- **`to_list_literal`'s empty-but-present array case is unexercised.** `export_sampledata.py`'s
+  `to_list_literal` turns PostgreSQL's `{}` into `[]`; an `""` cell (no array text at all) instead
+  short-circuits to `""` before that conversion runs. No row in the current fixture set carries an
+  empty-but-present array, so the `{}` → `[]` path is not pinned by any test.
 
 ## No coverage, by nature
 
@@ -86,12 +87,16 @@ Each of these would be a change no test could observe, so none of them is made:
   without fault injection. The rest of that mapping is pinned by `test/sql/dijkstra_errors.test`,
   but any claim that the mapping is covered has to carry this qualifier — it is never true
   unqualified.
-- **Two upstream categories, `dijkstraCostMatrix` and `dijkstraVia`, produce no generated test file
-  at all.** Every block in each one calls a function this extension does not implement, so the
-  generator has nothing left to write once the unimplemented ones are skipped, and it does not emit
-  a file with zero assertions. Coverage for "what upstream offers here that this build does not" is
-  therefore recorded only by layer 4 (the signature comparison) and `test/pgrouting_not_ported.json`
-  for any category that ends up with no generated file of its own.
+- **Two of the six stems in the `dijkstra` category, `dijkstraCostMatrix` and `dijkstraVia`,
+  produce no generated test file at all.** Every block in each one calls a function this extension
+  does not implement (`pgr_dijkstraCostMatrix` and `pgr_TSP` for the former, `pgr_dijkstravia` for
+  the latter), so the generator has nothing left to write once the unimplemented ones are skipped,
+  and it does not emit a file with zero assertions. The category itself still has generated files —
+  `dijkstra.test`, `dijkstraCost.test`, `dijkstraNear.test` and `dijkstraNearCost.test` all exist —
+  only these two stems within it have none. Coverage for "what upstream offers here that this build
+  does not" is recorded by layer 4 (the signature comparison) for all three functions, and by
+  `test/pgrouting_not_ported.json` only for `pgr_dijkstravia`; the other two surface solely through
+  `check_signatures.py`'s unimplemented-function list.
 
 ## Open decision
 
