@@ -9,6 +9,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import check_signatures as cs
+import duckdbcli
 
 
 class ParseSigFileTest(unittest.TestCase):
@@ -108,6 +109,52 @@ class LoadNotPortedTest(unittest.TestCase):
         path = self._write('["pgr_dijkstravia"]')
         with self.assertRaises(ValueError):
             cs.load_not_ported(path)
+
+
+class CollectVariantsTest(unittest.TestCase):
+    """collect_variants splits array_to_string(..., chr(31)) back into tuples.
+
+    This split is new logic that exists only because DuckDB's `.mode json` cannot render a LIST
+    column as valid JSON (it uses list-literal syntax such as `[col0, col1]`), so
+    duckdbcli.DuckDB.query() fails on the brief's original query that selects `parameters` and
+    `parameter_types` directly. collect_variants works around that by joining each list into one
+    VARCHAR with chr(31) and splitting it back apart here -- these tests pin down that round trip
+    with a stub `db`, not a live DuckDB process.
+    """
+
+    class _FakeDB:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def query(self, sql):
+            return duckdbcli.QueryResult(
+                columns=["pgrouting_name", "parameters", "parameter_types"],
+                types=["VARCHAR", "VARCHAR", "VARCHAR"],
+                rows=self._rows,
+            )
+
+    def test_splits_a_multi_element_list(self):
+        db = self._FakeDB([["pgr_dijkstra", "col0\x1fcol1\x1fdirected",
+                            "VARCHAR\x1fBIGINT\x1fBOOLEAN"]])
+        self.assertEqual(cs.collect_variants(db),
+                         {"pgr_dijkstra": [(("col0", "col1", "directed"),
+                                            ("VARCHAR", "BIGINT", "BOOLEAN"))]})
+
+    def test_splits_a_single_element_list(self):
+        db = self._FakeDB([["pgr_foo", "col0", "VARCHAR"]])
+        self.assertEqual(cs.collect_variants(db),
+                         {"pgr_foo": [(("col0",), ("VARCHAR",))]})
+
+    def test_empty_parameter_list_is_an_empty_tuple_not_a_tuple_of_one_empty_string(self):
+        db = self._FakeDB([["pgr_version", "", ""]])
+        self.assertEqual(cs.collect_variants(db), {"pgr_version": [((), ())]})
+
+    def test_groups_multiple_rows_under_the_same_function_name(self):
+        db = self._FakeDB([
+            ["pgr_dijkstra", "col0\x1fcol1\x1fdirected", "VARCHAR\x1fBIGINT\x1fBOOLEAN"],
+            ["pgr_dijkstra", "col0\x1fcol1", "VARCHAR\x1fBIGINT"],
+        ])
+        self.assertEqual(len(cs.collect_variants(db)["pgr_dijkstra"]), 2)
 
 
 if __name__ == "__main__":
