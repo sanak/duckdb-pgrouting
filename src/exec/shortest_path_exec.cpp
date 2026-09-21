@@ -28,6 +28,15 @@ namespace duckdb {
 
 namespace {
 
+// The child names and types of one LIST(STRUCT) input column, read off the bound type. `known`
+// stays false for a column that is absent or SQLNULL-typed, i.e. one that carries no row shape at
+// all; see RunOnce for why the shape is needed even when the column's cell is NULL.
+struct RowSchema {
+	bool known = false;
+	vector<string> names;
+	vector<LogicalType> types;
+};
+
 struct ShortestPathExecBindData : public TableFunctionData {
 	duckdb_routing::DriverRequest request;
 	bool null_input = false;
@@ -37,6 +46,8 @@ struct ShortestPathExecBindData : public TableFunctionData {
 	idx_t combinations_column = DConstants::INVALID_INDEX;
 	idx_t starts_column = DConstants::INVALID_INDEX;
 	idx_t ends_column = DConstants::INVALID_INDEX;
+	RowSchema edges_schema;
+	RowSchema combinations_schema;
 };
 
 struct ShortestPathExecState : public LocalTableFunctionState {
@@ -106,6 +117,21 @@ bool Unpack(ClientContext &context, Vector &list_column, idx_t row, duckdb_routi
 		source->ToUnifiedFormat(out.columns[c]);
 	}
 	return true;
+}
+
+// Builds a registrable input that has the right columns and no rows. pgRouting's fetchers resolve
+// and type-check the column names before reading any row (fetch_column_info), and never index the
+// per-column vectors when the row count is zero, so `columns` is deliberately left empty.
+duckdb_routing::MaterializedInput EmptyInput(const RowSchema &schema) {
+	duckdb_routing::MaterializedInput input;
+	input.names = schema.names;
+	input.types = schema.types;
+	for (auto &type : schema.types) {
+		// Unpack casts a DECIMAL child to DOUBLE and reports DOUBLE here; both land in
+		// ColumnClass::NUMERIC, so the class a zero-row input reports is the same either way.
+		input.classes.push_back(ClassOf(type));
+	}
+	return input;
 }
 
 // `name` is the column ('starts'/'ends') this list came from, needed only to name it in the
@@ -208,6 +234,25 @@ void CheckRowListColumn(TableFunctionBindInput &input, idx_t column, const char 
 	}
 }
 
+// Records the row shape of an already-validated LIST(STRUCT) column, spelling the child names
+// exactly as Unpack does so that a zero-row input answers FindColumn the same way a populated one
+// would. A column that is absent or SQLNULL-typed leaves `known` false.
+void CaptureRowSchema(TableFunctionBindInput &input, idx_t column, RowSchema &schema) {
+	if (column == DConstants::INVALID_INDEX) {
+		return;
+	}
+	const auto &type = input.input_table_types[column];
+	if (IsAlwaysNull(type)) {
+		return;
+	}
+	auto &struct_type = ListType::GetChildType(type);
+	for (idx_t c = 0; c < StructType::GetChildCount(struct_type); c++) {
+		schema.names.push_back(StructType::GetChildName(struct_type, c).GetIdentifierName());
+		schema.types.push_back(StructType::GetChildType(struct_type, c));
+	}
+	schema.known = true;
+}
+
 unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBindInput &input,
                                               vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto data = make_uniq<ShortestPathExecBindData>();
@@ -241,6 +286,8 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	CheckRowListColumn(input, data->combinations_column, "combinations");
 	CheckIdListColumn(input, data->starts_column, "starts");
 	CheckIdListColumn(input, data->ends_column, "ends");
+	CaptureRowSchema(input, data->edges_column, data->edges_schema);
+	CaptureRowSchema(input, data->combinations_column, data->combinations_schema);
 
 	return_types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT,
 	                LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::DOUBLE, LogicalType::DOUBLE};
@@ -265,15 +312,28 @@ void RunOnce(ClientContext &context, const ShortestPathExecBindData &bind, Short
 	auto request = bind.request;
 	// The materialized inputs reference this chunk, so nothing here may outlive the driver call.
 	state.registry = duckdb_routing::InputRegistry();
+	// An input query that matches no rows makes `list(<row>)` evaluate to NULL, so there is no
+	// list to unpack even though the query itself was fine. pgRouting treats an empty edge set (or
+	// an empty combinations set) as an ordinary empty result rather than an error, but it only
+	// gets there by looking the SQL string up in the registry first. Registering the bound row
+	// shape with no rows is what reproduces that; leaving it unregistered would instead surface
+	// the lookup miss, which means "this extension failed to provide an input it promised".
+	// A column with no bound row shape (`known` false) is an input this overload does not use at
+	// all, and the driver never asks for it, so it stays unregistered.
 	duckdb_routing::MaterializedInput edges;
 	if (Unpack(context, input.data[bind.edges_column], 0, edges)) {
 		state.registry.Register(request.edges_sql, duckdb_routing::KIND_EDGES, std::move(edges));
+	} else if (bind.edges_schema.known) {
+		state.registry.Register(request.edges_sql, duckdb_routing::KIND_EDGES, EmptyInput(bind.edges_schema));
 	}
 	if (bind.combinations_column != DConstants::INVALID_INDEX) {
 		duckdb_routing::MaterializedInput combinations;
 		if (Unpack(context, input.data[bind.combinations_column], 0, combinations)) {
 			state.registry.Register(request.combinations_sql, duckdb_routing::KIND_COMBINATIONS,
 			                        std::move(combinations));
+		} else if (bind.combinations_schema.known) {
+			state.registry.Register(request.combinations_sql, duckdb_routing::KIND_COMBINATIONS,
+			                        EmptyInput(bind.combinations_schema));
 		}
 	}
 	request.starts = ReadIdList(input, bind.starts_column, "starts", request.has_starts);
