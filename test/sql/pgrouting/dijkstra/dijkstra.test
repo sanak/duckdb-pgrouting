@@ -1,55 +1,43 @@
 # name: test/sql/pgrouting/dijkstra/dijkstra.test
-# description: Upstream pgr_dijkstra documentation queries, converted by hand
+# description: Generated from pgRouting's dijkstra documentation queries
 # group: [pgrouting]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Queries and expected rows come from pgRouting v4.0.2's own documentation queries for
-# pgr_dijkstra (third_party/pgrouting/docqueries/dijkstra/dijkstra.pg and its committed
-# dijkstra.result); the only edits are the dropped pgr_ prefix and psql's aligned output rewritten
-# as sqllogictest rows, except as noted in the block below this header. The sample graph and
-# combinations are the ones pgRouting's documentation uses; test/data/pgrouting_sample/edges.csv
-# and combinations.csv were transcribed from docqueries/src/sampledata.result (source/target) and
-# tools/testers/sampledata.pg (cost, reverse_cost, and the combinations rows) since building the
-# fixture upstream's own way requires PostGIS and pgr_extractVertices, neither of which this
-# extension depends on.
+# GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
+# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
 #
-# This file covers every documentation query built on the edges table's five-argument signature
-# (id, source, target, cost, reverse_cost) that calls pgr_Dijkstra/pgr_dijkstra: q2, q3, q4, q5,
-# q51, q52, q6, q7, q8 and q70-q73 (q9 is empty upstream and is skipped). It does not cover the
-# remaining pgr_dijkstra documentation queries built on edges tables with no reverse_cost column,
-# or with a directed flag or vertex list passed differently from those thirteen; converting those
-# is later work, not part of what this file promises to check.
+# Source: third_party/pgrouting/docqueries/dijkstra/dijkstra.pg and the committed transcript beside it. The queries and their expected rows are
+# upstream's; the only edits are the dropped pgr_ prefix and psql's aligned output rewritten as
+# sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
+# line with its reason, so what this file does not cover is visible here rather than implied.
 
 require routing
 
 statement ok
-CREATE TABLE edges AS SELECT * FROM read_csv_auto('test/data/pgrouting_sample/edges.csv');
+CREATE TABLE edges AS
+  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/edges.csv');
 
 statement ok
-CREATE TABLE combinations AS SELECT * FROM read_csv_auto('test/data/pgrouting_sample/combinations.csv');
+CREATE TABLE vertices AS
+  SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges,
+         CAST(out_edges AS BIGINT[]) AS out_edges, x, y
+  FROM read_csv_auto('test/data/pgrouting_sample/vertices.csv');
 
-# ------------------------------------------------------------------------------------------------
-# Boost-version-dependent ties
-#
-# q4, q5, q6 and q7 below each diverge from upstream's committed dijkstra.result by an equal-cost
-# tie-break only: same start_vid/end_vid, same row count, same total cost (agg_cost), only a
-# different equal-cost intermediate route. test/sql/dijkstra.test already documents this in detail
-# (the vendored Boost 1.89 breaks a tie at node 12 that upstream's fixture, generated against a
-# different Boost release, breaks the other way) for the very same pairs reached here:
-#   - q4 (both paths, upstream ARRAY[6, 1] -> 17): the tie at node 12, distance 2 from
-#     destination 17 in the reversed, destination-rooted search. q5's 6-to-17 path hits the same
-#     node-12 tie, reached differently: distance 3 from departure 6, in an undirected search
-#     rooted at the departure, not the destination.
-#   - q6 and q7 (the (10, 7) and (15, 7) pairs; the other four pairs in each match upstream
-#     exactly): the ties at node 7 (from departure 10) and node 11 (from departure 15).
-# The four blocks below carry this build's own observed rows instead of upstream's, each followed
-# by a tie-insensitive companion query (start_vid, end_vid, row count, total agg_cost) whose
-# numbers are unaffected by which side of the tie a future Boost/vcpkg bump lands on and are
-# identical to upstream's.
-# ------------------------------------------------------------------------------------------------
+statement ok
+CREATE TABLE pointsofinterest AS
+  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/pointsofinterest.csv');
 
-# q2: positional directed
+statement ok
+CREATE TABLE combinations AS
+  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/combinations.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+  SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+  FROM read_csv_auto('test/data/pgrouting_sample/restrictions.csv');
+
+# q2
 query IIIIIIRR
 SELECT * FROM Dijkstra(
   'select id, source, target, cost, reverse_cost from edges',
@@ -62,7 +50,7 @@ SELECT * FROM Dijkstra(
 5	5	6	10	15	3	1	4
 6	6	6	10	10	-1	0	5
 
-# q3: one to many
+# q3
 query IIIIIIRR
 SELECT * FROM Dijkstra(
   'select id, source, target, cost, reverse_cost from edges',
@@ -80,73 +68,26 @@ SELECT * FROM Dijkstra(
 10	4	6	17	16	15	1	3
 11	5	6	17	17	-1	0	4
 
-# q4: many to one. This build's own observed rows: node 12, distance 2 from destination 17 in
-# the reversed search, has two equal-cost predecessors; upstream picks node 11 (edge 11), this
-# build picks node 8 (edge 12). See test/sql/dijkstra.test's tie-break summary for the full
-# analysis (same graph, same pair, same tie).
-query IIIIIIRR
-SELECT * FROM Dijkstra(
-  'select id, source, target, cost, reverse_cost from edges',
-  ARRAY[6, 1], 17);
-----
-1	1	1	17	1	6	1	0
-2	2	1	17	3	7	1	1
-3	3	1	17	7	10	1	2
-4	4	1	17	8	12	1	3
-5	5	1	17	12	13	1	4
-6	6	1	17	17	-1	0	5
-7	1	6	17	6	4	1	0
-8	2	6	17	7	10	1	1
-9	3	6	17	8	12	1	2
-10	4	6	17	12	13	1	3
-11	5	6	17	17	-1	0	4
-
-# Tie-insensitive companion for q4.
+# q4: this build reaches the same optimum by a different equal-cost route, so only what upstream
+# guarantees is asserted: endpoints, row count and total agg_cost
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM Dijkstra(
+FROM (SELECT * FROM Dijkstra(
   'select id, source, target, cost, reverse_cost from edges',
-  ARRAY[6, 1], 17)
+  ARRAY[6, 1], 17))
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
 ----
 1	17	6	5
 6	17	5	4
 
-# q5: many to many, undirected. This build's own observed rows: the 6-to-17 path diverges from
-# upstream at the same node-12 tie as q4 (reached here via an undirected search rooted at 6); the
-# 1-to-17 and 1-to-10 and 6-to-10 paths never reach node 12 and match upstream exactly.
-query IIIIIIRR
-SELECT * FROM Dijkstra(
-  'select id, source, target, cost, reverse_cost from edges',
-  ARRAY[6, 1], ARRAY[10, 17],
-  directed => false);
-----
-1	1	1	10	1	6	1	0
-2	2	1	10	3	7	1	1
-3	3	1	10	7	4	1	2
-4	4	1	10	6	2	1	3
-5	5	1	10	10	-1	0	4
-6	1	1	17	1	6	1	0
-7	2	1	17	3	7	1	1
-8	3	1	17	7	8	1	2
-9	4	1	17	11	9	1	3
-10	5	1	17	16	15	1	4
-11	6	1	17	17	-1	0	5
-12	1	6	10	6	2	1	0
-13	2	6	10	10	-1	0	1
-14	1	6	17	6	4	1	0
-15	2	6	17	7	10	1	1
-16	3	6	17	8	12	1	2
-17	4	6	17	12	13	1	3
-18	5	6	17	17	-1	0	4
-
-# Tie-insensitive companion for q5.
+# q5: this build reaches the same optimum by a different equal-cost route, so only what upstream
+# guarantees is asserted: endpoints, row count and total agg_cost
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM Dijkstra(
+FROM (SELECT * FROM Dijkstra(
   'select id, source, target, cost, reverse_cost from edges',
   ARRAY[6, 1], ARRAY[10, 17],
-  directed => false)
+  directed => false))
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
 ----
 1	10	5	4
@@ -154,7 +95,7 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 6	10	2	1
 6	17	5	4
 
-# q51: the combinations table used by q52 below.
+# q51
 query II
 SELECT source, target FROM combinations;
 ----
@@ -164,8 +105,7 @@ SELECT source, target FROM combinations;
 6	15
 6	14
 
-# q52: combinations, positional undirected. (6, 14) has no path (14 is only reachable through 13,
-# in a separate component) and so contributes no rows, matching upstream.
+# q52
 query IIIIIIRR
 SELECT * FROM Dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
@@ -183,43 +123,13 @@ SELECT * FROM Dijkstra(
 9	2	6	15	10	3	1	1
 10	3	6	15	15	-1	0	2
 
-# q6: many to many. This build's own observed rows: the (10, 7) and (15, 7) pairs each diverge
-# from upstream at a node with two equal-cost predecessors (node 7 from departure 10, node 11 from
-# departure 15); the other four pairs (7,10), (7,15), (10,15) and (15,10) match upstream exactly.
-query IIIIIIRR
-SELECT * FROM Dijkstra(
-  'select id, source, target, cost, reverse_cost from edges',
-  ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15]);
-----
-1	1	7	10	7	8	1	0
-2	2	7	10	11	9	1	1
-3	3	7	10	16	16	1	2
-4	4	7	10	15	3	1	3
-5	5	7	10	10	-1	0	4
-6	1	7	15	7	8	1	0
-7	2	7	15	11	9	1	1
-8	3	7	15	16	16	1	2
-9	4	7	15	15	-1	0	3
-10	1	10	7	10	2	1	0
-11	2	10	7	6	4	1	1
-12	3	10	7	7	-1	0	2
-13	1	10	15	10	5	1	0
-14	2	10	15	11	9	1	1
-15	3	10	15	16	16	1	2
-16	4	10	15	15	-1	0	3
-17	1	15	7	15	3	1	0
-18	2	15	7	10	5	1	1
-19	3	15	7	11	8	1	2
-20	4	15	7	7	-1	0	3
-21	1	15	10	15	3	1	0
-22	2	15	10	10	-1	0	1
-
-# Tie-insensitive companion for q6, covering all six pairs.
+# q6: this build reaches the same optimum by a different equal-cost route, so only what upstream
+# guarantees is asserted: endpoints, row count and total agg_cost
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM Dijkstra(
+FROM (SELECT * FROM Dijkstra(
   'select id, source, target, cost, reverse_cost from edges',
-  ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15])
+  ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15]))
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
 ----
 7	10	5	4
@@ -229,43 +139,13 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 15	7	4	3
 15	10	2	1
 
-# q7: many to many, the same six pairs as q6 from a clean, deduplicated start array. Same tie
-# behavior as q6, at the same two pairs; the rows below are this build's own observed output for
-# the (10, 7) and (15, 7) pairs, not upstream's.
-query IIIIIIRR
-SELECT * FROM Dijkstra(
-  'select id, source, target, cost, reverse_cost from edges',
-  ARRAY[7, 10, 15], ARRAY[7, 10, 15]);
-----
-1	1	7	10	7	8	1	0
-2	2	7	10	11	9	1	1
-3	3	7	10	16	16	1	2
-4	4	7	10	15	3	1	3
-5	5	7	10	10	-1	0	4
-6	1	7	15	7	8	1	0
-7	2	7	15	11	9	1	1
-8	3	7	15	16	16	1	2
-9	4	7	15	15	-1	0	3
-10	1	10	7	10	2	1	0
-11	2	10	7	6	4	1	1
-12	3	10	7	7	-1	0	2
-13	1	10	15	10	5	1	0
-14	2	10	15	11	9	1	1
-15	3	10	15	16	16	1	2
-16	4	10	15	15	-1	0	3
-17	1	15	7	15	3	1	0
-18	2	15	7	10	5	1	1
-19	3	15	7	11	8	1	2
-20	4	15	7	7	-1	0	3
-21	1	15	10	15	3	1	0
-22	2	15	10	10	-1	0	1
-
-# Tie-insensitive companion for q7, same rationale as q6's.
+# q7: this build reaches the same optimum by a different equal-cost route, so only what upstream
+# guarantees is asserted: endpoints, row count and total agg_cost
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM Dijkstra(
+FROM (SELECT * FROM Dijkstra(
   'select id, source, target, cost, reverse_cost from edges',
-  ARRAY[7, 10, 15], ARRAY[7, 10, 15])
+  ARRAY[7, 10, 15], ARRAY[7, 10, 15]))
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
 ----
 7	10	5	4
@@ -275,7 +155,7 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 15	7	4	3
 15	10	2	1
 
-# q8: combinations passed as SQL text, positional directed.
+# q8
 query IIIIIIRR
 SELECT * FROM Dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
@@ -295,8 +175,7 @@ SELECT * FROM Dijkstra(
 12	4	12	10	15	3	1	3
 13	5	12	10	10	-1	0	4
 
-# q70: one to one, the shortest signature (directed defaults to true, using lowercase pgr_dijkstra
-# as upstream does for this and the remaining queries).
+# q70
 query IIIIIIRR
 SELECT * FROM dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
@@ -345,3 +224,444 @@ SELECT * FROM dijkstra(
 3	3	12	7	16	9	1	2
 4	4	12	7	11	8	1	3
 5	5	12	7	7	-1	0	4
+
+# q74
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  6, ARRAY[10, 7]
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	6	10	6	4	1	0
+4	2	6	10	7	8	1	1
+5	3	6	10	11	9	1	2
+6	4	6	10	16	16	1	3
+7	5	6	10	15	3	1	4
+8	6	6	10	10	-1	0	5
+
+# q75
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[6, 12], 7
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	12	7	12	13	1	0
+4	2	12	7	17	15	1	1
+5	3	12	7	16	9	1	2
+6	4	12	7	11	8	1	3
+7	5	12	7	7	-1	0	4
+
+# q76
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[6, 12], ARRAY[10,7]
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	6	10	6	4	1	0
+4	2	6	10	7	8	1	1
+5	3	6	10	11	9	1	2
+6	4	6	10	16	16	1	3
+7	5	6	10	15	3	1	4
+8	6	6	10	10	-1	0	5
+9	1	12	7	12	13	1	0
+10	2	12	7	17	15	1	1
+11	3	12	7	16	9	1	2
+12	4	12	7	11	8	1	3
+13	5	12	7	7	-1	0	4
+14	1	12	10	12	13	1	0
+15	2	12	10	17	15	1	1
+16	3	12	10	16	16	1	2
+17	4	12	10	15	3	1	3
+18	5	12	10	10	-1	0	4
+
+# q77
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS combinations (source, target)'
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	6	10	6	4	1	0
+4	2	6	10	7	8	1	1
+5	3	6	10	11	9	1	2
+6	4	6	10	16	16	1	3
+7	5	6	10	15	3	1	4
+8	6	6	10	10	-1	0	5
+9	1	12	10	12	13	1	0
+10	2	12	10	17	15	1	1
+11	3	12	10	16	16	1	2
+12	4	12	10	15	3	1	3
+13	5	12	10	10	-1	0	4
+
+# q90
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  6, 10,
+  false
+);
+----
+1	1	6	10	6	2	1	0
+2	2	6	10	10	-1	0	1
+
+# q91
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  6, 7,
+  false
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+
+# q92
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  12, 10,
+  false
+);
+----
+1	1	12	10	12	11	1	0
+2	2	12	10	11	5	1	1
+3	3	12	10	10	-1	0	2
+
+# q93: this build reaches the same optimum by a different equal-cost route, so only what upstream
+# guarantees is asserted: endpoints, row count and total agg_cost
+query IIIR
+SELECT start_vid, end_vid, count(*), max(agg_cost)
+FROM (SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  12, 7,
+  false
+))
+GROUP BY start_vid, end_vid ORDER BY 1, 2;
+----
+12	7	3	2
+
+# q94
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  6, ARRAY[10,7],
+  false
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	6	10	6	2	1	0
+4	2	6	10	10	-1	0	1
+
+# q95
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[6,12], 7,
+  false
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	12	7	12	12	1	0
+4	2	12	7	8	10	1	1
+5	3	12	7	7	-1	0	2
+
+# q96: this build reaches the same optimum by a different equal-cost route, so only what upstream
+# guarantees is asserted: endpoints, row count and total agg_cost
+query IIIR
+SELECT start_vid, end_vid, count(*), max(agg_cost)
+FROM (SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[6, 12], ARRAY[10,7],
+  false
+))
+GROUP BY start_vid, end_vid ORDER BY 1, 2;
+----
+6	7	2	1
+6	10	2	1
+12	7	3	2
+12	10	3	2
+
+# q97
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS combinations (source, target)',
+  false
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	6	10	6	2	1	0
+4	2	6	10	10	-1	0	1
+5	1	12	10	12	11	1	0
+6	2	12	10	11	5	1	1
+7	3	12	10	10	-1	0	2
+
+# q11
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  6, 10
+);
+----
+
+# q111
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  6, 7
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+
+# q112
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  12, 10
+);
+----
+
+# q113
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  12, 7
+);
+----
+
+# q114
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  6, ARRAY[10,7]
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+
+# q115
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  ARRAY[6,12], 7
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+
+# q116
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  ARRAY[6, 12], ARRAY[10,7]
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+
+# q117
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS combinations (source, target)'
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+
+# q13
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  6, 10,
+  false
+);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	5	1	2
+4	4	6	10	10	-1	0	3
+
+# q131
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  6, 7,
+  false
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+
+# q132
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  12, 10,
+  false
+);
+----
+1	1	12	10	12	11	1	0
+2	2	12	10	11	5	1	1
+3	3	12	10	10	-1	0	2
+
+# q133: this build reaches the same optimum by a different equal-cost route, so only what upstream
+# guarantees is asserted: endpoints, row count and total agg_cost
+query IIIR
+SELECT start_vid, end_vid, count(*), max(agg_cost)
+FROM (SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  12, 7,
+  false
+))
+GROUP BY start_vid, end_vid ORDER BY 1, 2;
+----
+12	7	3	2
+
+# q134
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  6, ARRAY[10,7],
+  false
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	6	10	6	4	1	0
+4	2	6	10	7	8	1	1
+5	3	6	10	11	5	1	2
+6	4	6	10	10	-1	0	3
+
+# q135
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  ARRAY[6,12], 7,
+  false
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	12	7	12	12	1	0
+4	2	12	7	8	10	1	1
+5	3	12	7	7	-1	0	2
+
+# q136: this build reaches the same optimum by a different equal-cost route, so only what upstream
+# guarantees is asserted: endpoints, row count and total agg_cost
+query IIIR
+SELECT start_vid, end_vid, count(*), max(agg_cost)
+FROM (SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  ARRAY[6, 12], ARRAY[10,7],
+  false
+))
+GROUP BY start_vid, end_vid ORDER BY 1, 2;
+----
+6	7	2	1
+6	10	4	3
+12	7	3	2
+12	10	3	2
+
+# q137
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges',
+  'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS combinations (source, target)',
+  false
+);
+----
+1	1	6	7	6	4	1	0
+2	2	6	7	7	-1	0	1
+3	1	6	10	6	4	1	0
+4	2	6	10	7	8	1	1
+5	3	6	10	11	5	1	2
+6	4	6	10	10	-1	0	3
+7	1	12	10	12	11	1	0
+8	2	12	10	11	5	1	1
+9	3	12	10	10	-1	0	2
+
+# q15
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  6, 10
+);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5
+
+# q151
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  6, ARRAY[10]
+);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5
+
+# q152
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[6], 10
+);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5
+
+# q153
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[6], ARRAY[10]
+);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5
+
+# q154
+query IIIIIIRR
+SELECT * FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT * FROM (VALUES(6, 10)) AS combinations (source, target)'
+);
+----
+1	1	6	10	6	4	1	0
+2	2	6	10	7	8	1	1
+3	3	6	10	11	9	1	2
+4	4	6	10	16	16	1	3
+5	5	6	10	15	3	1	4
+6	6	6	10	10	-1	0	5
+

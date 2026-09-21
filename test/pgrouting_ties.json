@@ -1,0 +1,44 @@
+{
+  "dijkstra/dijkstra.pg": {
+    "q133": {
+      "differing_rows": 2,
+      "reason": "equal-cost tie",
+      "upstream_rows": 3
+    },
+    "q136": {
+      "differing_rows": 2,
+      "reason": "equal-cost tie",
+      "upstream_rows": 12
+    },
+    "q4": {
+      "differing_rows": 4,
+      "reason": "equal-cost tie",
+      "upstream_rows": 11
+    },
+    "q5": {
+      "differing_rows": 2,
+      "reason": "equal-cost tie",
+      "upstream_rows": 18
+    },
+    "q6": {
+      "differing_rows": 4,
+      "reason": "equal-cost tie",
+      "upstream_rows": 22
+    },
+    "q7": {
+      "differing_rows": 4,
+      "reason": "equal-cost tie",
+      "upstream_rows": 22
+    },
+    "q93": {
+      "differing_rows": 2,
+      "reason": "equal-cost tie",
+      "upstream_rows": 3
+    },
+    "q96": {
+      "differing_rows": 2,
+      "reason": "equal-cost tie",
+      "upstream_rows": 10
+    }
+  }
+}

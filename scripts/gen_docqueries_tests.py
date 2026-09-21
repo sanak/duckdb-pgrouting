@@ -20,7 +20,9 @@ import os
 import pathlib
 import re
 import sys
+import textwrap
 from dataclasses import dataclass
+from itertools import zip_longest
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -32,6 +34,9 @@ import pgparse  # noqa: E402
 DOCQUERIES = "third_party/pgrouting/docqueries"
 OUT_ROOT = "test/sql/pgrouting"
 SKIP_FILE = "test/pgrouting_skip.json"
+TIES_FILE = "test/pgrouting_ties.json"
+TIE_COLUMNS = ("start_vid", "end_vid", "agg_cost")
+ROUTE_COLUMNS = ("node", "edge")
 
 # A call is an upstream function only when pgr_ starts an identifier, so my_pgr_dijkstra_helper
 # is left alone.
@@ -54,6 +59,7 @@ class Emitted:
     directive: str
     sql: str
     rows: List[List[str]]
+    note: str = ""
 
 
 @dataclass
@@ -138,22 +144,85 @@ def _actual(value: Any, slt_type: str) -> Any:
     return str(value)
 
 
-def compare(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str) -> None:
-    """Raise Mismatch unless this build reproduces upstream's rows exactly."""
+def _diff(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str) -> str:
+    """A unified diff of upstream's rows against this build's, both brought onto one footing."""
     expected = [[coerce(cell, t) for cell, t in zip(row, directive)] for row in table.rows]
     actual = [[_actual(v, t) for v, t in zip(row, directive)] for row in result.rows]
-    if expected != actual:
-        raise Mismatch(
-            "\n".join(
-                difflib.unified_diff(
-                    [repr(r) for r in expected],
-                    [repr(r) for r in actual],
-                    fromfile="upstream",
-                    tofile="this build",
-                    lineterm="",
-                )
-            )
+    return "\n".join(
+        difflib.unified_diff(
+            [repr(r) for r in expected],
+            [repr(r) for r in actual],
+            fromfile="upstream",
+            tofile="this build",
+            lineterm="",
         )
+    )
+
+
+def _differing(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str) -> int:
+    """How many rows are not identical between upstream's table and this build's result."""
+    expected = [[coerce(cell, t) for cell, t in zip(row, directive)] for row in table.rows]
+    actual = [[_actual(v, t) for v, t in zip(row, directive)] for row in result.rows]
+    return sum(1 for e, a in zip_longest(expected, actual, fillvalue=object()) if e != a)
+
+
+def tie_shape(columns: Sequence[str], rows: Sequence[Sequence[Any]],
+              directive: str) -> Optional[List[Tuple[Any, Any, int, Any]]]:
+    """The per-path summary upstream guarantees: endpoints, row count, total cost.
+
+    Returns None when this result carries no route, in which case there is nothing a tie could
+    hide and every difference is a defect.
+    """
+    lowered = [c.lower() for c in columns]
+    if not all(c in lowered for c in TIE_COLUMNS):
+        return None
+    if not any(c in lowered for c in ROUTE_COLUMNS):
+        return None
+    start = lowered.index("start_vid")
+    end = lowered.index("end_vid")
+    agg = lowered.index("agg_cost")
+    groups: Dict[Tuple[Any, Any], List[Any]] = {}
+    for row in rows:
+        key = (_actual(row[start], directive[start]), _actual(row[end], directive[end]))
+        groups.setdefault(key, []).append(_actual(row[agg], directive[agg]))
+    return sorted(
+        (key[0], key[1], len(costs), max(costs)) for key, costs in groups.items()
+    )
+
+
+def classify(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str) -> str:
+    """"match", "tie" or "defect" for one block."""
+    expected = [[coerce(cell, t) for cell, t in zip(row, directive)] for row in table.rows]
+    actual = [[_actual(v, t) for v, t in zip(row, directive)] for row in result.rows]
+    if expected == actual:
+        return "match"
+    upstream_shape = tie_shape(table.columns, table.rows, directive)
+    ours_shape = tie_shape(result.columns, result.rows, directive)
+    if upstream_shape is None or ours_shape is None:
+        return "defect"
+    return "tie" if upstream_shape == ours_shape else "defect"
+
+
+def companion_sql(sql: str) -> str:
+    """Wrap a query in the assertion that survives a tie flip."""
+    return (
+        "SELECT start_vid, end_vid, count(*), max(agg_cost)\n"
+        "FROM ({})\n"
+        "GROUP BY start_vid, end_vid ORDER BY 1, 2;".format(sql.strip().rstrip(";"))
+    )
+
+
+def companion_rows(table: pgparse.AlignedTable, directive: str) -> List[List[str]]:
+    """The companion's expected rows, computed from upstream's table and not from this build."""
+    shape = tie_shape(table.columns, table.rows, directive)
+    assert shape is not None  # classify() already established this
+    out = []
+    for start, end, count, total in shape:
+        total_text = repr(total)
+        if isinstance(total, float) and total.is_integer():
+            total_text = str(int(total))
+        out.append([str(start), str(end), str(count), total_text])
+    return out
 
 
 HEADER = """# name: {out}
@@ -193,9 +262,18 @@ def render(category: str, stem: str, items: Sequence[Item]) -> str:
             parts.append("# {}: skipped - {}\n\n".format(item.name, item.reason))
             continue
         rows = "".join("\t".join(cells) + "\n" for cells in item.rows)
+        header = "# {}\n".format(item.name)
+        if item.note:
+            wrapped = textwrap.wrap(
+                "{}: {}".format(item.name, item.note),
+                width=98,
+                initial_indent="# ",
+                subsequent_indent="# ",
+            )
+            header = "\n".join(wrapped) + "\n"
         parts.append(
-            "# {}\nquery {}\n{}\n----\n{}\n".format(
-                item.name, item.directive, item.sql.strip(), rows
+            "{}query {}\n{}\n----\n{}\n".format(
+                header, item.directive, item.sql.strip(), rows
             )
         )
     return "".join(parts)
@@ -214,7 +292,7 @@ def expected_cells(table: pgparse.AlignedTable, directive: str) -> List[List[str
 
 
 def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Dict[str, str],
-            skips: Dict[str, Dict[str, str]]) -> List[Item]:
+            skips: Dict[str, Dict[str, str]], ties: Dict[str, Dict[str, dict]]) -> List[Item]:
     root = pathlib.Path(DOCQUERIES) / category
     pg_blocks = pgparse.nonempty(pgparse.split_blocks((root / (stem + ".pg")).read_text()))
     transcripts = {
@@ -245,27 +323,57 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Dict[st
         if any(t == "T" and cell.strip() == "" for row in table.rows for cell, t in zip(row, directive)):
             items.append(Skipped(block.name, "blank cell in a text column"))
             continue
-        compare(table, result, directive)
+        verdict = classify(table, result, directive)
+        if verdict == "defect":
+            raise Mismatch(
+                "{}/{}.pg {}: this build's answer is not an equal-cost alternative to "
+                "upstream's\n{}".format(
+                    category, stem, block.name, _diff(table, result, directive)
+                )
+            )
+        if verdict == "tie":
+            ties.setdefault("{}/{}.pg".format(category, stem), {})[block.name] = {
+                "reason": "equal-cost tie",
+                "upstream_rows": table.row_count,
+                "differing_rows": _differing(table, result, directive),
+            }
+            items.append(
+                Emitted(
+                    block.name,
+                    "IIIR",
+                    companion_sql(sql),
+                    companion_rows(table, directive),
+                    note=(
+                        "this build reaches the same optimum by a different equal-cost route, "
+                        "so only what upstream guarantees is asserted: endpoints, row count and "
+                        "total agg_cost"
+                    ),
+                )
+            )
+            continue
         items.append(Emitted(block.name, directive, sql, expected_cells(table, directive)))
     return items
 
 
-def generate(db: duckdbcli.DuckDB, only: Optional[str]) -> Dict[str, str]:
-    """Render every docqueries file, returning {output path: file body}."""
+def generate(
+    db: duckdbcli.DuckDB, only: Optional[str]
+) -> Tuple[Dict[str, str], Dict[str, Dict[str, dict]]]:
+    """Render every docqueries file, returning ({output path: file body}, ties)."""
     implemented = implemented_names(db)
     skips = json.loads(pathlib.Path(SKIP_FILE).read_text())
     rendered: Dict[str, str] = {}
+    ties: Dict[str, Dict[str, dict]] = {}
     for pg in sorted(pathlib.Path(DOCQUERIES).glob("*/*.pg")):
         category, stem = pg.parent.name, pg.stem
         if only and category != only:
             continue
         if not (pg.parent / (stem + ".result")).exists():
             continue
-        items = process(category, stem, db, implemented, skips)
+        items = process(category, stem, db, implemented, skips, ties)
         if not any(isinstance(item, Emitted) for item in items):
             continue
         rendered["{}/{}/{}.test".format(OUT_ROOT, category, stem)] = render(category, stem, items)
-    return rendered
+    return rendered, ties
 
 
 def _raw_preamble() -> str:
@@ -290,7 +398,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     db = duckdbcli.DuckDB(args.duckdb, preamble=_raw_preamble())
-    rendered = generate(db, args.category)
+    rendered, ties = generate(db, args.category)
+    rendered[TIES_FILE] = json.dumps(ties, indent=2, sort_keys=True) + "\n"
 
     failures = 0
     for path, body in sorted(rendered.items()):

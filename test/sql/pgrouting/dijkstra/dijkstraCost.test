@@ -1,0 +1,65 @@
+# name: test/sql/pgrouting/dijkstra/dijkstraCost.test
+# description: Generated from pgRouting's dijkstraCost documentation queries
+# group: [pgrouting]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
+# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
+#
+# Source: third_party/pgrouting/docqueries/dijkstra/dijkstraCost.pg and the committed transcript beside it. The queries and their expected rows are
+# upstream's; the only edits are the dropped pgr_ prefix and psql's aligned output rewritten as
+# sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
+# line with its reason, so what this file does not cover is visible here rather than implied.
+
+require routing
+
+statement ok
+CREATE TABLE edges AS
+  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/edges.csv');
+
+statement ok
+CREATE TABLE vertices AS
+  SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges,
+         CAST(out_edges AS BIGINT[]) AS out_edges, x, y
+  FROM read_csv_auto('test/data/pgrouting_sample/vertices.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS
+  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE combinations AS
+  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/combinations.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+  SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+  FROM read_csv_auto('test/data/pgrouting_sample/restrictions.csv');
+
+# q2: skipped - not implemented: pgr_dijkstraCost
+
+# q3: skipped - not implemented: pgr_dijkstraCost
+
+# q4: skipped - not implemented: pgr_dijkstraCost
+
+# q5: skipped - not implemented: pgr_dijkstraCost
+
+# q51
+query II
+SELECT source, target FROM combinations;
+----
+5	6
+5	10
+6	5
+6	15
+6	14
+
+# q52: skipped - not implemented: pgr_dijkstraCost
+
+# q6: skipped - not implemented: pgr_dijkstraCost
+
+# q7: skipped - not implemented: pgr_dijkstraCost
+
+# q8: skipped - not implemented: pgr_dijkstraCost
+
