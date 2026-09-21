@@ -94,9 +94,9 @@ SELECT * FROM dijkstra(
 # single-threaded, so the exact rows below are stable.
 #
 #   q4 (both paths; the search is rooted at 17 in the reversed graph, normal = false): node 12,
-#     distance 2 from 17, has two equal-cost predecessors; upstream picks node 11 (edge 11), this
-#     build picks node 8 (edge 12). Because normal = false folds both departures (6 and 1) into
-#     the single combinations entry {17: {1, 6}} (cpp_common/combinations.cpp), and
+#     at distance 1 from 17, has two equal-cost predecessors at distance 2; upstream picks node 11
+#     (edge 11), this build picks node 8 (edge 12). Because normal = false folds both departures
+#     (6 and 1) into the single combinations entry {17: {1, 6}} (cpp_common/combinations.cpp), and
 #     pgrouting::algorithms::dijkstra allocates one shared predecessors/distances array per
 #     departure (dijkstra.hpp's dijkstra_1_to_many), this one tie is resolved once for the whole
 #     search tree, so both q4 paths necessarily move together. Total cost 5 (path to 1) / 4 (path
@@ -404,19 +404,32 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 
 # q6 and q7 must agree cell for cell regardless of how any tie resolves: this is the actual check
 # that get_pgset's uniquing of the duplicated, unsorted start array is correct, independent of
-# either of the exact-row blocks above happening to carry identical literals.
-query I
-SELECT count(*) FROM (
-  SELECT * FROM dijkstra(
-    'SELECT id, source, target, cost, reverse_cost FROM edges',
-    ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15])
-  EXCEPT ALL
-  SELECT * FROM dijkstra(
-    'SELECT id, source, target, cost, reverse_cost FROM edges',
-    ARRAY[7, 10, 15], ARRAY[7, 10, 15])
-);
+# either of the exact-row blocks above happening to carry identical literals. Both directions are
+# asserted on purpose. EXCEPT ALL one way only proves that q6 holds no row q7 lacks; it would still
+# pass if q7 carried extra rows, and ruling that out would mean leaning on the exact-row blocks
+# above for q7's cardinality - exactly the coupling this block exists to avoid.
+query II
+SELECT
+  (SELECT count(*) FROM (
+    SELECT * FROM dijkstra(
+      'SELECT id, source, target, cost, reverse_cost FROM edges',
+      ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15])
+    EXCEPT ALL
+    SELECT * FROM dijkstra(
+      'SELECT id, source, target, cost, reverse_cost FROM edges',
+      ARRAY[7, 10, 15], ARRAY[7, 10, 15])
+  )) AS q6_except_q7,
+  (SELECT count(*) FROM (
+    SELECT * FROM dijkstra(
+      'SELECT id, source, target, cost, reverse_cost FROM edges',
+      ARRAY[7, 10, 15], ARRAY[7, 10, 15])
+    EXCEPT ALL
+    SELECT * FROM dijkstra(
+      'SELECT id, source, target, cost, reverse_cost FROM edges',
+      ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15])
+  )) AS q7_except_q6;
 ----
-0
+0	0
 
 # The combinations fetcher only reads `source` and `target`, so pgRouting allows edges_sql and
 # combinations_sql to be textually identical (every edge's own endpoints become one combination);
