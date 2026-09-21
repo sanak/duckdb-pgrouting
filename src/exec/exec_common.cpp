@@ -71,11 +71,17 @@ DriverResult RunShortestPath(duckdb::ClientContext &context, InputRegistry &regi
 		// Upstream's process layer drops partial results when err is set; so do we.
 		result = DriverResult();
 		const auto hint = log.str();
-		if (err_text.find("AssertFailedException") != std::string::npos) {
+		// A prefix match, not a substring one: this is the only arm that raises
+		// InternalException, which invalidates the whole database instance, and err text can carry
+		// the user's own SQL (LookupInput interpolates it), so a query that merely mentions the
+		// token must not be routed here. Upstream's AssertFailedException::what() starts with it.
+		if (err_text.rfind("AssertFailedException", 0) == 0) {
 			throw duckdb::InternalException(err_text);
 		}
-		if (err_text == "Out of memory!") {
-			// pgr_alloc and to_pg_msg throw exactly this string; the driver turns it into err text.
+		// pgr_alloc and to_pg_msg throw exactly "Out of memory!", which the driver turns into err
+		// text; a std::bad_alloc raised anywhere inside pgRouting is instead caught by the
+		// driver's catch(std::exception&) and lands here as what(), i.e. "std::bad_alloc".
+		if (err_text == "Out of memory!" || err_text.find("bad_alloc") != std::string::npos) {
 			throw duckdb::OutOfMemoryException(err_text);
 		}
 		throw duckdb::InvalidInputException(hint.empty() ? err_text : err_text + "\nHINT: " + hint);

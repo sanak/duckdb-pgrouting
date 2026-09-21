@@ -40,9 +40,14 @@ namespace duckdb_routing {
 const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
     {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {}},
     {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {}},
+    // C++17 has no designated initializers, so DriverFlags is filled positionally. The field names
+    // below follow function_spec.hpp's declaration order: a field inserted there then shows up
+    // here as names that no longer match their values, instead of silently re-mapping every one of
+    // them. `normal = false` is the many-to-one graph reversal.
     {"pgr_dijkstra",
      {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID},
-     {false, false, 0, false, ' ', true, 0, "path"}},
+     {/* only_cost */ false, /* normal */ false, /* n_goals */ 0, /* global */ false,
+      /* driving_side */ ' ', /* details */ true, /* which */ 0, /* result_kind */ "path"}},
     {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {}},
     {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {}},
 };

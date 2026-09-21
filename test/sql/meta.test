@@ -29,8 +29,10 @@ dijkstra	pgr_dijkstra
 # dropped variant. pgr_dijkstra's five signatures are each registered twice (once with `directed`
 # as a named parameter, once with it appended as a trailing positional BOOLEAN, since DuckDB never
 # matches a named parameter positionally), so this catalog must carry exactly ten "dijkstra"
-# entries.
+# entries. The routing tag scopes the count to this extension's own registrations, so another
+# extension that also published a function named `dijkstra` cannot fail this spuriously.
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dijkstra';
+SELECT count(*) FROM duckdb_functions()
+WHERE function_name = 'dijkstra' AND tags['ext'] = 'routing';
 ----
 10

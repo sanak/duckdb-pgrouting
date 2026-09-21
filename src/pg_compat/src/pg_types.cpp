@@ -20,7 +20,12 @@ thread_local std::string ereport_message;
 
 std::string FormatMessage(const char *fmt, va_list args) {
 	char buffer[1024];
-	std::vsnprintf(buffer, sizeof(buffer), fmt, args);
+	buffer[0] = '\0';
+	if (std::vsnprintf(buffer, sizeof(buffer), fmt, args) < 0) {
+		// A negative return means an encoding error, and the buffer's contents are then
+		// unspecified: an empty message beats a std::string built from indeterminate bytes.
+		return std::string();
+	}
 	return buffer;
 }
 } // namespace

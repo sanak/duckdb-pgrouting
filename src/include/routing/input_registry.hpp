@@ -42,12 +42,23 @@ private:
 // Makes a registry and a ClientContext visible to the pg_compat layer for the duration of one
 // driver call. Thread-local: one driver runs per in-out call, and concurrent queries are
 // independent.
+//
+// The destructor restores whatever was installed before rather than clearing the slots, so that a
+// nested scope on one thread would leave the enclosing one intact. No such nesting exists today --
+// the TABLE argument is a scalar subquery, fully materialized before the in-out operator runs, so
+// two driver calls cannot interleave on one thread -- and this is three members rather than a
+// dependency on that staying true.
 class ScopedRoutingContext {
 public:
 	ScopedRoutingContext(duckdb::ClientContext &context, InputRegistry &registry);
 	~ScopedRoutingContext();
 	ScopedRoutingContext(const ScopedRoutingContext &) = delete;
 	ScopedRoutingContext &operator=(const ScopedRoutingContext &) = delete;
+
+private:
+	duckdb::ClientContext *saved_context;
+	InputRegistry *saved_registry;
+	bool saved_interrupted;
 };
 
 } // namespace duckdb_routing

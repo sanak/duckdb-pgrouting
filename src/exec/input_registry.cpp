@@ -61,16 +61,17 @@ const MaterializedInput *InputRegistry::Find(const duckdb::string &sql, const du
 	return it == inputs.end() ? nullptr : &it->second;
 }
 
-ScopedRoutingContext::ScopedRoutingContext(duckdb::ClientContext &context, InputRegistry &registry) {
+ScopedRoutingContext::ScopedRoutingContext(duckdb::ClientContext &context, InputRegistry &registry)
+    : saved_context(state.context), saved_registry(state.registry), saved_interrupted(state.interrupted) {
 	state.context = &context;
 	state.registry = &registry;
 	state.interrupted = false;
 }
 
 ScopedRoutingContext::~ScopedRoutingContext() {
-	state.context = nullptr;
-	state.registry = nullptr;
-	state.interrupted = false;
+	state.context = saved_context;
+	state.registry = saved_registry;
+	state.interrupted = saved_interrupted;
 }
 
 const InputHandle &LookupInput(const std::string &sql, const std::string &kind) {
