@@ -36,12 +36,12 @@ require routing
 #
 # On this chain graph, an early (low-id) start vertex's search walks nearly the whole chain, so the
 # guaranteed N - 256 searches' work grows roughly with (N - 256) * N: this is why N=4000 is used
-# here rather than a much thinner margin over 256. Measured directly against a release build
-# (`make release`, which runs this whole query roughly 25-30x faster than a debug build): the first
-# N - 256 = 3744 searches alone take ~416 ms, comfortably over the 100 ms deadline below (a ~4x
-# margin). The actual observed runtime is far below that worst-case figure in both build types,
-# because the deadline is typically crossed, and the interrupt typically fires, well before the
-# (N - 256)th search - measured over 10 runs each: release ~0.11-0.14s, debug ~5.5-5.7s.
+# here rather than a much thinner margin over 256. Measured directly: a query that performs only
+# those first N - 256 = 3744 searches completes in ~416 ms including returning its rows, so the
+# searches themselves comfortably outlast the 100 ms deadline below. The actual observed runtime of
+# the query below is far lower than that figure in both build types, because the deadline is
+# typically crossed, and the interrupt typically fires, well before the (N - 256)th search -
+# measured over 10 runs each: release ~0.11-0.14s, debug ~5.5-5.7s.
 statement ok
 CREATE TABLE big_edges AS
 SELECT i AS id, i AS source, i + 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost

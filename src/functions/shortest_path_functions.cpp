@@ -187,10 +187,9 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 		// A NULL here already made null_input true above, so this value is never read back.
 		directed = value.IsNull() ? true : BooleanValue::Get(value);
 	} else {
-		// A NULL named `directed` falls back to true rather than making the whole call NULL:
-		// Task 2.1 left this undecided (Phase 0), and this is where it is decided, in favour of
-		// keeping the pre-existing behaviour of dijkstra(sql, 6, 10, directed := NULL) rather than
-		// matching PostgreSQL's STRICT semantics for this one named parameter.
+		// A NULL named `directed` falls back to true rather than making the whole call NULL, in
+		// favour of keeping the pre-existing behaviour of dijkstra(sql, 6, 10, directed := NULL)
+		// rather than matching PostgreSQL's STRICT semantics for this one named parameter.
 		directed = NamedFlagOr(input, "directed", true);
 	}
 
