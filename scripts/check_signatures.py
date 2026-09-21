@@ -86,3 +86,112 @@ def sig_file_path(version):
     if len(parts) < 2:
         raise ValueError("cannot derive a sig file name from version %r" % version)
     return os.path.join(SIG_DIR, "pgrouting--%s.%s.sig" % (parts[0], parts[1]))
+
+
+def load_not_ported(path):
+    """Read the human-owned list of upstream functions deliberately left unimplemented."""
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise ValueError("%s must hold a JSON object" % path)
+    for name, entry in data.items():
+        if not isinstance(entry, dict) or not entry.get("reason"):
+            raise ValueError("%s: entry %r needs a non-empty \"reason\"" % (path, name))
+    return data
+
+
+# DuckDB's `.mode json` renders a LIST column with its own list-literal syntax (unquoted,
+# comma-space separated, e.g. `[col0, col1]`) rather than a JSON array, so a query that selects
+# `parameters` or `parameter_types` directly makes duckdbcli.DuckDB.query() fail with "not JSON"
+# (it runs `json.loads` on the CLI's raw output). Measured directly: `SELECT parameters,
+# parameter_types FROM duckdb_functions() WHERE function_name='dijkstra'` raises
+# `duckdbcli.DuckDBError: not JSON`. Joining each list into one string with a separator that
+# never appears in a type name or a parameter name keeps the columns scalar VARCHAR, which
+# `.mode json` renders as an ordinary JSON string; splitting it back apart here recovers the list.
+_LIST_SEP = "\x1f"
+
+
+def collect_variants(db):
+    """Return {upstream function name: [(parameters, parameter_types), ...]} from the catalog.
+
+    tags['ext'] = 'routing' also matches _pgr_shortestpath_exec, the internal in-out table
+    function, which carries no pgrouting_name; the NULL filter drops it.
+    """
+    result = db.query(
+        "SELECT tags['pgrouting_name'], "
+        "array_to_string(parameters, chr(31)), "
+        "array_to_string(parameter_types, chr(31)) "
+        "FROM duckdb_functions() "
+        "WHERE tags['ext'] = 'routing' AND tags['pgrouting_name'] IS NOT NULL "
+        "ORDER BY 1, 2, 3;"
+    )
+    variants = {}
+    for name, parameters, parameter_types in result.rows:
+        params = tuple(parameters.split(_LIST_SEP)) if parameters else ()
+        types = tuple(parameter_types.split(_LIST_SEP)) if parameter_types else ()
+        variants.setdefault(name, []).append((params, types))
+    return variants
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Check pgRouting signature coverage.")
+    parser.add_argument("--duckdb", default=None,
+                        help="DuckDB binary with the routing extension linked in")
+    parser.add_argument("--quiet", action="store_true",
+                        help="print failures only, not the coverage report")
+    args = parser.parse_args(argv)
+
+    db = duckdbcli.DuckDB(args.duckdb or duckdbcli.default_binary())
+    version = db.query("SELECT DuckDB_pgRouting_Version();").rows[0][0]
+    path = sig_file_path(version)
+    if not os.path.exists(path):
+        print("FAIL: no signature file %s for pgRouting %s" % (path, version))
+        return 1
+    with open(path, "r", encoding="utf-8") as handle:
+        upstream = parse_sig_file(handle.read())
+
+    variants = collect_variants(db)
+    not_ported = load_not_ported(NOT_PORTED_PATH)
+    failures = []
+    lines = ["pgRouting %s, signatures from %s" % (version, path)]
+
+    for name in sorted(variants):
+        if name not in upstream:
+            failures.append("%s: registered here but absent from %s" % (name, path))
+            continue
+        sigs = [map_upstream_types(a) for a in upstream[name]]
+        keys = [candidate_keys(p, t) for p, t in variants[name]]
+        for sig, raw in zip(sigs, upstream[name]):
+            hits = sum(1 for key in keys if sig in key)
+            if hits == 0:
+                failures.append("%s(%s): no registered variant covers it" % (name, ",".join(raw)))
+            else:
+                lines.append("  %s(%s) covered by %d variant(s)" % (name, ",".join(raw), hits))
+        for (_, types), key in zip(variants[name], keys):
+            if not any(sig in key for sig in sigs):
+                failures.append("%s variant (%s) covers no upstream signature"
+                                % (name, ", ".join(types)))
+
+    for name, entry in sorted(not_ported.items()):
+        if name in variants:
+            failures.append("%s is listed as not ported but is implemented" % name)
+        elif name not in upstream:
+            failures.append("%s is listed as not ported but does not exist upstream" % name)
+        else:
+            lines.append("  not ported: %s (%s)" % (name, entry["reason"]))
+
+    unimplemented = sorted(set(upstream) - set(variants) - set(not_ported))
+    lines.append("implemented: %d, not ported: %d, unimplemented: %d"
+                 % (len(variants), len(not_ported), len(unimplemented)))
+    if not args.quiet:
+        print("\n".join(lines))
+        print("unimplemented: " + ", ".join(unimplemented))
+    for failure in failures:
+        print("FAIL: " + failure)
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

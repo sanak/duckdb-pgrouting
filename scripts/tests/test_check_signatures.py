@@ -3,6 +3,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -80,6 +81,33 @@ class SigFilePathTest(unittest.TestCase):
     def test_rejects_a_version_without_a_minor(self):
         with self.assertRaises(ValueError):
             cs.sig_file_path("4")
+
+
+class LoadNotPortedTest(unittest.TestCase):
+    def _write(self, text):
+        handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+        handle.write(text)
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
+
+    def test_missing_file_is_an_empty_mapping(self):
+        self.assertEqual(cs.load_not_ported(os.path.join("no", "such", "file.json")), {})
+
+    def test_reads_entries_with_a_reason(self):
+        path = self._write('{"pgr_dijkstravia": {"reason": "out of the MVP function set"}}')
+        self.assertEqual(cs.load_not_ported(path)["pgr_dijkstravia"]["reason"],
+                         "out of the MVP function set")
+
+    def test_rejects_an_entry_without_a_reason(self):
+        path = self._write('{"pgr_dijkstravia": {}}')
+        with self.assertRaises(ValueError):
+            cs.load_not_ported(path)
+
+    def test_rejects_a_top_level_list(self):
+        path = self._write('["pgr_dijkstravia"]')
+        with self.assertRaises(ValueError):
+            cs.load_not_ported(path)
 
 
 if __name__ == "__main__":
