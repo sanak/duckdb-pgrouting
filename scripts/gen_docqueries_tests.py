@@ -203,6 +203,21 @@ def classify(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directi
     return "tie" if upstream_shape == ours_shape else "defect"
 
 
+def check_column_count(category: str, stem: str, block_name: str,
+                        table: pgparse.AlignedTable, result: duckdbcli.QueryResult) -> None:
+    """Guard every consumer of ``directive``, which is derived from this build's columns alone.
+
+    ``classify``/``_diff``/``_differing``/``expected_cells`` all build rows with
+    ``zip(row, directive)``; ``zip`` silently truncates to the shorter side. Without this guard a
+    dropped or added output column on either side would be dropped from the comparison instead of
+    failing it, in exactly the direction this generator exists to catch.
+    """
+    if len(table.columns) != len(result.columns):
+        raise Mismatch(
+            "{}/{}.pg {}: upstream returns {} columns, this build {}".format(
+                category, stem, block_name, len(table.columns), len(result.columns)))
+
+
 def companion_sql(sql: str) -> str:
     """Wrap a query in the assertion that survives a tie flip."""
     return (
@@ -280,13 +295,23 @@ def render(category: str, stem: str, items: Sequence[Item]) -> str:
 
 
 def expected_cells(table: pgparse.AlignedTable, directive: str) -> List[List[str]]:
-    """Upstream's own cells, normalised only where sqllogictest needs it."""
+    """Upstream's own cells, normalised only where sqllogictest needs it.
+
+    A boolean-typed cell is rendered as ``true``/``false``, mirroring ``coerce()``'s reading of
+    psql's ``t``/``f`` and the ``T`` directive the column gets: DuckDB itself prints a BOOLEAN as
+    ``true``/``false``, and AGENTS.md documents that as the convention a boolean column follows.
+    """
     out = []
     for row in table.rows:
         cells = []
         for cell, slt_type in zip(row, directive):
             text = cell.strip()
-            cells.append("NULL" if text == "" else text)
+            if text == "":
+                cells.append("NULL")
+            elif slt_type == "T" and text in ("t", "f"):
+                cells.append("true" if text == "t" else "false")
+            else:
+                cells.append(text)
         out.append(cells)
     return out
 
@@ -319,6 +344,7 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Dict[st
             continue
         table = transcript.tables[0]
         result = db.query(sql)
+        check_column_count(category, stem, block.name, table, result)
         directive = slt_types(result.types)
         if any(t == "T" and cell.strip() == "" for row in table.rows for cell, t in zip(row, directive)):
             items.append(Skipped(block.name, "blank cell in a text column"))

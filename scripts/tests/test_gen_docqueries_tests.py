@@ -70,6 +70,61 @@ class TestCoerce(unittest.TestCase):
         self.assertIs(False, gen.coerce("f", "T"))
 
 
+class TestCheckColumnCount(unittest.TestCase):
+    def test_raises_when_upstream_has_more_columns_than_this_build(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["a", "b", "c"], [["1", "2", "3"]], 1)
+        result = duckdbcli.QueryResult(["a", "b"], ["BIGINT", "BIGINT"], [[1, 2]])
+        with self.assertRaises(gen.Mismatch) as ctx:
+            gen.check_column_count("dijkstra", "dijkstra", "q1", table, result)
+        message = str(ctx.exception)
+        self.assertIn("dijkstra/dijkstra.pg q1", message)
+        self.assertIn("upstream returns 3 columns", message)
+        self.assertIn("this build 2", message)
+
+    def test_raises_when_this_build_has_more_columns_than_upstream(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["a"], [["1"]], 1)
+        result = duckdbcli.QueryResult(["a", "b"], ["BIGINT", "BIGINT"], [[1, 2]])
+        with self.assertRaises(gen.Mismatch):
+            gen.check_column_count("dijkstra", "dijkstra", "q1", table, result)
+
+    def test_does_not_raise_when_column_counts_match(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["a"], [["1"]], 1)
+        result = duckdbcli.QueryResult(["a"], ["BIGINT"], [[1]])
+        gen.check_column_count("dijkstra", "dijkstra", "q1", table, result)  # no raise
+
+
+class TestExpectedCells(unittest.TestCase):
+    def test_boolean_cells_render_as_true_and_false(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["b"], [["t"], ["f"]], 2)
+        self.assertEqual([["true"], ["false"]], gen.expected_cells(table, "T"))
+
+    def test_blank_cell_is_still_null_not_a_boolean(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["b"], [[""]], 1)
+        self.assertEqual([["NULL"]], gen.expected_cells(table, "T"))
+
+    def test_non_boolean_text_passes_through_verbatim(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["b"], [["abc"]], 1)
+        self.assertEqual([["abc"]], gen.expected_cells(table, "T"))
+
+    def test_t_and_f_in_a_non_text_column_are_untouched(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["i"], [["7"]], 1)
+        self.assertEqual([["7"]], gen.expected_cells(table, "I"))
+
+
 class TestRender(unittest.TestCase):
     def test_emits_a_well_formed_sqllogictest(self):
         items = [
