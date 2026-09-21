@@ -1,0 +1,37 @@
+# name: test/sql/collisions.test
+# description: No public name of the routing extension collides with another catalog entry
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The risk this guards is a DuckDB submodule bump adding a built-in whose name this extension
+# already publishes: DuckDB would resolve the name by load order and a caller's dijkstra(...)
+# could silently reach a different implementation.
+#
+# Only what a plain build already carries is compared - DuckDB's built-ins plus the statically
+# linked core_functions and parquet, 814 distinct names at the time of writing. Optional
+# out-of-tree extensions (spatial, json, icu, fts) are deliberately not compared: this repository
+# tracks DuckDB main, whose commit-hash version has no published extension artifacts, so they
+# could only be covered by building each one from source in every platform build. None of
+# pgRouting's names plausibly collides with a geometry, JSON, collation or full-text function, so
+# that is a large cost for a small gain. This omission is a decision, not an oversight.
+
+require routing
+
+# Sanity: the extension really is loaded, so an empty result below means "no collisions" rather
+# than "nothing was there to collide".
+query I
+SELECT count(DISTINCT function_name) FROM duckdb_functions() WHERE tags['ext'] = 'routing';
+----
+3
+
+# The collision check. Any row here is a name this extension publishes that something else
+# publishes too.
+query TT
+SELECT DISTINCT theirs.function_name, coalesce(theirs.tags['ext'], 'duckdb built-in')
+FROM duckdb_functions() AS ours
+JOIN duckdb_functions() AS theirs USING (function_name)
+WHERE ours.tags['ext'] = 'routing'
+  AND theirs.tags['ext'] IS DISTINCT FROM 'routing'
+ORDER BY 1;
+----

@@ -2,6 +2,12 @@
 
 #include "routing/register.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/function_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 
@@ -24,6 +30,19 @@ void PgRoutingVersionFunction(DataChunk &args, ExpressionState &, Vector &result
 void RegisterMetaFunctions(ExtensionLoader &loader) {
 	ScalarFunction version("DuckDB_pgRouting_Version", {}, LogicalType::VARCHAR, PgRoutingVersionFunction);
 	loader.RegisterFunction(version);
+
+	// Tagged like every other function this extension publishes, so the name-collision check can
+	// select this extension's names by tag rather than by guessing at a prefix.
+	auto &db = loader.GetDatabaseInstance();
+	auto &catalog = Catalog::GetSystemCatalog(db);
+	auto transaction = CatalogTransaction::GetSystemTransaction(db);
+	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
+	auto entry = schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY,
+	                              Identifier("DuckDB_pgRouting_Version"));
+	if (!entry) {
+		throw InternalException("routing: DuckDB_pgRouting_Version was not registered");
+	}
+	entry->Cast<FunctionEntry>().tags.insert("ext", "routing");
 }
 
 } // namespace duckdb
