@@ -232,7 +232,7 @@ HEADER = """# name: {out}
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
-# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
+# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py --category dijkstra
 #
 # Source: {pg} and the committed transcript beside it. The queries and their expected rows are
 # upstream's; the only edits are the dropped pgr_ prefix and psql's aligned output rewritten as

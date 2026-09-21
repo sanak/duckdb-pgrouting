@@ -118,6 +118,15 @@ SELECT * FROM dijkstra(
 #   q6 / q7 (the (15, 7) pair): node 11, distance 2 from departure 15, has two equal-cost
 #     predecessors; upstream picks node 16 (edge 9), this build picks node 10 (edge 5); both then
 #     continue identically via edge 8 to node 7. Total cost 3 either way.
+#
+# Division of labour with the generated file. test/sql/pgrouting/dijkstra/ is generated from
+# upstream's own documentation queries and asserts what upstream guarantees for them: endpoints,
+# row count and total agg_cost, with an equal-cost tie downgraded to exactly that tie-insensitive
+# shape. This file stays hand-written and asserts what this build actually does, including the
+# exact row picked on each side of a tie and the analysis above of why. The two overlap on several
+# queries on purpose: when a Boost or vcpkg bump flips a tie, this file's exact-row block fails
+# while the generated file's tie-insensitive one does not, and that difference is the diagnosis.
+# Do not remove the overlap to avoid duplication.
 # ------------------------------------------------------------------------------------------------
 
 # many to one (upstream q4). Note the driver reverses the graph for this signature (normal =
