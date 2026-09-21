@@ -78,10 +78,17 @@ DriverResult RunShortestPath(duckdb::ClientContext &context, InputRegistry &regi
 		if (err_text.rfind("AssertFailedException", 0) == 0) {
 			throw duckdb::InternalException(err_text);
 		}
-		// pgr_alloc and to_pg_msg throw exactly "Out of memory!", which the driver turns into err
-		// text; a std::bad_alloc raised anywhere inside pgRouting is instead caught by the
-		// driver's catch(std::exception&) and lands here as what(), i.e. "std::bad_alloc".
-		if (err_text == "Out of memory!" || err_text.find("bad_alloc") != std::string::npos) {
+		// Exact comparisons, for the same reason the arm above is a prefix match: err text can
+		// carry the user's own SQL, and neither producer here needs anything looser. pgr_alloc and
+		// to_pg_msg throw exactly "Out of memory!", which the driver copies into err verbatim. A
+		// std::bad_alloc raised anywhere inside pgRouting is instead caught by the driver's
+		// catch (std::exception &), whose whole body is `err << except.what();` -- nothing before
+		// it, nothing after it, into the stream this function just created -- so err is exactly
+		// what(). That text is spelled by the standard library rather than by pgRouting; it is
+		// "std::bad_alloc" on the libc++ toolchain this was verified against. A standard library
+		// that spells it differently falls through to the InvalidInputException below, which is
+		// where every unrecognised err text already goes and is what this arm used to do.
+		if (err_text == "Out of memory!" || err_text == "std::bad_alloc") {
 			throw duckdb::OutOfMemoryException(err_text);
 		}
 		throw duckdb::InvalidInputException(hint.empty() ? err_text : err_text + "\nHINT: " + hint);
