@@ -70,7 +70,7 @@ asserted against `true` / `false`.
 
 ## Test tooling
 
-`scripts/` holds four Python tools over two shared modules, plus their `unittest` suite. They read
+`scripts/` holds three Python tools over two shared modules, plus their `unittest` suite. They read
 upstream's committed fixtures and drive the built `duckdb` binary; none of them needs PostgreSQL,
 and none of them ever writes under `third_party/pgrouting`.
 

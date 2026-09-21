@@ -45,6 +45,20 @@ decision rather than an oversight.
   translator to touch and so reaches the database unchanged), and the generator aborts on the first
   one instead of skipping it. Widening the regenerated category set means adding that fifth skip
   reason first.
+- **Three of the eight tie-downgraded `dijkstra` blocks have no exact-row counterpart anywhere in
+  the repository.** `q93`, `q133` and `q136` are pinned only by the `differing_rows` count recorded
+  for them in `test/pgrouting_ties.json`; `test/sql/dijkstra.test` keeps an exact-row block for
+  every other tie-downgraded shape (q4, q5, q6, q7 and q96) but never mentions q93, q133 or q136.
+  This is acceptable today: every tie-downgraded block, these three included, still asserts
+  upstream's own `start_vid`/`end_vid`, row count and total `agg_cost` (the companion query's
+  `GROUP BY start_vid, end_vid` / `count(*)` / `max(agg_cost)`); only the specific `node`/`edge`
+  route on the equal-cost tie is left unpinned. All three are, in fact, the same documented (12, 7)
+  tie that q96's exact-row block in `test/sql/dijkstra.test` already covers (q93 and q133 each
+  compute that single pair directly; q136's 12-row result contains it as one of four combinations,
+  and its `differing_rows: 2` matches q93/q133's own two differing cells exactly). A future
+  contributor who wants an exact-row regression signal for one of these three specifically, rather
+  than relying on q96's coverage of the same tie, should add a hand-written block for it to
+  `test/sql/dijkstra.test` the way q4/q5/q6/q7/q96 already have one.
 - **Regenerating one category currently rewrites the whole ties file.** `gen_docqueries_tests.py`'s
   `main` writes `test/pgrouting_ties.json` from only the categories it just processed, so once a
   second category with tie-classified blocks exists, regenerating either one on its own would drop
