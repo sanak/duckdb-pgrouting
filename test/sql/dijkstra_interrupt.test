@@ -6,32 +6,46 @@
 
 require routing
 
-# A directed chain of 400 edges (1->2->...->401): a search from a low-numbered start vertex to
-# vertex 400 has to walk most of the chain, while a search from a start vertex near 400 finishes
+# A directed chain of 4000 edges (1->2->...->4001): a search from a low-numbered start vertex to
+# vertex 4000 has to walk most of the chain, while a search from a start vertex near 4000 finishes
 # almost immediately. dijkstra(sql, starts, ends) with both `starts` and `ends` given as lists
 # takes the many-to-many driver path, which calls CHECK_FOR_INTERRUPTS() once per start vertex
-# (third_party/pgrouting/include/dijkstra/dijkstra.hpp, via the combinations map in
-# get_combinations()) - one opportunity to observe the deadline per start vertex, in ascending
-# start-vertex order.
+# (third_party/pgrouting/include/dijkstra/dijkstra.hpp, via the combinations map built by
+# get_combinations() in third_party/pgrouting/src/cpp_common/combinations.cpp) - one opportunity
+# to observe the deadline per start vertex, in ascending start-vertex order.
 #
-# A single scalar END_VID (dijkstra(sql, starts, end_vid), the other many-to-one signature) is
-# NOT usable for this test: pgRouting implements that overload by reversing the graph and
-# swapping starts/ends, which collapses all requested start vertices into a single combinations-map
-# entry (one departure, many destinations) and therefore calls CHECK_FOR_INTERRUPTS() exactly once
-# for the whole query, regardless of how many start vertices are requested - measured directly
-# (temporary call-count instrumentation) at 4000 start vertices, a single check right at the very
-# start of the search means the ~4s search below can never be aborted early this way.
+# A single scalar END_VID (dijkstra(sql, starts, end_vid), the other many-to-one signature) is not
+# usable for this test: pgRouting implements that overload by reversing the graph and swapping
+# starts/ends, which collapses all requested start vertices into a single combinations-map entry
+# (one departure, many destinations), so it calls CHECK_FOR_INTERRUPTS() exactly once for the
+# whole query no matter how many start vertices are requested.
 #
-# DuckDB's InterruptCheck() re-reads the query deadline only on every 256th call to it, and that
-# call counter is per-thread and never reset between queries, so this test uses 400 start
-# vertices - comfortably more than 256 - so the deadline is certain to be observed regardless of
-# how many InterruptCheck() calls other statements in this session already made on this thread.
-# Measured directly: 20/20 runs interrupted after 242-250 CHECK_FOR_INTERRUPTS calls (always
-# < 256, as expected), in 0.69-0.73s wall time per run.
+# DuckDB's ClientContext::InterruptCheck() (duckdb/src/main/client_context.cpp) re-reads the query
+# deadline only on every 256th call to it, through a thread_local counter that only advances while
+# a deadline is active; the first such call inside this query can therefore land anywhere in
+# [1, 256], depending on how many deadline-checking InterruptCheck() calls earlier statements in
+# this session made while a deadline was active. What that guarantees, for a query making N of
+# these calls: the *last* possible deadline-reading call inside those N calls sits at some position
+# >= N - 256 (checks recur every 256 calls, so if the last one before N were earlier than that,
+# another one would fit before N, contradicting "last"). So if the work done by the first N - 256
+# searches alone already exceeds the 100 ms deadline set below, the interrupt is guaranteed to fire
+# before all N searches complete, regardless of where in [1, 256] the first check happens to land.
+# That is a guarantee that this query gets aborted, not a prediction of when - in practice the
+# deadline is crossed, and the interrupt fires, much earlier than after N - 256 searches (see the
+# measurements below).
+#
+# On this chain graph, an early (low-id) start vertex's search walks nearly the whole chain, so the
+# guaranteed N - 256 searches' work grows roughly with (N - 256) * N: this is why N=4000 is used
+# here rather than a much thinner margin over 256. Measured directly against a release build
+# (`make release`, which runs this whole query roughly 25-30x faster than a debug build): the first
+# N - 256 = 3744 searches alone take ~416 ms, comfortably over the 100 ms deadline below (a ~4x
+# margin). The actual observed runtime is far below that worst-case figure in both build types,
+# because the deadline is typically crossed, and the interrupt typically fires, well before the
+# (N - 256)th search - measured over 10 runs each: release ~0.11-0.14s, debug ~5.5-5.7s.
 statement ok
 CREATE TABLE big_edges AS
 SELECT i AS id, i AS source, i + 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost
-FROM range(1, 401) t(i);
+FROM range(1, 4001) t(i);
 
 statement ok
 SET max_execution_time = 100;
@@ -39,7 +53,7 @@ SET max_execution_time = 100;
 statement error
 SELECT count(*) FROM dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM big_edges',
-  range(1, 401)::BIGINT[], [400]::BIGINT[]);
+  range(1, 4001)::BIGINT[], [4000]::BIGINT[]);
 ----
 INTERRUPT Error: Interrupted!
 
