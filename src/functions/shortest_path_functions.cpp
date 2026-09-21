@@ -179,6 +179,15 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	for (auto &value : input.inputs) {
 		null_input = null_input || value.IsNull();
 	}
+	// Upstream declares every pgr_dijkstra overload STRICT (see the CREATE FUNCTION bodies in
+	// third_party/pgrouting/sql/dijkstra/dijkstra.sql), and PostgreSQL applies STRICT whichever
+	// way an argument was written, so `directed => NULL` yields an empty result there just as a
+	// positional NULL does. DuckDB keeps named arguments out of `input.inputs`, so `directed` has
+	// to be scanned separately for the two to agree.
+	auto named_directed = input.named_parameters.find("directed");
+	if (named_directed != input.named_parameters.end() && named_directed->second.IsNull()) {
+		null_input = true;
+	}
 
 	// The second registered variant of every spec (see the `variant == 1` case in
 	// RegisterShortestPathFunctions below, added because DuckDB never matches a named parameter
@@ -192,9 +201,8 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 		// A NULL here already made null_input true above, so this value is never read back.
 		directed = value.IsNull() ? true : BooleanValue::Get(value);
 	} else {
-		// A NULL named `directed` falls back to true rather than making the whole call NULL, in
-		// favour of keeping the pre-existing behaviour of dijkstra(sql, 6, 10, directed := NULL)
-		// rather than matching PostgreSQL's STRICT semantics for this one named parameter.
+		// A NULL named `directed` already made null_input true above, exactly as a positional one
+		// does, so the fallback here is only ever taken for an absent parameter.
 		directed = NamedFlagOr(input, "directed", true);
 	}
 

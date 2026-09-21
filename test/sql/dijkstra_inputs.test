@@ -30,13 +30,42 @@ FROM (DESCRIBE SELECT * FROM dijkstra(NULL, 1, 3));
 ----
 [agg_cost, cost, edge, end_vid, node, path_seq, seq, start_vid]
 
-# A NULL passed as the named `directed` parameter is not scanned for STRICT NULL handling: it
-# falls back to `directed = true` and the call still returns rows.
+# A NULL `directed` is STRICT whichever way it is written. PostgreSQL applies STRICT to the
+# function, not to the call syntax, so upstream returns an empty result for `directed => NULL` just
+# as it does for a positional NULL. Both forms are pinned here because DuckDB keeps a named
+# argument out of the positional inputs, which makes them two separate code paths on this side.
 query I
 SELECT count(*) FROM dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', 1, 3, directed := NULL);
 ----
+0
+
+query I
+SELECT count(*) FROM dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM edges', 1, 3, NULL);
+----
+0
+
+# A non-NULL `directed` still arrives, both ways round: only a NULL one is swallowed. Dropping
+# reverse_cost makes the edges one-way, so 3 -> 1 exists in the undirected graph only, and the
+# flag's value is therefore observable in the row count.
+query I
+SELECT count(*) FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges', 3, 1, directed := false);
+----
 3
+
+query I
+SELECT count(*) FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges', 3, 1, false);
+----
+3
+
+query I
+SELECT count(*) FROM dijkstra(
+  'SELECT id, source, target, cost FROM edges', 3, 1, true);
+----
+0
 
 # The input must be exactly one SELECT statement. The "Invalid Input Error: " prefix pins the
 # exception class as InvalidInputException, not ParserException: a bare-text block would pass for
