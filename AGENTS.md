@@ -10,11 +10,14 @@ code (`third_party/pgrouting`, a submodule pinned to a release tag) is compiled 
 statically linked; only its PostgreSQL-specific layers are replaced. License: GPL-2.0-or-later.
 
 Current state: the extension registers `dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`,
-`dijkstraNear`, `dijkstraNearCost`, `withPoints`, `withPointsCost` and `withPointsCostMatrix` —
-pgRouting's forty-one corresponding signatures, each registered once per number of its defaulted
-parameters passed positionally — and `DuckDB_pgRouting_Version()`. Every call is rewritten into a
-call to pgRouting's own unified `do_shortestPath` driver; with points given, DuckDB also
-materializes the two edge queries that driver derives from the edge and points SQL.
+`dijkstraNear`, `dijkstraNearCost`, `withPoints`, `withPointsCost`, `withPointsCostMatrix`,
+`bdDijkstra`, `bdDijkstraCost`, `bdDijkstraCostMatrix`, `bellmanFord`, `edwardMoore`,
+`dagShortestPath` and `binaryBreadthFirstSearch` — pgRouting's seventy-two corresponding
+signatures, each registered once per number of its defaulted parameters passed positionally — and
+`DuckDB_pgRouting_Version()`. The dijkstra and withPoints families call pgRouting's unified
+`do_shortestPath` driver; with points given, DuckDB also materializes the two edge queries that
+driver derives from the edge and points SQL. The other five families call their own per-family
+`pgr_do_*` drivers through one adapter on the pg_compat side.
 
 ## Layout
 
@@ -28,7 +31,9 @@ materializes the two edge queries that driver derives from the edge and points S
   only into pg_compat and pgRouting translation units: the stub `postgres.h` defines `ERROR` as
   a macro and DuckDB has an enumerator of that name, so the two must never meet in one
   translation unit. `src/include/routing/input_access.hpp` is the seam between the two worlds
-  and includes neither.
+  and includes neither. `src/pg_compat/src/old_style_drivers.cpp` is the one translation unit
+  that calls pgRouting's per-family drivers, whose headers include `postgres.h`; the DuckDB side
+  reaches it through `src/include/routing/old_style_drivers.hpp`, which includes neither world.
 - `src/exec/` — input registry, driver invocation, the internal in-out table function, and the copy
   of upstream's withPoints derived-query key template (`withpoints_keys.cpp`).
 - `src/functions/` — the declarative overload table (`shortest_path_specs.cpp`) and the public

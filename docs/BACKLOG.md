@@ -21,13 +21,14 @@ decision rather than an oversight.
   CLI's own JSON renderer, not in anything `duckdbcli` decides.
 - **`duckdbcli.query()` starts two subprocesses per query** — one for `DESCRIBE`, one for the query
   itself — and each one reruns the whole SQL preamble, which now loads five CSV fixtures. Across
-  the 82 blocks that reach `db.query()` out of the 88 total across the eight selected pages
+  the 134 blocks that reach `db.query()` out of the 142 total across the fifteen selected pages
   (`dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`, `dijkstraNear`, `dijkstraNearCost`,
-  `withPoints`, `withPointsCost`, `withPointsCostMatrix`; 6 blocks are skipped), that is 164
-  process starts; each call now has a 120-second timeout. Acceptable for a tool that only runs at
-  regeneration time, not in any inner loop a developer waits on repeatedly. Measured with the
-  eight dijkstra- and withPoints-family functions implemented: 5.25 s for the whole argument-free
-  run.
+  `withPoints`, `withPointsCost`, `withPointsCostMatrix`, `bdDijkstra`, `bdDijkstraCost`,
+  `bdDijkstraCostMatrix`, `bellmanFord`, `edwardMoore`, `dagShortestPath`,
+  `binaryBreadthFirstSearch`; 8 blocks are skipped), that is 268 process starts; each call now has
+  a 120-second timeout. Acceptable for a tool that only runs at regeneration time, not in any
+  inner loop a developer waits on repeatedly. Measured with all fifteen MVP functions implemented:
+  9.53 s for the whole argument-free run.
 - **`pgr_dijkstravia` is listed in `test/pgrouting_not_ported.json`** although it is only outside
   the MVP, not meaningless in DuckDB; `pgr_withPointsVia`, `pgr_withPointsDD` and
   `pgr_withPointsKSP` are treated as merely unimplemented instead. Revisit when the MVP is
@@ -122,6 +123,10 @@ Each of these would be a change no test could observe, so none of them is made:
   for both remaining functions (`pgr_TSP`, `pgr_dijkstravia`), and by
   `test/pgrouting_not_ported.json` only for `pgr_dijkstravia`; `pgr_TSP` surfaces solely through
   `check_signatures.py`'s unimplemented-function list.
+- **`bdDijkstra/bdDijkstraCostMatrix.pg` produces no generated test file either**, for the same
+  reason: its only runnable block, q2, passes a scalar subquery as the vertex array and is skipped
+  in `test/pgrouting_skip.json`; q3 calls `pgr_TSP`. Coverage for `bdDijkstraCostMatrix` comes from
+  the hand-written `test/sql/bd_dijkstra.test`, which also pins upstream's q2 rows.
 
 ## Open decision
 
