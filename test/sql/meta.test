@@ -26,11 +26,13 @@ GROUP BY ALL ORDER BY 1, 2;
 dijkstra	pgr_dijkstra
 
 # The GROUP BY ALL query above collapses every overload's tags to one row and so cannot catch a
-# dropped variant. pgr_dijkstra's five signatures are each registered twice (once with `directed`
-# as a named parameter, once with it appended as a trailing positional BOOLEAN, since DuckDB never
-# matches a named parameter positionally), so this catalog must carry exactly ten "dijkstra"
-# entries. The routing tag scopes the count to this extension's own registrations, so another
-# extension that also published a function named `dijkstra` cannot fail this spuriously.
+# dropped variant. PostgreSQL accepts any leading run of an overload's DEFAULT parameters
+# positionally as well as by name, and DuckDB never matches a named parameter positionally, so a
+# signature with k defaulted parameters is registered as k + 1 variants, each taking the first
+# 0..k of them positionally and all of them by name. pgr_dijkstra has one defaulted parameter
+# (`directed`) and five signatures, so this catalog must carry exactly ten "dijkstra" entries. The
+# routing tag scopes the count to this extension's own registrations, so another extension that
+# also published a function named `dijkstra` cannot fail this spuriously.
 query I
 SELECT count(*) FROM duckdb_functions()
 WHERE function_name = 'dijkstra' AND tags['ext'] = 'routing';

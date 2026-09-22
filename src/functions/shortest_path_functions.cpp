@@ -4,7 +4,7 @@
 // its call into a query over _pgr_shortestpath_exec, so that the user's edge query is executed by
 // DuckDB itself and handed to pgRouting already materialized.
 //
-// Every overload is declared as data in SHORTEST_PATH_SPECS (function_spec.hpp): a spec row's
+// Every overload is declared as data in SHORTEST_PATH_SPECS (shortest_path_specs.cpp): a spec row's
 // upstream name and positional argument kinds are registered as a DuckDB TableFunction, and
 // ShortestPathBindReplace walks the same spec back at call time to build the row that
 // _pgr_shortestpath_exec expects.
@@ -33,26 +33,6 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
 #include "function_spec.hpp"
-
-namespace duckdb_routing {
-
-// See function_spec.hpp for what each field means.
-const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
-    {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {}},
-    {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {}},
-    // C++17 has no designated initializers, so DriverFlags is filled positionally. The field names
-    // below follow function_spec.hpp's declaration order: a field inserted there then shows up
-    // here as names that no longer match their values, instead of silently re-mapping every one of
-    // them. `normal = false` is the many-to-one graph reversal.
-    {"pgr_dijkstra",
-     {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID},
-     {/* only_cost */ false, /* normal */ false, /* n_goals */ 0, /* global */ false,
-      /* driving_side */ ' ', /* details */ true, /* which */ 0, /* result_kind */ "path"}},
-    {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {}},
-    {"pgr_dijkstra", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {}},
-};
-
-} // namespace duckdb_routing
 
 namespace duckdb {
 
@@ -132,14 +112,6 @@ unique_ptr<ParsedExpression> IdListCast(const Value &value) {
 	return make_uniq<CastExpression>(LogicalType::LIST(LogicalType::BIGINT), Constant(value));
 }
 
-bool NamedFlagOr(TableFunctionBindInput &input, const char *name, bool fallback) {
-	auto it = input.named_parameters.find(name);
-	if (it == input.named_parameters.end() || it->second.IsNull()) {
-		return fallback;
-	}
-	return BooleanValue::Get(it->second);
-}
-
 //===--------------------------------------------------------------------===//
 // The spec index a bound function carries, so bind_replace knows which overload it serves.
 //===--------------------------------------------------------------------===//
@@ -162,10 +134,36 @@ LogicalType TypeOf(duckdb_routing::ArgKind kind) {
 	case ArgKind::START_VIDS:
 	case ArgKind::END_VIDS:
 		return LogicalType::LIST(LogicalType::BIGINT);
-	case ArgKind::DIRECTED:
-		return LogicalType::BOOLEAN;
 	}
 	throw InternalException("Unhandled ArgKind");
+}
+
+LogicalType TypeOf(duckdb_routing::OptionalType type) {
+	switch (type) {
+	case duckdb_routing::OptionalType::BOOLEAN:
+		return LogicalType::BOOLEAN;
+	case duckdb_routing::OptionalType::BIGINT:
+		return LogicalType::BIGINT;
+	}
+	throw InternalException("Unhandled OptionalType");
+}
+
+// The value of the index-th defaulted parameter: positional when this variant carries it
+// positionally (see RegisterShortestPathFunctions), else named, else upstream's default.
+Value ResolveOptional(const duckdb_routing::FunctionSpec &spec, TableFunctionBindInput &input, idx_t index) {
+	const auto &param = spec.optionals[index];
+	const idx_t positional_index = spec.args.size() + index;
+	if (positional_index < input.inputs.size()) {
+		return input.inputs[positional_index];
+	}
+	auto it = input.named_parameters.find(param.name);
+	if (it != input.named_parameters.end()) {
+		return it->second;
+	}
+	if (param.type == duckdb_routing::OptionalType::BOOLEAN) {
+		return Value::BOOLEAN(param.default_value != 0);
+	}
+	return Value::BIGINT(param.default_value);
 }
 
 //===--------------------------------------------------------------------===//
@@ -179,31 +177,34 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	for (auto &value : input.inputs) {
 		null_input = null_input || value.IsNull();
 	}
-	// Upstream declares every pgr_dijkstra overload STRICT (see the CREATE FUNCTION bodies in
-	// third_party/pgrouting/sql/dijkstra/dijkstra.sql), and PostgreSQL applies STRICT whichever
-	// way an argument was written, so `directed => NULL` yields an empty result there just as a
-	// positional NULL does. DuckDB keeps named arguments out of `input.inputs`, so `directed` has
-	// to be scanned separately for the two to agree.
-	auto named_directed = input.named_parameters.find("directed");
-	if (named_directed != input.named_parameters.end() && named_directed->second.IsNull()) {
-		null_input = true;
+	// Upstream declares every overload STRICT, and PostgreSQL applies STRICT whichever way an
+	// argument was written, so `directed => NULL` (or `cap => NULL`) yields an empty result there
+	// just as a positional NULL does. DuckDB keeps named arguments out of `input.inputs`, so each
+	// named defaulted parameter has to be scanned separately for the two to agree.
+	for (const auto &param : spec.optionals) {
+		auto named = input.named_parameters.find(param.name);
+		if (named != input.named_parameters.end() && named->second.IsNull()) {
+			null_input = true;
+		}
 	}
 
-	// The second registered variant of every spec (see the `variant == 1` case in
-	// RegisterShortestPathFunctions below, added because DuckDB never matches a named parameter
-	// positionally while upstream's own pgr_dijkstra SQL passes `directed` positionally) appends
-	// `directed` as a trailing positional BOOLEAN; it is present whenever there is one more input
-	// than the spec declares, and it overrides the named `directed` parameter.
-	const bool has_positional_directed = input.inputs.size() > spec.args.size();
-	bool directed;
-	if (has_positional_directed) {
-		auto &value = input.inputs.back();
-		// A NULL here already made null_input true above, so this value is never read back.
-		directed = value.IsNull() ? true : BooleanValue::Get(value);
-	} else {
-		// A NULL named `directed` already made null_input true above, exactly as a positional one
-		// does, so the fallback here is only ever taken for an absent parameter.
-		directed = NamedFlagOr(input, "directed", true);
+	bool directed = true;
+	int64_t n_goals = spec.flags.n_goals;
+	bool global = spec.flags.global;
+	if (!null_input) {
+		for (idx_t i = 0; i < spec.optionals.size(); i++) {
+			const auto value = ResolveOptional(spec, input, i);
+			const string name = spec.optionals[i].name;
+			if (name == "directed") {
+				directed = BooleanValue::Get(value);
+			} else if (name == "cap") {
+				n_goals = BigIntValue::Get(value);
+			} else if (name == "global") {
+				global = BooleanValue::Get(value);
+			} else {
+				throw InternalException("routing: unhandled optional parameter '%s'", name);
+			}
+		}
 	}
 
 	string edges_sql;
@@ -248,8 +249,6 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 			case duckdb_routing::ArgKind::END_VIDS:
 				ends_expr = Named(IdListCast(input.inputs[i]), "ends");
 				break;
-			case duckdb_routing::ArgKind::DIRECTED:
-				throw InternalException("routing: ArgKind::DIRECTED must not appear in spec.args");
 			}
 		}
 	}
@@ -266,8 +265,8 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	args.push_back(Named(Constant(Value::BOOLEAN(directed)), "directed"));
 	args.push_back(Named(Constant(Value::BOOLEAN(spec.flags.only_cost)), "only_cost"));
 	args.push_back(Named(Constant(Value::BOOLEAN(spec.flags.normal)), "normal"));
-	args.push_back(Named(Constant(Value::BIGINT(spec.flags.n_goals)), "n_goals"));
-	args.push_back(Named(Constant(Value::BOOLEAN(spec.flags.global)), "global"));
+	args.push_back(Named(Constant(Value::BIGINT(n_goals)), "n_goals"));
+	args.push_back(Named(Constant(Value::BOOLEAN(global)), "global"));
 	args.push_back(Named(Constant(Value::INTEGER(spec.flags.which)), "which"));
 	args.push_back(Named(Constant(Value(string(1, spec.flags.driving_side))), "driving_side"));
 	args.push_back(Named(Constant(Value::BOOLEAN(spec.flags.details)), "details"));
@@ -322,16 +321,19 @@ void RegisterShortestPathFunctions(ExtensionLoader &loader) {
 		for (auto kind : spec.args) {
 			types.push_back(TypeOf(kind));
 		}
-		for (idx_t variant = 0; variant < 2; variant++) {
+		// PostgreSQL accepts any leading run of an overload's DEFAULT parameters positionally;
+		// DuckDB never matches a named parameter positionally. So register one variant per
+		// positional prefix length p = 0..k, each accepting all k by name as well.
+		for (idx_t p = 0; p <= spec.optionals.size(); p++) {
 			auto variant_types = types;
-			if (variant == 1) {
-				// PostgreSQL lets `directed` be passed positionally; DuckDB never matches a named
-				// parameter positionally, so upstream's own SQL needs this second variant.
-				variant_types.push_back(LogicalType::BOOLEAN);
+			for (idx_t j = 0; j < p; j++) {
+				variant_types.push_back(TypeOf(spec.optionals[j].type));
 			}
 			TableFunction fn(variant_types, nullptr, nullptr);
 			fn.bind_replace = ShortestPathBindReplace;
-			fn.named_parameters["directed"] = LogicalType::BOOLEAN;
+			for (const auto &param : spec.optionals) {
+				fn.named_parameters[param.name] = TypeOf(param.type);
+			}
 			// The spec index travels in the function's extra_info so bind_replace knows which
 			// overload it is serving without re-deriving it from the argument types.
 			fn.function_info = make_shared_ptr<ShortestPathFunctionInfo>(i);

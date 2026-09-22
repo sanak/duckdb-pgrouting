@@ -27,6 +27,7 @@ set(ROUTING_SOURCES
     src/exec/shortest_path_exec.cpp
     src/functions/meta_functions.cpp
     src/functions/shortest_path_functions.cpp
+    src/functions/shortest_path_specs.cpp
     src/pg_compat/src/get_check_data.cpp
     src/pg_compat/src/pg_types.cpp)
 
