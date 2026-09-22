@@ -44,7 +44,7 @@ class TestDuckDB(unittest.TestCase):
 
     def test_the_extension_is_linked_in(self):
         rows = self.db.query(
-            "SELECT count(*) AS n FROM duckdb_functions() WHERE tags['ext'] = 'routing'"
+            "SELECT count(*) AS n FROM duckdb_functions() WHERE tags['ext'] = 'pgrouting'"
         ).rows
         self.assertGreater(rows[0][0], 0)
 

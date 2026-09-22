@@ -9,7 +9,7 @@
 
 struct ArrayType;
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 class ScopedIntArray {
 public:
@@ -29,4 +29,4 @@ private:
 	ArrayType *ptr;
 };
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

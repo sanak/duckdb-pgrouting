@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 cmake_minimum_required(VERSION 3.5)
 
-set(TARGET_NAME routing)
+set(TARGET_NAME pgrouting)
 set(EXTENSION_NAME ${TARGET_NAME}_extension)
 set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
 
@@ -20,8 +20,8 @@ include_directories(src/include)
 include_directories(src/pg_compat/include)
 include_directories(${PGROUTING_DIR}/include)
 
-set(ROUTING_SOURCES
-    src/routing_extension.cpp
+set(DUCKDB_PGROUTING_SOURCES
+    src/pgrouting_extension.cpp
     src/exec/exec_common.cpp
     src/exec/input_registry.cpp
     src/exec/shortest_path_exec.cpp
@@ -33,7 +33,7 @@ set(ROUTING_SOURCES
     src/pg_compat/src/old_style_drivers.cpp
     src/pg_compat/src/pg_types.cpp)
 
-set(EXTENSION_SOURCES ${ROUTING_SOURCES} ${PGROUTING_SOURCES})
+set(EXTENSION_SOURCES ${DUCKDB_PGROUTING_SOURCES} ${PGROUTING_SOURCES})
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})

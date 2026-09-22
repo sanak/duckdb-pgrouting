@@ -18,7 +18,7 @@
 
 #include "function_spec.hpp"
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 namespace {
 
@@ -258,4 +258,4 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
      OldStyleFlags(DriverKind::BINARY_BFS, false, ResultColumns::PATH)},
 };
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

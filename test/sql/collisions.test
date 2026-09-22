@@ -1,5 +1,5 @@
 # name: test/sql/collisions.test
-# description: No public name of the routing extension collides with another catalog entry
+# description: No public name of the pgrouting extension collides with another catalog entry
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -16,12 +16,12 @@
 # pgRouting's names plausibly collides with a geometry, JSON, collation or full-text function, so
 # that is a large cost for a small gain. This omission is a decision, not an oversight.
 
-require routing
+require pgrouting
 
 # Sanity: the extension really is loaded, so an empty result below means "no collisions" rather
 # than "nothing was there to collide".
 query I
-SELECT count(DISTINCT function_name) FROM duckdb_functions() WHERE tags['ext'] = 'routing';
+SELECT count(DISTINCT function_name) FROM duckdb_functions() WHERE tags['ext'] = 'pgrouting';
 ----
 17
 
@@ -31,7 +31,7 @@ query TT
 SELECT DISTINCT theirs.function_name, coalesce(theirs.tags['ext'], 'duckdb built-in')
 FROM duckdb_functions() AS ours
 JOIN duckdb_functions() AS theirs USING (function_name)
-WHERE ours.tags['ext'] = 'routing'
-  AND theirs.tags['ext'] IS DISTINCT FROM 'routing'
+WHERE ours.tags['ext'] = 'pgrouting'
+  AND theirs.tags['ext'] IS DISTINCT FROM 'pgrouting'
 ORDER BY 1;
 ----

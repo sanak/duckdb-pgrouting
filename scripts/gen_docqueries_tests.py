@@ -80,7 +80,7 @@ def implemented_names(db: duckdbcli.DuckDB) -> Dict[str, str]:
     result = db.query(
         "SELECT DISTINCT lower(tags['pgrouting_name']) AS upstream, function_name AS public "
         "FROM duckdb_functions() "
-        "WHERE tags['ext'] = 'routing' AND tags['pgrouting_name'] IS NOT NULL"
+        "WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL"
     )
     return {row[0]: row[1] for row in result.rows}
 
@@ -280,7 +280,7 @@ HEADER = """# name: {out}
 # sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
 # line with its reason, so what this file does not cover is visible here rather than implied.
 
-require routing
+require pgrouting
 
 """
 

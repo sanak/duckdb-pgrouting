@@ -4,7 +4,7 @@ Guidance for coding agents (and humans) working on this repository.
 
 ## Overview
 
-`duckdb-routing` is a DuckDB extension (`LOAD routing`) that exposes pgRouting's graph algorithms
+`duckdb-pgrouting` is a DuckDB extension (`LOAD pgrouting`) that exposes pgRouting's graph algorithms
 with pgRouting's SQL API minus the `pgr_` prefix (`pgr_dijkstra` → `dijkstra`). pgRouting's C++
 code (`third_party/pgrouting`, a submodule pinned to a release tag) is compiled **unmodified** and
 statically linked; only its PostgreSQL-specific layers are replaced. License: GPL-2.0-or-later.
@@ -26,14 +26,14 @@ driver derives from the edge and points SQL. The other five families call their 
 - `third_party/pgrouting/` — pgRouting submodule, pinned to a release tag.
 - `cmake/pgrouting_sources.cmake` — explicit list of compiled upstream files; also reads the
   pgRouting version from upstream's `CMakeLists.txt`.
-- `src/routing_extension.cpp` — extension entry point (`LoadInternal`).
+- `src/pgrouting_extension.cpp` — extension entry point (`LoadInternal`).
 - `src/pg_compat/` — PostgreSQL stub headers and the replaced upstream definitions. Compiled
   only into pg_compat and pgRouting translation units: the stub `postgres.h` defines `ERROR` as
   a macro and DuckDB has an enumerator of that name, so the two must never meet in one
-  translation unit. `src/include/routing/input_access.hpp` is the seam between the two worlds
+  translation unit. `src/include/pgrouting/input_access.hpp` is the seam between the two worlds
   and includes neither. `src/pg_compat/src/old_style_drivers.cpp` is the one translation unit
   that calls pgRouting's per-family drivers, whose headers include `postgres.h`; the DuckDB side
-  reaches it through `src/include/routing/old_style_drivers.hpp`, which includes neither world.
+  reaches it through `src/include/pgrouting/old_style_drivers.hpp`, which includes neither world.
 - `src/exec/` — input registry, driver invocation, the internal in-out table function, and the copy
   of upstream's withPoints derived-query key template (`withpoints_keys.cpp`).
 - `src/functions/` — the declarative overload table (`shortest_path_specs.cpp`) and the public
@@ -58,7 +58,7 @@ git submodule update --init --recursive
 export VCPKG_TOOLCHAIN_PATH=<vcpkg>/scripts/buildsystems/vcpkg.cmake
 GEN=ninja make debug           # or: make release / make relassert
 make test_debug                # all sqllogictests
-build/debug/test/unittest test/sql/routing.test   # a single test file
+build/debug/test/unittest test/sql/pgrouting.test   # a single test file
 ```
 
 Wasm (requires `source <emsdk>/emsdk_env.sh`, and `VCPKG_TOOLCHAIN_PATH` exported as above):

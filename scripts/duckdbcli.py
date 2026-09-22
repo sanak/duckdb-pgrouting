@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Run SQL through the built duckdb binary.
 
-The binary produced by this repository's own build already has the routing extension statically
+The binary produced by this repository's own build already has the pgrouting extension statically
 linked, so no LOAD is needed and no Python DuckDB package is involved -- a pip-installed driver
 would exercise a different build than the one CI ships.
 """

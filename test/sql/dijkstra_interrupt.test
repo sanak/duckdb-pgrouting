@@ -4,7 +4,7 @@
 
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-require routing
+require pgrouting
 
 # A directed chain of 4000 edges (1->2->...->4001): a search from a low-numbered start vertex to
 # vertex 4000 has to walk most of the chain, while a search from a start vertex near 4000 finishes

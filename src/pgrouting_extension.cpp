@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #define DUCKDB_EXTENSION_MAIN
 
-#include "routing_extension.hpp"
+#include "pgrouting_extension.hpp"
 
 #include "duckdb.hpp"
-#include "routing/register.hpp"
+#include "pgrouting/register.hpp"
 
 namespace duckdb {
 
@@ -14,17 +14,17 @@ static void LoadInternal(ExtensionLoader &loader) {
 	RegisterShortestPathFunctions(loader);
 }
 
-void RoutingExtension::Load(ExtensionLoader &loader) {
+void PgroutingExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
 
-std::string RoutingExtension::Name() {
-	return "routing";
+std::string PgroutingExtension::Name() {
+	return "pgrouting";
 }
 
-std::string RoutingExtension::Version() const {
-#ifdef EXT_VERSION_ROUTING
-	return EXT_VERSION_ROUTING;
+std::string PgroutingExtension::Version() const {
+#ifdef EXT_VERSION_PGROUTING
+	return EXT_VERSION_PGROUTING;
 #else
 	return "";
 #endif
@@ -34,7 +34,7 @@ std::string RoutingExtension::Version() const {
 
 extern "C" {
 
-DUCKDB_CPP_EXTENSION_ENTRY(routing, loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(pgrouting, loader) {
 	duckdb::LoadInternal(loader);
 }
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "routing/exec_common.hpp"
+#include "pgrouting/exec_common.hpp"
 
 #include <cstdlib>
 #include <sstream>
@@ -11,11 +11,11 @@
 
 #include "c_types/path_rt.h"
 #include "drivers/shortestPath_driver.hpp"
-#include "routing/driver_input.hpp"
-#include "routing/input_registry.hpp"
-#include "routing/old_style_drivers.hpp"
+#include "pgrouting/driver_input.hpp"
+#include "pgrouting/input_registry.hpp"
+#include "pgrouting/old_style_drivers.hpp"
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 DriverResult::~DriverResult() {
 	if (rows) {
@@ -129,4 +129,4 @@ DriverResult RunShortestPath(duckdb::ClientContext &context, InputRegistry &regi
 	return result;
 }
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

@@ -2,9 +2,9 @@
 #pragma once
 
 #include "duckdb.hpp"
-#include "routing/input_access.hpp"
+#include "pgrouting/input_access.hpp"
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 // One LIST(STRUCT) column of the single input row, unpacked into per-child vectors so that no
 // value is ever boxed as duckdb::Value during the driver's row loop.
@@ -61,4 +61,4 @@ private:
 	bool saved_interrupted;
 };
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-class RoutingExtension : public Extension {
+class PgroutingExtension : public Extension {
 public:
 	void Load(ExtensionLoader &loader) override;
 	std::string Name() override;

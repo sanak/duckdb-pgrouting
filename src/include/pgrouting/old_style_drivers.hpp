@@ -8,12 +8,12 @@
 #include <cstddef>
 #include <string>
 
-#include "routing/driver_kind.hpp"
+#include "pgrouting/driver_kind.hpp"
 
 struct ArrayType;
 struct Path_rt;
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 struct OldStyleOutput {
 	Path_rt *rows = nullptr; // allocated by the driver with malloc; the caller takes ownership
@@ -30,4 +30,4 @@ struct OldStyleOutput {
 OldStyleOutput RunOldStyle(DriverKind kind, const std::string &edges_sql, const std::string &combinations_sql,
                            ArrayType *starts, ArrayType *ends, bool directed, bool only_cost, bool normal);
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

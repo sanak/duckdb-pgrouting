@@ -4,7 +4,7 @@
 
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-require routing
+require pgrouting
 
 statement ok
 CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
@@ -21,7 +21,7 @@ CREATE MACRO dag() AS 'SELECT id, source, target, cost FROM edges';
 
 # No defaulted parameter: one variant per signature.
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dagShortestPath' AND tags['ext'] = 'routing';
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dagShortestPath' AND tags['ext'] = 'pgrouting';
 ----
 5
 

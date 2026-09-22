@@ -4,7 +4,7 @@
 
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-require routing
+require pgrouting
 
 statement ok
 CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
@@ -29,12 +29,12 @@ CREATE MACRO p() AS 'SELECT pid, edge_id, fraction, side FROM pois';
 
 # One defaulted parameter (directed): 2 variants per signature.
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'withPointsCost' AND tags['ext'] = 'routing';
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'withPointsCost' AND tags['ext'] = 'pgrouting';
 ----
 20
 
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'withPointsCostMatrix' AND tags['ext'] = 'routing';
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'withPointsCostMatrix' AND tags['ext'] = 'pgrouting';
 ----
 4
 

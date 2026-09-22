@@ -2,12 +2,12 @@
 
 // Calls the pgRouting drivers that v4.0.2 has not moved onto the unified do_shortestPath. Their
 // headers include postgres.h, so this translation unit belongs to the pg_compat side and includes
-// no DuckDB header; exec_common.cpp reaches it through routing/old_style_drivers.hpp only.
+// no DuckDB header; exec_common.cpp reaches it through pgrouting/old_style_drivers.hpp only.
 //
 // One case per family. If upstream moves a family onto do_shortestPath, delete its case and switch
 // that family's spec rows (shortest_path_specs.cpp) to DriverKind::SHORTEST_PATH.
 
-#include "routing/old_style_drivers.hpp"
+#include "pgrouting/old_style_drivers.hpp"
 
 #include "cpp_common/alloc.hpp"
 #include "drivers/bdDijkstra/bdDijkstra_driver.h"
@@ -16,7 +16,7 @@
 #include "drivers/breadthFirstSearch/binaryBreadthFirstSearch_driver.h"
 #include "drivers/dagShortestPath/dagShortestPath_driver.h"
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 namespace {
 
@@ -91,4 +91,4 @@ OldStyleOutput RunOldStyle(DriverKind kind, const std::string &edges_sql, const 
 	return out;
 }
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

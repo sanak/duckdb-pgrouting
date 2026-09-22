@@ -136,7 +136,7 @@ _LIST_SEP = "\x1f"
 def collect_variants(db):
     """Return {upstream function name: [(parameters, parameter_types), ...]} from the catalog.
 
-    tags['ext'] = 'routing' also matches _pgr_shortestpath_exec, the internal in-out table
+    tags['ext'] = 'pgrouting' also matches _pgr_shortestpath_exec, the internal in-out table
     function, which carries no pgrouting_name; the NULL filter drops it.
 
     The key is the tag lowercased. PostgreSQL case-folds unquoted identifiers, so a
@@ -151,7 +151,7 @@ def collect_variants(db):
         "array_to_string(parameters, chr(31)), "
         "array_to_string(parameter_types, chr(31)) "
         "FROM duckdb_functions() "
-        "WHERE tags['ext'] = 'routing' AND tags['pgrouting_name'] IS NOT NULL "
+        "WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL "
         "ORDER BY 1, 2, 3;"
     )
     variants = {}
@@ -165,7 +165,7 @@ def collect_variants(db):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Check pgRouting signature coverage.")
     parser.add_argument("--duckdb", default=None,
-                        help="DuckDB binary with the routing extension linked in")
+                        help="DuckDB binary with the pgrouting extension linked in")
     parser.add_argument("--quiet", action="store_true",
                         help="print failures only, not the coverage report")
     args = parser.parse_args(argv)

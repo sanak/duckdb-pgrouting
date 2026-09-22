@@ -4,7 +4,7 @@
 
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-require routing
+require pgrouting
 
 statement ok
 CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
@@ -19,7 +19,7 @@ statement ok
 CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
 
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'binaryBreadthFirstSearch' AND tags['ext'] = 'routing';
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'binaryBreadthFirstSearch' AND tags['ext'] = 'pgrouting';
 ----
 10
 

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "routing/input_registry.hpp"
+#include "pgrouting/input_registry.hpp"
 
 #include <cctype>
 
 #include "duckdb/common/exception.hpp"
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 namespace {
 
@@ -51,7 +51,7 @@ void InputRegistry::Register(const duckdb::string &sql, const duckdb::string &ki
 		// query the caller wrote (edges_sql == combinations_sql, the actually-legal case, differs
 		// in kind and therefore in key).
 		throw duckdb::InvalidInputException(
-		    "routing: input of kind '%s' is registered twice for the same query: %s", kind, sql);
+		    "pgrouting: input of kind '%s' is registered twice for the same query: %s", kind, sql);
 	}
 	inputs[key] = std::move(input);
 }
@@ -76,7 +76,7 @@ ScopedRoutingContext::~ScopedRoutingContext() {
 
 const InputHandle &LookupInput(const std::string &sql, const std::string &kind) {
 	if (!state.registry) {
-		throw std::string("Internal error: no routing context is active");
+		throw std::string("Internal error: no pgrouting context is active");
 	}
 	auto *found = state.registry->Find(sql, kind);
 	if (!found) {
@@ -184,4 +184,4 @@ void ClearInterrupted() {
 	state.interrupted = false;
 }
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

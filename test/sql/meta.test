@@ -1,10 +1,10 @@
 # name: test/sql/meta.test
-# description: Meta functions of the routing extension
+# description: Meta functions of the pgrouting extension
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-require routing
+require pgrouting
 
 query T
 SELECT DuckDB_pgRouting_Version();
@@ -20,7 +20,7 @@ true
 query TT
 SELECT function_name, tags['pgrouting_name']
 FROM duckdb_functions()
-WHERE tags['ext'] = 'routing' AND tags['pgrouting_name'] IS NOT NULL
+WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL
 GROUP BY ALL ORDER BY 1, 2;
 ----
 bdDijkstra	pgr_bdDijkstra
@@ -45,10 +45,10 @@ withPointsCostMatrix	pgr_withPointsCostMatrix
 # signature with k defaulted parameters is registered as k + 1 variants, each taking the first
 # 0..k of them positionally and all of them by name. pgr_dijkstra has one defaulted parameter
 # (`directed`) and five signatures, so this catalog must carry exactly ten "dijkstra" entries. The
-# routing tag scopes the count to this extension's own registrations, so another extension that
+# pgrouting tag scopes the count to this extension's own registrations, so another extension that
 # also published a function named `dijkstra` cannot fail this spuriously.
 query I
 SELECT count(*) FROM duckdb_functions()
-WHERE function_name = 'dijkstra' AND tags['ext'] = 'routing';
+WHERE function_name = 'dijkstra' AND tags['ext'] = 'pgrouting';
 ----
 10

@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "routing/pg_types.hpp"
+#include "pgrouting/pg_types.hpp"
 #include "cpp_common/alloc.hpp"
 #include "cpp_common/get_check_data.hpp"
 #include "cpp_common/info_t.hpp"
@@ -25,8 +25,8 @@ bool column_found(int colNumber) {
 
 namespace {
 
-bool Accepts(expectType expected, duckdb_routing::ColumnClass actual) {
-	using duckdb_routing::ColumnClass;
+bool Accepts(expectType expected, duckdb_pgrouting::ColumnClass actual) {
+	using duckdb_pgrouting::ColumnClass;
 	switch (expected) {
 	case ANY_INTEGER:
 		return actual == ColumnClass::INTEGER;
@@ -62,14 +62,14 @@ const char *ExpectedName(expectType expected) {
 
 void fetch_column_info(const TupleDesc &tupdesc, std::vector<Column_info_t> &info) {
 	for (auto &col : info) {
-		col.colNumber = duckdb_routing::FindColumn(*tupdesc->input, col.name);
+		col.colNumber = duckdb_pgrouting::FindColumn(*tupdesc->input, col.name);
 		if (col.colNumber == -1) {
 			if (col.strict) {
 				throw std::string("Column '") + col.name + "' not Found";
 			}
 			continue;
 		}
-		const auto actual = duckdb_routing::ColumnClassOf(*tupdesc->input, col.colNumber);
+		const auto actual = duckdb_pgrouting::ColumnClassOf(*tupdesc->input, col.colNumber);
 		if (!Accepts(col.eType, actual)) {
 			throw std::string("Unexpected Column '") + col.name + "' type. Expected " + ExpectedName(col.eType);
 		}
@@ -77,38 +77,38 @@ void fetch_column_info(const TupleDesc &tupdesc, std::vector<Column_info_t> &inf
 }
 
 int64_t getBigInt(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info) {
-	if (duckdb_routing::IsNull(*tuple->input, tuple->row, info.colNumber)) {
+	if (duckdb_pgrouting::IsNull(*tuple->input, tuple->row, info.colNumber)) {
 		throw std::string("Unexpected Null value in column ") + info.name;
 	}
-	return duckdb_routing::ReadInt64(*tuple->input, tuple->row, info.colNumber);
+	return duckdb_pgrouting::ReadInt64(*tuple->input, tuple->row, info.colNumber);
 }
 
 double getFloat8(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info) {
-	if (duckdb_routing::IsNull(*tuple->input, tuple->row, info.colNumber)) {
+	if (duckdb_pgrouting::IsNull(*tuple->input, tuple->row, info.colNumber)) {
 		throw std::string("Unexpected Null value in column ") + info.name;
 	}
-	return duckdb_routing::ReadDouble(*tuple->input, tuple->row, info.colNumber);
+	return duckdb_pgrouting::ReadDouble(*tuple->input, tuple->row, info.colNumber);
 }
 
 char getChar(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info, bool strict, char default_value) {
-	if (duckdb_routing::IsNull(*tuple->input, tuple->row, info.colNumber)) {
+	if (duckdb_pgrouting::IsNull(*tuple->input, tuple->row, info.colNumber)) {
 		if (strict) {
 			throw std::string("Unexpected Null value in column ") + info.name;
 		}
 		return default_value;
 	}
-	return duckdb_routing::ReadChar(*tuple->input, tuple->row, info.colNumber);
+	return duckdb_pgrouting::ReadChar(*tuple->input, tuple->row, info.colNumber);
 }
 
 char *getText(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info) {
-	if (duckdb_routing::IsNull(*tuple->input, tuple->row, info.colNumber)) {
+	if (duckdb_pgrouting::IsNull(*tuple->input, tuple->row, info.colNumber)) {
 		throw std::string("Unexpected Null value in column ") + info.name;
 	}
-	return to_pg_msg(duckdb_routing::ReadText(*tuple->input, tuple->row, info.colNumber));
+	return to_pg_msg(duckdb_pgrouting::ReadText(*tuple->input, tuple->row, info.colNumber));
 }
 
 int64_t *getBigIntArr(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info, size_t *size) {
-	const auto values = duckdb_routing::ReadInt64Array(*tuple->input, tuple->row, info.colNumber);
+	const auto values = duckdb_pgrouting::ReadInt64Array(*tuple->input, tuple->row, info.colNumber);
 	*size = values.size();
 	auto *out = pgr_alloc(values.size(), static_cast<int64_t *>(nullptr));
 	std::copy(values.begin(), values.end(), out);

@@ -12,7 +12,7 @@
 # sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
 # line with its reason, so what this file does not cover is visible here rather than implied.
 
-require routing
+require pgrouting
 
 statement ok
 CREATE TABLE edges AS

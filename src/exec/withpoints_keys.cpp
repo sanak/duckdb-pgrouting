@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "routing/withpoints_keys.hpp"
+#include "pgrouting/withpoints_keys.hpp"
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 // A character-for-character copy of get_new_queries in the anonymous namespace of
 // third_party/pgrouting/src/dijkstra/shortestPath_driver.cpp. do_shortestPath calls that function
@@ -29,4 +29,4 @@ WithPointsKeys WithPointsDerivedKeys(const std::string &edges_sql, const std::st
 	return keys;
 }
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

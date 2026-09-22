@@ -1,4 +1,4 @@
-# duckdb-routing
+# duckdb-pgrouting
 
 A DuckDB extension that brings [pgRouting](https://pgrouting.org/)'s graph algorithms to DuckDB,
 with pgRouting's SQL API minus the `pgr_` prefix. pgRouting's C++ code is reused unmodified and

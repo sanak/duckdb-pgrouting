@@ -4,7 +4,7 @@
 // Shadows third_party/pgrouting/include/cpp_common/interruption.hpp, whose body is PostgreSQL's
 // CHECK_FOR_INTERRUPTS from miscadmin.h.
 
-#include "routing/input_access.hpp"
+#include "pgrouting/input_access.hpp"
 
 #ifdef _MSC_VER
 #define __PGR_PRETTY_FUNCTION__ __FUNCSIG__
@@ -12,4 +12,4 @@
 #define __PGR_PRETTY_FUNCTION__ __PRETTY_FUNCTION__
 #endif
 
-#define CHECK_FOR_INTERRUPTS() ::duckdb_routing::CheckForInterrupts()
+#define CHECK_FOR_INTERRUPTS() ::duckdb_pgrouting::CheckForInterrupts()

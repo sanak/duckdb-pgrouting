@@ -55,11 +55,11 @@ decision rather than an oversight.
 
 ## Closed as declined
 
-- **A routing-specific log tag.** `DUCKDB_LOG_INFO` has no tag parameter, and adding one needs a
-  `LogType` class plus the `DUCKDB_LOG` macro. Routing messages are therefore not filterable by tag
-  name in `duckdb_logs`. They are still visible: they arrive with an empty `type` and the level
-  upstream chose — `INFO` for a notice, `DEBUG` for a log line — which is what
-  `test/sql/dijkstra_errors.test` asserts against. Reopen only if something needs tag-based
+- **A pgrouting-specific log tag.** `DUCKDB_LOG_INFO` has no tag parameter, and adding one needs a
+  `LogType` class plus the `DUCKDB_LOG` macro. The extension's messages are therefore not
+  filterable by tag name in `duckdb_logs`. They are still visible: they arrive with an empty
+  `type` and the level upstream chose — `INFO` for a notice, `DEBUG` for a log line — which is
+  what `test/sql/dijkstra_errors.test` asserts against. Reopen only if something needs tag-based
   filtering for its own sake.
 
 ## Test tooling gaps
@@ -89,7 +89,7 @@ decision rather than an oversight.
 
 Each of these would be a change no test could observe, so none of them is made:
 
-- `duckdb_routing::ColumnClass::CHAR1` in `src/include/routing/input_access.hpp` is never produced
+- `duckdb_pgrouting::ColumnClass::CHAR1` in `src/include/pgrouting/input_access.hpp` is never produced
   by `ClassOf`, so the `CHAR1` arm of `Accepts` in `src/pg_compat/src/get_check_data.cpp` cannot
   fire.
 - `getText` in `src/pg_compat/src/get_check_data.cpp` returns a `std::malloc`'d buffer with no

@@ -106,7 +106,7 @@ jobs:
       - name: Layer 4 - signature coverage
         run: python3 scripts/check_signatures.py
 
-      # Layer 5. Loads the core extensions beside routing and asserts no public name is shared.
+      # Layer 5. Loads the core extensions beside pgrouting and asserts no public name is shared.
       # Run directly rather than through `make test_release`, which would re-run the whole suite
       # that MainDistributionPipeline.yml already runs.
       - name: Layer 5 - no public name collides with another extension

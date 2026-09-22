@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "routing/register.hpp"
+#include "pgrouting/register.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/function_entry.hpp"
@@ -40,9 +40,9 @@ void RegisterMetaFunctions(ExtensionLoader &loader) {
 	auto entry = schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY,
 	                              Identifier("DuckDB_pgRouting_Version"));
 	if (!entry) {
-		throw InternalException("routing: DuckDB_pgRouting_Version was not registered");
+		throw InternalException("pgrouting: DuckDB_pgRouting_Version was not registered");
 	}
-	entry->Cast<FunctionEntry>().tags.insert("ext", "routing");
+	entry->Cast<FunctionEntry>().tags.insert("ext", "pgrouting");
 }
 
 } // namespace duckdb

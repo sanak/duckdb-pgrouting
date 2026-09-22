@@ -9,7 +9,7 @@
 // ShortestPathBindReplace walks the same spec back at call time to build the row that
 // _pgr_shortestpath_exec expects.
 
-#include "routing/register.hpp"
+#include "pgrouting/register.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/function_entry.hpp"
@@ -197,22 +197,22 @@ struct ShortestPathFunctionInfo : public TableFunctionInfo {
 	idx_t spec_index;
 };
 
-const vector<const char *> &OutputColumns(duckdb_routing::ResultColumns columns) {
+const vector<const char *> &OutputColumns(duckdb_pgrouting::ResultColumns columns) {
 	static const vector<const char *> PATH = {"seq", "path_seq", "start_vid", "end_vid",
 	                                          "node", "edge", "cost", "agg_cost"};
 	static const vector<const char *> COST = {"start_vid", "end_vid", "agg_cost"};
 	switch (columns) {
-	case duckdb_routing::ResultColumns::PATH:
+	case duckdb_pgrouting::ResultColumns::PATH:
 		return PATH;
-	case duckdb_routing::ResultColumns::COST:
-	case duckdb_routing::ResultColumns::COST_OF_PATH:
+	case duckdb_pgrouting::ResultColumns::COST:
+	case duckdb_pgrouting::ResultColumns::COST_OF_PATH:
 		return COST;
 	}
 	throw InternalException("Unhandled ResultColumns");
 }
 
-LogicalType TypeOf(duckdb_routing::ArgKind kind) {
-	using duckdb_routing::ArgKind;
+LogicalType TypeOf(duckdb_pgrouting::ArgKind kind) {
+	using duckdb_pgrouting::ArgKind;
 	switch (kind) {
 	case ArgKind::EDGES_SQL:
 	case ArgKind::COMBINATIONS_SQL:
@@ -230,11 +230,11 @@ LogicalType TypeOf(duckdb_routing::ArgKind kind) {
 	throw InternalException("Unhandled ArgKind");
 }
 
-LogicalType TypeOf(duckdb_routing::OptionalType type) {
+LogicalType TypeOf(duckdb_pgrouting::OptionalType type) {
 	switch (type) {
-	case duckdb_routing::OptionalType::BOOLEAN:
+	case duckdb_pgrouting::OptionalType::BOOLEAN:
 		return LogicalType::BOOLEAN;
-	case duckdb_routing::OptionalType::BIGINT:
+	case duckdb_pgrouting::OptionalType::BIGINT:
 		return LogicalType::BIGINT;
 	}
 	throw InternalException("Unhandled OptionalType");
@@ -242,7 +242,7 @@ LogicalType TypeOf(duckdb_routing::OptionalType type) {
 
 // The value of the index-th defaulted parameter: positional when this variant carries it
 // positionally (see RegisterShortestPathFunctions), else named, else upstream's default.
-Value ResolveOptional(const duckdb_routing::FunctionSpec &spec, TableFunctionBindInput &input, idx_t index) {
+Value ResolveOptional(const duckdb_pgrouting::FunctionSpec &spec, TableFunctionBindInput &input, idx_t index) {
 	const auto &param = spec.optionals[index];
 	const idx_t positional_index = spec.args.size() + index;
 	if (positional_index < input.inputs.size()) {
@@ -252,7 +252,7 @@ Value ResolveOptional(const duckdb_routing::FunctionSpec &spec, TableFunctionBin
 	if (it != input.named_parameters.end()) {
 		return it->second;
 	}
-	if (param.type == duckdb_routing::OptionalType::BOOLEAN) {
+	if (param.type == duckdb_pgrouting::OptionalType::BOOLEAN) {
 		return Value::BOOLEAN(param.default_value != 0);
 	}
 	return Value::BIGINT(param.default_value);
@@ -263,7 +263,7 @@ Value ResolveOptional(const duckdb_routing::FunctionSpec &spec, TableFunctionBin
 //===--------------------------------------------------------------------===//
 unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto &function_info = input.info->Cast<ShortestPathFunctionInfo>();
-	const auto &spec = duckdb_routing::SHORTEST_PATH_SPECS[function_info.spec_index];
+	const auto &spec = duckdb_pgrouting::SHORTEST_PATH_SPECS[function_info.spec_index];
 
 	bool null_input = false;
 	for (auto &value : input.inputs) {
@@ -297,7 +297,7 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 			} else if (name == "details") {
 				details = BooleanValue::Get(value);
 			} else {
-				throw InternalException("routing: unhandled optional parameter '%s'", name);
+				throw InternalException("pgrouting: unhandled optional parameter '%s'", name);
 			}
 		}
 	}
@@ -306,7 +306,7 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	// resolved above. The exec function hands only the first character to the driver, as
 	// upstream's process layer does (driving_side[0]).
 	string driving_side = " ";
-	if (spec.flags.driving_side == duckdb_routing::DrivingSideSource::FROM_DIRECTED) {
+	if (spec.flags.driving_side == duckdb_pgrouting::DrivingSideSource::FROM_DIRECTED) {
 		driving_side = directed ? "r" : "b";
 	}
 
@@ -339,39 +339,39 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	if (!null_input) {
 		for (idx_t i = 0; i < spec.args.size(); i++) {
 			switch (spec.args[i]) {
-			case duckdb_routing::ArgKind::EDGES_SQL:
+			case duckdb_pgrouting::ArgKind::EDGES_SQL:
 				// Materialized after the loop: with points given, the driver never fetches the
 				// edge query itself, only the two it derives from it and the points query.
 				edges_sql = StringValue::Get(input.inputs[i]);
 				break;
-			case duckdb_routing::ArgKind::COMBINATIONS_SQL:
+			case duckdb_pgrouting::ArgKind::COMBINATIONS_SQL:
 				combinations_sql = StringValue::Get(input.inputs[i]);
 				combinations_expr = Named(ListOfRows(context, combinations_sql), "combinations");
 				break;
-			case duckdb_routing::ArgKind::START_VID:
+			case duckdb_pgrouting::ArgKind::START_VID:
 				starts_expr = Named(IdList(input.inputs[i]), "starts");
 				break;
-			case duckdb_routing::ArgKind::END_VID:
+			case duckdb_pgrouting::ArgKind::END_VID:
 				ends_expr = Named(IdList(input.inputs[i]), "ends");
 				break;
-			case duckdb_routing::ArgKind::START_VIDS:
+			case duckdb_pgrouting::ArgKind::START_VIDS:
 				starts_expr = Named(IdListCast(input.inputs[i]), "starts");
 				break;
-			case duckdb_routing::ArgKind::END_VIDS:
+			case duckdb_pgrouting::ArgKind::END_VIDS:
 				ends_expr = Named(IdListCast(input.inputs[i]), "ends");
 				break;
-			case duckdb_routing::ArgKind::VIDS:
+			case duckdb_pgrouting::ArgKind::VIDS:
 				// One array as both starts and ends: the old-style drivers only read the arrays when
 				// both are given, and pair every start with every end; a vertex paired with itself
 				// yields no row.
 				starts_expr = Named(IdListCast(input.inputs[i]), "starts");
 				ends_expr = Named(IdListCast(input.inputs[i]), "ends");
 				break;
-			case duckdb_routing::ArgKind::POINTS_SQL:
+			case duckdb_pgrouting::ArgKind::POINTS_SQL:
 				points_sql = StringValue::Get(input.inputs[i]);
 				has_points = true;
 				break;
-			case duckdb_routing::ArgKind::DRIVING_SIDE:
+			case duckdb_pgrouting::ArgKind::DRIVING_SIDE:
 				driving_side = StringValue::Get(input.inputs[i]);
 				break;
 			}
@@ -413,7 +413,7 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	args.push_back(Named(Constant(Value(driving_side)), "driving_side"));
 	args.push_back(Named(Constant(Value::BOOLEAN(details)), "details"));
 	args.push_back(Named(Constant(Value::BOOLEAN(null_input)), "null_input"));
-	args.push_back(Named(Constant(Value(duckdb_routing::DriverKindName(spec.flags.driver))), "driver"));
+	args.push_back(Named(Constant(Value(duckdb_pgrouting::DriverKindName(spec.flags.driver))), "driver"));
 	// The exec function always returns the path columns; the public overload's shape is the
 	// outer projection below.
 	args.push_back(Named(Constant(Value("path")), "result_kind"));
@@ -426,7 +426,7 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 		outer->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(column)));
 	}
 	outer->from_table = std::move(fref);
-	if (spec.flags.columns == duckdb_routing::ResultColumns::COST_OF_PATH) {
+	if (spec.flags.columns == duckdb_pgrouting::ResultColumns::COST_OF_PATH) {
 		// The driver ran in path mode (see the COST_OF_PATH comment in function_spec.hpp); keep
 		// only each path's closing row, identified the same way pgRouting's own SQL does: edge =
 		// -1.
@@ -445,16 +445,16 @@ void TagFunctions(ExtensionLoader &loader) {
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
 	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
-	for (auto &spec : duckdb_routing::SHORTEST_PATH_SPECS) {
-		const auto public_name = duckdb_routing::PublicName(spec.upstream_name);
+	for (auto &spec : duckdb_pgrouting::SHORTEST_PATH_SPECS) {
+		const auto public_name = duckdb_pgrouting::PublicName(spec.upstream_name);
 		auto entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier(public_name));
 		if (!entry) {
-			throw InternalException("routing: function %s was not registered", public_name);
+			throw InternalException("pgrouting: function %s was not registered", public_name);
 		}
 		auto &function_entry = entry->Cast<FunctionEntry>();
 		// The tooling reads this back from duckdb_functions() instead of keeping a second copy of
 		// the upstream <-> public name mapping in a script.
-		function_entry.tags.insert("ext", "routing");
+		function_entry.tags.insert("ext", "pgrouting");
 		function_entry.tags.insert("pgrouting_name", spec.upstream_name);
 	}
 }
@@ -463,9 +463,9 @@ void TagFunctions(ExtensionLoader &loader) {
 
 void RegisterShortestPathFunctions(ExtensionLoader &loader) {
 	unordered_map<string, TableFunctionSet> sets;
-	for (idx_t i = 0; i < duckdb_routing::SHORTEST_PATH_SPECS.size(); i++) {
-		auto &spec = duckdb_routing::SHORTEST_PATH_SPECS[i];
-		const auto public_name = duckdb_routing::PublicName(spec.upstream_name);
+	for (idx_t i = 0; i < duckdb_pgrouting::SHORTEST_PATH_SPECS.size(); i++) {
+		auto &spec = duckdb_pgrouting::SHORTEST_PATH_SPECS[i];
+		const auto public_name = duckdb_pgrouting::PublicName(spec.upstream_name);
 		auto entry = sets.find(public_name);
 		if (entry == sets.end()) {
 			entry = sets.emplace(public_name, TableFunctionSet(Identifier(public_name))).first;

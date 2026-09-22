@@ -10,9 +10,9 @@
 
 #include "duckdb.hpp"
 
-#include "routing/driver_kind.hpp"
+#include "pgrouting/driver_kind.hpp"
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 // What a required positional argument of a public function means.
 enum class ArgKind : uint8_t {
@@ -99,4 +99,4 @@ inline duckdb::string PublicName(const char *upstream_name) {
 // Defined in shortest_path_specs.cpp.
 extern const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS;
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

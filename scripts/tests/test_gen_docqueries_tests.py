@@ -180,7 +180,7 @@ class TestRender(unittest.TestCase):
         self.assertIn("# group: [pgrouting]\n", text)
         self.assertIn("# SPDX-License-Identifier: GPL-2.0-or-later\n", text)
         self.assertIn("GENERATED FILE", text)
-        self.assertIn("require routing\n", text)
+        self.assertIn("require pgrouting\n", text)
         self.assertIn("# q2\nquery IIR\nSELECT * FROM Dijkstra('x', 6, 10);\n----\n1\t1\t0\n", text)
         self.assertIn("# q99: skipped - not implemented: pgr_dijkstraVia\n", text)
         self.assertTrue(text.endswith("\n"))

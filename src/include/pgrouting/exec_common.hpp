@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "routing/driver_kind.hpp"
+#include "pgrouting/driver_kind.hpp"
 
 struct Path_rt;
 
@@ -14,7 +14,7 @@ namespace duckdb {
 class ClientContext;
 }
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 class InputRegistry;
 
@@ -59,4 +59,4 @@ public:
 // Runs the driver with the registry active, maps its messages and exceptions to DuckDB ones.
 DriverResult RunShortestPath(duckdb::ClientContext &context, InputRegistry &registry, const DriverRequest &request);
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

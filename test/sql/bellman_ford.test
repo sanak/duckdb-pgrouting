@@ -4,7 +4,7 @@
 
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-require routing
+require pgrouting
 
 statement ok
 CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
@@ -20,7 +20,7 @@ CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
 
 query II
 SELECT function_name, count(*) FROM duckdb_functions()
-WHERE function_name IN ('bellmanFord', 'edwardMoore') AND tags['ext'] = 'routing'
+WHERE function_name IN ('bellmanFord', 'edwardMoore') AND tags['ext'] = 'pgrouting'
 GROUP BY ALL ORDER BY 1;
 ----
 bellmanFord	10

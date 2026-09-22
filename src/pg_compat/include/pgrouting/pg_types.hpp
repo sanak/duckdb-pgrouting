@@ -10,15 +10,15 @@
 
 #include <postgres.h>
 
-#include "routing/input_access.hpp"
+#include "pgrouting/input_access.hpp"
 
 struct HeapTupleData {
-	const duckdb_routing::InputHandle *input;
+	const duckdb_pgrouting::InputHandle *input;
 	std::size_t row;
 };
 
 struct TupleDescData {
-	const duckdb_routing::InputHandle *input;
+	const duckdb_pgrouting::InputHandle *input;
 };
 
 struct ArrayType {

@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 // One materialized SQL input. Declared here, defined on the DuckDB side.
 struct InputHandle;
@@ -53,4 +53,4 @@ void CheckForInterrupts();
 bool WasInterrupted();
 void ClearInterrupted();
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

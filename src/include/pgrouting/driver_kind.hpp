@@ -8,7 +8,7 @@
 #include <initializer_list>
 #include <string>
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 // SHORTEST_PATH is pgRouting's unified do_shortestPath. The others are the per-family drivers that
 // pgRouting v4.0.2 still keeps; old_style_drivers.cpp calls them.
@@ -51,4 +51,4 @@ inline bool ParseDriverKind(const std::string &name, DriverKind &kind) {
 	return false;
 }
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting

@@ -1,0 +1,12 @@
+# name: test/sql/pgrouting.test
+# description: The pgrouting extension loads
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+query T
+SELECT loaded FROM duckdb_extensions() WHERE extension_name = 'pgrouting';
+----
+true

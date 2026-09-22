@@ -4,7 +4,7 @@
 // It receives one row whose columns carry the already-materialized inputs, runs pgRouting's
 // driver once, and streams the driver's tuples out.
 
-#include "routing/register.hpp"
+#include "pgrouting/register.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/function_entry.hpp"
@@ -21,9 +21,9 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 
 #include "c_types/path_rt.h"
-#include "routing/exec_common.hpp"
-#include "routing/input_registry.hpp"
-#include "routing/withpoints_keys.hpp"
+#include "pgrouting/exec_common.hpp"
+#include "pgrouting/input_registry.hpp"
+#include "pgrouting/withpoints_keys.hpp"
 
 namespace duckdb {
 
@@ -39,7 +39,7 @@ struct RowSchema {
 };
 
 struct ShortestPathExecBindData : public TableFunctionData {
-	duckdb_routing::DriverRequest request;
+	duckdb_pgrouting::DriverRequest request;
 	bool null_input = false;
 	// Column positions of the input row, resolved by name so that new columns can be added
 	// without disturbing the ones already bound.
@@ -59,14 +59,14 @@ struct ShortestPathExecBindData : public TableFunctionData {
 
 struct ShortestPathExecState : public LocalTableFunctionState {
 	bool ran = false;
-	duckdb_routing::InputRegistry registry;
-	duckdb_routing::DriverResult result;
+	duckdb_pgrouting::InputRegistry registry;
+	duckdb_pgrouting::DriverResult result;
 	idx_t offset = 0;
 	int64_t next_path_seq = 1; // carried across output chunks
 };
 
-duckdb_routing::ColumnClass ClassOf(const LogicalType &type) {
-	using duckdb_routing::ColumnClass;
+duckdb_pgrouting::ColumnClass ClassOf(const LogicalType &type) {
+	using duckdb_pgrouting::ColumnClass;
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
@@ -92,7 +92,7 @@ duckdb_routing::ColumnClass ClassOf(const LogicalType &type) {
 }
 
 // Unpacks one LIST(STRUCT) cell into per-child vectors. Returns false when the cell is NULL.
-bool Unpack(ClientContext &context, Vector &list_column, idx_t row, duckdb_routing::MaterializedInput &out) {
+bool Unpack(ClientContext &context, Vector &list_column, idx_t row, duckdb_pgrouting::MaterializedInput &out) {
 	UnifiedVectorFormat list_format;
 	list_column.ToUnifiedFormat(list_format);
 	const auto list_idx = list_format.sel->get_index(row);
@@ -129,8 +129,8 @@ bool Unpack(ClientContext &context, Vector &list_column, idx_t row, duckdb_routi
 // Builds a registrable input that has the right columns and no rows. pgRouting's fetchers resolve
 // and type-check the column names before reading any row (fetch_column_info), and never index the
 // per-column vectors when the row count is zero, so `columns` is deliberately left empty.
-duckdb_routing::MaterializedInput EmptyInput(const RowSchema &schema) {
-	duckdb_routing::MaterializedInput input;
+duckdb_pgrouting::MaterializedInput EmptyInput(const RowSchema &schema) {
+	duckdb_pgrouting::MaterializedInput input;
 	input.names = schema.names;
 	input.types = schema.types;
 	for (auto &type : schema.types) {
@@ -221,7 +221,7 @@ void CheckIdListColumn(TableFunctionBindInput &input, idx_t column, const char *
 	if (IsAlwaysNull(type)) {
 		return;
 	}
-	if (ClassOf(type) != duckdb_routing::ColumnClass::INTEGER_ARRAY) {
+	if (ClassOf(type) != duckdb_pgrouting::ColumnClass::INTEGER_ARRAY) {
 		throw InvalidInputException("_pgr_shortestpath_exec: column '%s' must be LIST(BIGINT), got %s", name,
 		                            type.ToString());
 	}
@@ -277,13 +277,13 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	const auto driving_side = NamedStringOr(input, "driving_side", " ");
 	request.driving_side = driving_side.empty() ? ' ' : driving_side[0];
 	const auto driver =
-	    NamedStringOr(input, "driver", duckdb_routing::DriverKindName(duckdb_routing::DriverKind::SHORTEST_PATH));
-	if (!duckdb_routing::ParseDriverKind(driver, request.driver)) {
+	    NamedStringOr(input, "driver", duckdb_pgrouting::DriverKindName(duckdb_pgrouting::DriverKind::SHORTEST_PATH));
+	if (!duckdb_pgrouting::ParseDriverKind(driver, request.driver)) {
 		throw InvalidInputException("_pgr_shortestpath_exec: unknown driver '%s'", driver);
 	}
-	if (request.driver != duckdb_routing::DriverKind::SHORTEST_PATH && !request.points_sql.empty()) {
+	if (request.driver != duckdb_pgrouting::DriverKind::SHORTEST_PATH && !request.points_sql.empty()) {
 		throw InvalidInputException("_pgr_shortestpath_exec: points_sql is only supported by driver '%s'",
-		                            duckdb_routing::DriverKindName(duckdb_routing::DriverKind::SHORTEST_PATH));
+		                            duckdb_pgrouting::DriverKindName(duckdb_pgrouting::DriverKind::SHORTEST_PATH));
 	}
 	data->null_input = NamedOr<bool>(input, "null_input", false);
 
@@ -331,12 +331,12 @@ unique_ptr<LocalTableFunctionState> ShortestPathExecInitLocal(ExecutionContext &
 // the registry first and then reads zero rows, so the bound row shape is registered with no rows.
 // A column that is absent, or has no bound row shape (`known` false), is an input this call does
 // not use; the driver never asks for it, so it stays unregistered.
-void RegisterRowList(ClientContext &context, duckdb_routing::InputRegistry &registry, DataChunk &input,
+void RegisterRowList(ClientContext &context, duckdb_pgrouting::InputRegistry &registry, DataChunk &input,
                      idx_t column, const RowSchema &schema, const string &sql, const char *kind) {
 	if (column == DConstants::INVALID_INDEX) {
 		return;
 	}
-	duckdb_routing::MaterializedInput rows;
+	duckdb_pgrouting::MaterializedInput rows;
 	if (Unpack(context, input.data[column], 0, rows)) {
 		registry.Register(sql, kind, std::move(rows));
 	} else if (schema.known) {
@@ -355,29 +355,29 @@ void RunOnce(ClientContext &context, const ShortestPathExecBindData &bind, Short
 
 	auto request = bind.request;
 	// The materialized inputs reference this chunk, so nothing here may outlive the driver call.
-	state.registry = duckdb_routing::InputRegistry();
+	state.registry = duckdb_pgrouting::InputRegistry();
 	// Offered here even when points_sql is set below (where the driver never reads edges_sql
 	// itself); that is a no-op only because the public overloads pass 'edges' as an untyped NULL
 	// in that case, so it has no bound row shape and RegisterRowList registers nothing for it.
 	RegisterRowList(context, state.registry, input, bind.edges_column, bind.edges_schema, request.edges_sql,
-	                duckdb_routing::KIND_EDGES);
+	                duckdb_pgrouting::KIND_EDGES);
 	RegisterRowList(context, state.registry, input, bind.combinations_column, bind.combinations_schema,
-	                request.combinations_sql, duckdb_routing::KIND_COMBINATIONS);
+	                request.combinations_sql, duckdb_pgrouting::KIND_COMBINATIONS);
 	// With points given, the driver fetches the points query and two edge queries it derives from
 	// edges_sql and points_sql, and never edges_sql itself (the caller passes 'edges' as NULL).
 	if (!request.points_sql.empty()) {
-		const auto keys = duckdb_routing::WithPointsDerivedKeys(request.edges_sql, request.points_sql);
+		const auto keys = duckdb_pgrouting::WithPointsDerivedKeys(request.edges_sql, request.points_sql);
 		RegisterRowList(context, state.registry, input, bind.points_column, bind.points_schema,
-		                request.points_sql, duckdb_routing::KIND_POINTS);
+		                request.points_sql, duckdb_pgrouting::KIND_POINTS);
 		RegisterRowList(context, state.registry, input, bind.edges_of_points_column,
-		                bind.edges_of_points_schema, keys.of_points, duckdb_routing::KIND_EDGES);
+		                bind.edges_of_points_schema, keys.of_points, duckdb_pgrouting::KIND_EDGES);
 		RegisterRowList(context, state.registry, input, bind.edges_no_points_column,
-		                bind.edges_no_points_schema, keys.no_points, duckdb_routing::KIND_EDGES);
+		                bind.edges_no_points_schema, keys.no_points, duckdb_pgrouting::KIND_EDGES);
 	}
 	request.starts = ReadIdList(input, bind.starts_column, "starts", request.has_starts);
 	request.ends = ReadIdList(input, bind.ends_column, "ends", request.has_ends);
 
-	state.result = duckdb_routing::RunShortestPath(context, state.registry, request);
+	state.result = duckdb_pgrouting::RunShortestPath(context, state.registry, request);
 }
 
 OperatorResultType ShortestPathExecFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
@@ -387,7 +387,7 @@ OperatorResultType ShortestPathExecFunction(ExecutionContext &context, TableFunc
 
 	if (!state.ran) {
 		state.ran = true;
-		state.result = duckdb_routing::DriverResult();
+		state.result = duckdb_pgrouting::DriverResult();
 		state.offset = 0;
 		state.next_path_seq = 1;
 		RunOnce(context.client, bind, state, input);
@@ -427,7 +427,7 @@ OperatorResultType ShortestPathExecFunction(ExecutionContext &context, TableFunc
 }
 
 // Tags this one internal function the same way TagFunctions (shortest_path_functions.cpp) tags
-// every public overload, so both are found by `WHERE tags['ext'] = 'routing'`.
+// every public overload, so both are found by `WHERE tags['ext'] = 'pgrouting'`.
 void TagExecFunction(ExtensionLoader &loader) {
 	auto &db = loader.GetDatabaseInstance();
 	auto &catalog = Catalog::GetSystemCatalog(db);
@@ -436,10 +436,10 @@ void TagExecFunction(ExtensionLoader &loader) {
 	auto entry =
 	    schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier("_pgr_shortestpath_exec"));
 	if (!entry) {
-		throw InternalException("routing: _pgr_shortestpath_exec was not registered");
+		throw InternalException("pgrouting: _pgr_shortestpath_exec was not registered");
 	}
 	auto &function_entry = entry->Cast<FunctionEntry>();
-	function_entry.tags.insert("ext", "routing");
+	function_entry.tags.insert("ext", "pgrouting");
 	function_entry.tags.insert("category", "internal");
 }
 

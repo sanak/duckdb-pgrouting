@@ -11,8 +11,8 @@
 #include <sstream>
 #include <string>
 
-#include "routing/pg_types.hpp"
-#include "routing/driver_input.hpp"
+#include "pgrouting/pg_types.hpp"
+#include "pgrouting/driver_input.hpp"
 #include "cpp_common/alloc.hpp"
 
 namespace {
@@ -88,7 +88,7 @@ char *to_pg_msg(const std::ostringstream &msg) {
 
 } // namespace pgrouting
 
-namespace duckdb_routing {
+namespace duckdb_pgrouting {
 
 ScopedIntArray::ScopedIntArray(const std::vector<int64_t> &values) : ptr(new ArrayType {values}) {
 }
@@ -100,4 +100,4 @@ ScopedIntArray::~ScopedIntArray() {
 	delete ptr;
 }
 
-} // namespace duckdb_routing
+} // namespace duckdb_pgrouting
