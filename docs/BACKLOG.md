@@ -21,10 +21,12 @@ decision rather than an oversight.
   CLI's own JSON renderer, not in anything `duckdbcli` decides.
 - **`duckdbcli.query()` starts two subprocesses per query** — one for `DESCRIBE`, one for the query
   itself — and each one reruns the whole SQL preamble, which now loads five CSV fixtures. Across
-  the roughly 46 blocks the dijkstra docqueries generator runs, that is on the order of 90-some
-  process starts; each call now has a 120-second timeout. Acceptable for a tool that only runs at
-  regeneration time, not in any inner loop a developer waits on repeatedly. Measured at the end of
-  Phase 4a: 4.4 s for the whole argument-free run.
+  the 66 blocks that reach `db.query()` out of the 67 total across the five selected pages
+  (`dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`, `dijkstraNear`, `dijkstraNearCost`; one block
+  is skipped), that is 132 process starts; each call now has a 120-second timeout. Acceptable for
+  a tool that only runs at regeneration time, not in any inner loop a developer waits on
+  repeatedly. Measured with the five dijkstra-family functions implemented: 4.4 s for the whole
+  argument-free run.
 - **`pgr_dijkstravia` is listed in `test/pgrouting_not_ported.json`** although it is only outside
   the MVP, not meaningless in DuckDB; `pgr_withPointsVia`, `pgr_withPointsDD` and
   `pgr_withPointsKSP` are treated as merely unimplemented instead. Revisit when the MVP is
@@ -36,6 +38,11 @@ decision rather than an oversight.
   materializes full paths instead of just their costs. Revert (switch the NearCost overloads back
   to `only_cost = true` and `ResultColumns::COST`) once the pinned release initializes
   `m_tot_cost`; see the `ResultColumns::COST_OF_PATH` comment in `src/functions/function_spec.hpp`.
+- **A defaulted parameter given both positionally and by name silently prefers the positional
+  value.** For example `dijkstraNearCost(edges_sql, 6, [10, 11, 1], true, 2, cap := 1)` returns the
+  same rows as `cap := 2` (the positional value), not `cap := 1` (the named one); PostgreSQL
+  rejects such a call outright. DuckDB resolves named and positional arguments independently and
+  this extension does not add its own check for the overlap.
 
 ## Closed as declined
 
@@ -99,7 +106,7 @@ Each of these would be a change no test could observe, so none of them is made:
   unqualified.
 - **Two of the six stems in the `dijkstra` category, `dijkstraCostMatrix` and `dijkstraVia`,
   produce no generated test file at all.** `dijkstraVia` produces none because its page is not
-  selected: `pgr_dijkstraVia` is not implemented. `dijkstraCostMatrix` produces none either: its
+  selected: `pgr_dijkstravia` is not implemented. `dijkstraCostMatrix` produces none either: its
   only runnable block, q1, passes a scalar subquery
   (`(SELECT array_agg(id) FROM vertices WHERE id IN (...))`) as the vertex array, which DuckDB
   rejects in the argument of a table function that is not in-out (`Table function cannot contain
@@ -111,8 +118,9 @@ Each of these would be a change no test could observe, so none of them is made:
   generated files — `dijkstra.test`, `dijkstraCost.test`, `dijkstraNear.test` and
   `dijkstraNearCost.test` all exist — only these two stems within it have none. Coverage for "what
   upstream offers here that this build does not" is recorded by layer 4 (the signature comparison)
-  for all three functions, and by `test/pgrouting_not_ported.json` only for `pgr_dijkstravia`; the
-  other two surface solely through `check_signatures.py`'s unimplemented-function list.
+  for both remaining functions (`pgr_TSP`, `pgr_dijkstravia`), and by
+  `test/pgrouting_not_ported.json` only for `pgr_dijkstravia`; `pgr_TSP` surfaces solely through
+  `check_signatures.py`'s unimplemented-function list.
 
 ## Open decision
 
@@ -124,6 +132,6 @@ Each of these would be a change no test could observe, so none of them is made:
   between runs. Adding `ORDER BY _pgr_row` would buy reproducibility at the price of a sort over
   the whole edge set on every query, and DuckDB struct ordering does not cover every child type, so
   it would need verification of its own. It may belong behind a setting rather than as a default.
-  Not decided. The `withPoints` derived inputs planned for the next sub-phase (edges of points,
-  edges without points) will share the property: they are built by joins whose output order
-  DuckDB does not guarantee either.
+  Not decided. The `withPoints` derived inputs planned next (edges of points, edges without
+  points) will share the property: they are built by joins whose output order DuckDB does not
+  guarantee either.

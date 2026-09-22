@@ -33,9 +33,13 @@ WHERE function_name = 'dijkstra' AND NOT list_contains(parameters, 'directed');
 # Positional and named directed agree, both ways round.
 query I
 SELECT count(*) FROM (
-  SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, false)
-  EXCEPT
-  SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, directed := false));
+  (SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, false)
+   EXCEPT
+   SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, directed := false))
+  UNION ALL
+  (SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, directed := false)
+   EXCEPT
+   SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, false)));
 ----
 0
 

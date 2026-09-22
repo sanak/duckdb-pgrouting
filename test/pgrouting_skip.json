@@ -1,7 +1,7 @@
 {
   "dijkstra/dijkstraCostMatrix.pg": {
     "q1": {
-      "reason": "passes a scalar subquery as an argument; DuckDB table functions accept only constant arguments (SET VARIABLE and getvariable() work instead)"
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
     }
   }
 }

@@ -1,5 +1,5 @@
 # name: test/sql/dijkstra_near.test
-# description: dijkstraNear and dijkstraNearCost: shape and upstream's documented answer
+# description: dijkstraNear and dijkstraNearCost: shape, upstream's documented answer, COST_OF_PATH regression
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -37,21 +37,26 @@ SELECT * FROM dijkstraNearCost('SELECT id, source, target, cost, reverse_cost FR
 ----
 6	11	2
 
-# Regression: the pinned pgRouting v4.0.2's only_cost Path constructor
-# (third_party/pgrouting/include/cpp_common/path.hpp) leaves m_tot_cost uninitialized, and when
-# n_goals (cap) is set, post_process's stable_sort/truncate by tot_cost() then reads that
-# uninitialized value. An only_cost NearCost call could therefore report the wrong nearest
-# destination; this extension works around it by running NearCost in path mode and keeping each
-# path's closing row instead (ResultColumns::COST_OF_PATH). 11 is the correct nearest of 10, 11,
-# 1 to 16 (cost 1, via edge 9); an uninitialized-cost build instead reported 1 (cost 4). Revert
-# to only_cost once upstream's fix (commit b27576bd58) reaches the pinned release.
+# Regression guard for the COST_OF_PATH workaround; see the root-cause comment on that enumerator
+# in src/functions/function_spec.hpp (an uninitialized m_tot_cost in the pinned release's
+# only_cost Path constructor). The real guard against a regression here is the generated
+# test/sql/pgrouting/dijkstra/dijkstraNearCost.test q41, whose expected rows are order-sensitive;
+# the hand-written blocks below only exercise the shape, since they cannot deterministically
+# reproduce undefined behaviour. 11 is the correct nearest of 10, 11, 1 to 16 (cost 1, via edge 9).
 query IIR
 SELECT * FROM dijkstraNearCost('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], [15, 16]);
 ----
 11	16	1
 
 # Same regression through the combinations form, using dijkstraNearCost.pg's own q41
-# combinations SQL but with the default global (true) rather than q41's global => false.
+# combinations SQL but with the default global (true) rather than q41's global => false. `11 16
+# 1` is one of three cost-1 answers here — (11,16), (15,10), (16,11) — and is deterministic:
+# pgRouting's post_process (third_party/pgrouting/src/dijkstra/shortestPath_driver.cpp) sorts by
+# end_id, then stably by start_id, then stably by tot_cost, so the final order is primarily by
+# tot_cost with ties broken by start_id, then end_id — among equal costs the lowest start_id
+# wins. With global => false (q41 itself, no truncation), an only_cost build reading the
+# uninitialized tot_cost instead sorted the wrong row first, which is what motivated the
+# COST_OF_PATH workaround.
 query IIR
 SELECT * FROM dijkstraNearCost('SELECT id, source, target, cost, reverse_cost FROM edges',
   'SELECT unnest(ARRAY[10, 11, 1]) as source, target
@@ -63,7 +68,8 @@ SELECT * FROM dijkstraNearCost('SELECT id, source, target, cost, reverse_cost FR
 11	16	1
 
 # dijkstraNearCost agrees with dijkstraNear's closing rows (edge = -1) for that same
-# combinations call with global := false, checked both ways round.
+# combinations call with global := false, checked both ways round. Both sides run the identical
+# driver call, so this checks the COST_OF_PATH projection and the edge = -1 filter only.
 query I
 SELECT count(*) FROM (
   (SELECT start_vid, end_vid, agg_cost FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
