@@ -26,6 +26,8 @@ GROUP BY ALL ORDER BY 1, 2;
 dijkstra	pgr_dijkstra
 dijkstraCost	pgr_dijkstraCost
 dijkstraCostMatrix	pgr_dijkstraCostMatrix
+dijkstraNear	pgr_dijkstraNear
+dijkstraNearCost	pgr_dijkstraNearCost
 
 # The GROUP BY ALL query above collapses every overload's tags to one row and so cannot catch a
 # dropped variant. PostgreSQL accepts any leading run of an overload's DEFAULT parameters

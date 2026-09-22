@@ -22,6 +22,7 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -126,7 +127,14 @@ const vector<const char *> &OutputColumns(duckdb_routing::ResultColumns columns)
 	static const vector<const char *> PATH = {"seq", "path_seq", "start_vid", "end_vid",
 	                                          "node", "edge", "cost", "agg_cost"};
 	static const vector<const char *> COST = {"start_vid", "end_vid", "agg_cost"};
-	return columns == duckdb_routing::ResultColumns::COST ? COST : PATH;
+	switch (columns) {
+	case duckdb_routing::ResultColumns::PATH:
+		return PATH;
+	case duckdb_routing::ResultColumns::COST:
+	case duckdb_routing::ResultColumns::COST_OF_PATH:
+		return COST;
+	}
+	throw InternalException("Unhandled ResultColumns");
 }
 
 LogicalType TypeOf(duckdb_routing::ArgKind kind) {
@@ -290,6 +298,14 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 		outer->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(column)));
 	}
 	outer->from_table = std::move(fref);
+	if (spec.flags.columns == duckdb_routing::ResultColumns::COST_OF_PATH) {
+		// The driver ran in path mode (see the COST_OF_PATH comment in function_spec.hpp); keep
+		// only each path's closing row, identified the same way pgRouting's own SQL does: edge =
+		// -1.
+		outer->where_clause = make_uniq<ComparisonExpression>(
+		    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>(Identifier("edge")),
+		    Constant(Value::BIGINT(-1)));
+	}
 	return make_uniq<SubqueryRef>(WrapNode(std::move(outer)));
 }
 

@@ -37,11 +37,33 @@ CREATE TABLE restrictions AS
   SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
   FROM read_csv_auto('test/data/pgrouting_sample/restrictions.csv');
 
-# q1: skipped - not implemented: pgr_dijkstraNearCost
+# q1
+query IIR
+SELECT * FROM dijkstraNearCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  6, ARRAY[10, 11, 1]);
+----
+6	11	2
 
-# q2: skipped - not implemented: pgr_dijkstraNearCost
+# q2
+query IIR
+SELECT * FROM dijkstraNearCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[10, 11, 1], 6,
+  true,
+  cap => 2) ORDER BY agg_cost;
+----
+10	6	1
+11	6	2
 
-# q3: skipped - not implemented: pgr_dijkstraNearCost
+# q3
+query IIR
+SELECT * FROM dijkstraNearCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[15, 16], ARRAY[10, 11, 1],
+  directed => false);
+----
+15	10	1
 
 # q4
 query II
@@ -64,5 +86,20 @@ FROM (SELECT unnest(ARRAY[10, 11, 1]) AS target) b ORDER BY source, target;
 16	10
 16	11
 
-# q41: skipped - not implemented: pgr_dijkstraNearCost
+# q41
+query IIR
+SELECT * FROM dijkstraNearCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT unnest(ARRAY[10, 11, 1]) as source, target
+   FROM (SELECT unnest(ARRAY[15, 16]) AS target) a
+     UNION
+   SELECT unnest(ARRAY[15, 16]), target
+   FROM (SELECT unnest(ARRAY[10, 11, 1]) AS target) b',
+  global => false);
+----
+11	16	1
+15	10	1
+16	11	1
+10	16	2
+1	16	4
 

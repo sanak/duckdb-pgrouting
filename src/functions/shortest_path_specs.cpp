@@ -50,6 +50,32 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
     // with every other one when ends is empty.
     {"pgr_dijkstraCostMatrix", {ArgKind::EDGES_SQL, ArgKind::START_VIDS}, {DIRECTED},
      Flags(true, true, false, ResultColumns::COST)},
+
+    // pgr_dijkstraNear: cap is the driver's n_goals. The one-to-many and many-to-one bodies pass
+    // a constant global = false; the other two expose global (default true).
+    {"pgr_dijkstraNear", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {DIRECTED, CAP},
+     Flags(false, true, false, ResultColumns::PATH)},
+    {"pgr_dijkstraNear", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {DIRECTED, CAP},
+     Flags(false, false, false, ResultColumns::PATH)},
+    {"pgr_dijkstraNear", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS},
+     {DIRECTED, CAP, GLOBAL}, Flags(false, true, true, ResultColumns::PATH)},
+    {"pgr_dijkstraNear", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED, CAP, GLOBAL},
+     Flags(false, true, true, ResultColumns::PATH)},
+    // pgr_dijkstraNearCost: as pgr_dijkstraNear, and its one-to-many and many-to-one bodies pass
+    // a constant global = true (dijkstraNearCost.sql), not false, unlike pgr_dijkstraNear.
+    // Upstream passes only_cost = true here; this extension deliberately passes false and
+    // projects ResultColumns::COST_OF_PATH instead, because the pinned pgRouting v4.0.2's
+    // only_cost Path constructor leaves m_tot_cost uninitialized, and post_process's cap-driven
+    // sort/truncate by tot_cost() then picks the wrong nearest destination (see ResultColumns'
+    // COST_OF_PATH comment in function_spec.hpp).
+    {"pgr_dijkstraNearCost", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {DIRECTED, CAP},
+     Flags(false, true, true, ResultColumns::COST_OF_PATH)},
+    {"pgr_dijkstraNearCost", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {DIRECTED, CAP},
+     Flags(false, false, true, ResultColumns::COST_OF_PATH)},
+    {"pgr_dijkstraNearCost", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS},
+     {DIRECTED, CAP, GLOBAL}, Flags(false, true, true, ResultColumns::COST_OF_PATH)},
+    {"pgr_dijkstraNearCost", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED, CAP, GLOBAL},
+     Flags(false, true, true, ResultColumns::COST_OF_PATH)},
 };
 
 } // namespace duckdb_routing

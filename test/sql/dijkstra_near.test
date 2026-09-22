@@ -1,0 +1,100 @@
+# name: test/sql/dijkstra_near.test
+# description: dijkstraNear and dijkstraNearCost: shape and upstream's documented answer
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require routing
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# Upstream's q1 of dijkstraNear.pg: the nearest of 10, 11, 1 from 6 is 11, at cost 2.
+query IIIIIIRR
+SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10, 11, 1]);
+----
+1	1	6	11	6	4	1	0
+2	2	6	11	7	8	1	1
+3	3	6	11	11	-1	0	2
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM dijkstraNearCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10, 11, 1]));
+----
+start_vid	BIGINT
+end_vid	BIGINT
+agg_cost	DOUBLE
+
+# NearCost of the same one-to-many call is that path's closing row.
+query IIR
+SELECT * FROM dijkstraNearCost('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10, 11, 1]);
+----
+6	11	2
+
+# Regression: the pinned pgRouting v4.0.2's only_cost Path constructor
+# (third_party/pgrouting/include/cpp_common/path.hpp) leaves m_tot_cost uninitialized, and when
+# n_goals (cap) is set, post_process's stable_sort/truncate by tot_cost() then reads that
+# uninitialized value. An only_cost NearCost call could therefore report the wrong nearest
+# destination; this extension works around it by running NearCost in path mode and keeping each
+# path's closing row instead (ResultColumns::COST_OF_PATH). 11 is the correct nearest of 10, 11,
+# 1 to 16 (cost 1, via edge 9); an uninitialized-cost build instead reported 1 (cost 4). Revert
+# to only_cost once upstream's fix (commit b27576bd58) reaches the pinned release.
+query IIR
+SELECT * FROM dijkstraNearCost('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], [15, 16]);
+----
+11	16	1
+
+# Same regression through the combinations form, using dijkstraNearCost.pg's own q41
+# combinations SQL but with the default global (true) rather than q41's global => false.
+query IIR
+SELECT * FROM dijkstraNearCost('SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT unnest(ARRAY[10, 11, 1]) as source, target
+     FROM (SELECT unnest(ARRAY[15, 16]) AS target) a
+   UNION
+   SELECT unnest(ARRAY[15, 16]), target
+     FROM (SELECT unnest(ARRAY[10, 11, 1]) AS target) b');
+----
+11	16	1
+
+# dijkstraNearCost agrees with dijkstraNear's closing rows (edge = -1) for that same
+# combinations call with global := false, checked both ways round.
+query I
+SELECT count(*) FROM (
+  (SELECT start_vid, end_vid, agg_cost FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
+     'SELECT unnest(ARRAY[10, 11, 1]) as source, target
+        FROM (SELECT unnest(ARRAY[15, 16]) AS target) a
+      UNION
+      SELECT unnest(ARRAY[15, 16]), target
+        FROM (SELECT unnest(ARRAY[10, 11, 1]) AS target) b', global := false)
+   WHERE edge = -1
+   EXCEPT
+   SELECT * FROM dijkstraNearCost('SELECT id, source, target, cost, reverse_cost FROM edges',
+     'SELECT unnest(ARRAY[10, 11, 1]) as source, target
+        FROM (SELECT unnest(ARRAY[15, 16]) AS target) a
+      UNION
+      SELECT unnest(ARRAY[15, 16]), target
+        FROM (SELECT unnest(ARRAY[10, 11, 1]) AS target) b', global := false))
+  UNION ALL
+  (SELECT * FROM dijkstraNearCost('SELECT id, source, target, cost, reverse_cost FROM edges',
+     'SELECT unnest(ARRAY[10, 11, 1]) as source, target
+        FROM (SELECT unnest(ARRAY[15, 16]) AS target) a
+      UNION
+      SELECT unnest(ARRAY[15, 16]), target
+        FROM (SELECT unnest(ARRAY[10, 11, 1]) AS target) b', global := false)
+   EXCEPT
+   SELECT start_vid, end_vid, agg_cost FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
+     'SELECT unnest(ARRAY[10, 11, 1]) as source, target
+        FROM (SELECT unnest(ARRAY[15, 16]) AS target) a
+      UNION
+      SELECT unnest(ARRAY[15, 16]), target
+        FROM (SELECT unnest(ARRAY[10, 11, 1]) AS target) b', global := false)
+   WHERE edge = -1)
+);
+----
+0

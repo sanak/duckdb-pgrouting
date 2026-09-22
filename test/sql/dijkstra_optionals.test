@@ -50,3 +50,76 @@ query I
 SELECT count(*) FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, true);
 ----
 0
+
+# Two signatures with (directed, cap) register 3 variants each, two with (directed, cap, global)
+# register 4 each.
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dijkstraNear';
+----
+14
+
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dijkstraNearCost';
+----
+14
+
+# cap passed positionally (p = 2) and by name agree. Upstream's own q2 of dijkstraNear.pg mixes
+# the two (positional directed, named cap) and returns 5 rows.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], 6, true, 2)
+  EXCEPT
+  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], 6, true, cap := 2));
+----
+0
+
+query I
+SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], 6, true, 2);
+----
+5
+
+# global passed positionally (p = 3) and by name agree.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [15, 16], [10, 11, 1], false, 1, false)
+  EXCEPT
+  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [15, 16], [10, 11, 1],
+                             directed := false, global := false));
+----
+0
+
+# STRICT applies to every defaulted parameter, positional or named.
+query I
+SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10, 11, 1], cap := NULL);
+----
+0
+
+query I
+SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10, 11, 1], true, NULL);
+----
+0
+
+query I
+SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [15, 16], [10, 11, 1], global := NULL);
+----
+0
+
+# The combinations form's positional directed (p = 1: VARCHAR, VARCHAR, BOOLEAN) binds without
+# ambiguity against the (edges_sql, combinations_sql) overload and agrees with the named form.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
+                             'SELECT unnest([10, 11, 1]) AS source, 6 AS target', false)
+  EXCEPT
+  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
+                             'SELECT unnest([10, 11, 1]) AS source, 6 AS target', directed := false));
+----
+0
+
+# Row count of the positional-directed combinations call above, measured against the release
+# build.
+query I
+SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
+                             'SELECT unnest([10, 11, 1]) AS source, 6 AS target', false);
+----
+2

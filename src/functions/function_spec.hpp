@@ -43,7 +43,16 @@ constexpr OptionalParam GLOBAL {"global", OptionalType::BOOLEAN, 1};
 // columns; COST is the projection upstream's Cost wrappers apply on top of the same driver call.
 enum class ResultColumns : uint8_t {
 	PATH, // seq, path_seq, start_vid, end_vid, node, edge, cost, agg_cost
-	COST  // start_vid, end_vid, agg_cost
+	COST, // start_vid, end_vid, agg_cost
+	// start_vid, end_vid, agg_cost of each path's closing row (edge = -1); the driver runs in
+	// path mode. Works around the pinned pgRouting v4.0.2's only_cost Path constructor
+	// (third_party/pgrouting/include/cpp_common/path.hpp), which leaves m_tot_cost
+	// uninitialized; when n_goals (cap) is set, post_process's stable_sort/truncate by
+	// tot_cost() then reads that garbage, so a NearCost overload run in only_cost mode can
+	// return the wrong nearest destination. Upstream fixed this in commit b27576bd58 (not in
+	// any released version yet): once the pinned release contains that fix, the NearCost
+	// overloads can go back to only_cost = true with plain COST.
+	COST_OF_PATH
 };
 
 // The driver flags that are fixed per overload rather than chosen by the caller. n_goals and
