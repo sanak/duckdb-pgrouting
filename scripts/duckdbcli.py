@@ -16,6 +16,10 @@ from typing import Any, List, Optional, Tuple
 
 DEFAULT_BINARY = "build/release/duckdb"
 
+# One query against the sample fixtures takes well under a second; a hung binary must fail the
+# run (and CI) instead of stalling it until the job's own limit.
+TIMEOUT_SECONDS = 120
+
 
 class DuckDBError(RuntimeError):
     """The binary exited non-zero, or printed something that is not JSON."""
@@ -47,6 +51,7 @@ class DuckDB:
             input=script,
             capture_output=True,
             text=True,
+            timeout=TIMEOUT_SECONDS,
         )
         if completed.returncode != 0:
             raise DuckDBError(

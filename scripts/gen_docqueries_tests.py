@@ -5,7 +5,11 @@ For every ``/* -- qN */`` block of an upstream ``.pg`` file this tool rewrites t
 function names to this extension's public names, runs the rewritten query against the built
 duckdb binary, and compares the answer with upstream's committed ``.result`` transcript. A block
 that agrees is emitted with upstream's own expected rows; a block that disagrees stops the
-generator. Task 7 adds the equal-cost tie classification on top of that.
+generator. A block that differs only by an equal-cost route is downgraded to a tie-insensitive
+assertion and recorded in test/pgrouting_ties.json.
+
+Only each implemented function's own documentation page is processed (see select_stems);
+--category narrows that further for debugging.
 
 The upstream-to-public name mapping is never written down here: it is read back from the
 ``pgrouting_name`` function tag in ``duckdb_functions()``.
@@ -247,7 +251,7 @@ HEADER = """# name: {out}
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
-# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py --category dijkstra
+# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
 #
 # Source: {pg} and the committed transcript beside it. The queries and their expected rows are
 # upstream's; the only edits are the dropped pgr_ prefix and psql's aligned output rewritten as
@@ -381,6 +385,41 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Dict[st
     return items
 
 
+def select_stems(root: pathlib.Path, implemented: Dict[str, str],
+                 only: Optional[Sequence[str]]) -> List[pathlib.Path]:
+    """The .pg files a run processes: each implemented function's own documentation page.
+
+    Upstream's documentation also calls implemented functions as helpers on other pages (for
+    example contraction.pg calls pgr_dijkstra), mostly against tables an earlier block of that page
+    created, which this generator never executes. Selecting by stem keeps exactly the pages
+    written about a function this build provides.
+    """
+    selected = []
+    for pg in sorted(root.glob("*/*.pg")):
+        if only and pg.parent.name not in only:
+            continue
+        if ("pgr_" + pg.stem).lower() not in implemented:
+            continue
+        if not (pg.parent / (pg.stem + ".result")).exists():
+            continue
+        selected.append(pg)
+    return selected
+
+
+def stale_outputs(existing: Sequence[str], rendered: Sequence[str],
+                  only: Optional[Sequence[str]]) -> List[str]:
+    """Generated files this run did not produce; a scoped run only judges its own categories."""
+    produced = set(rendered)
+    stale = []
+    for path in existing:
+        category = pathlib.PurePosixPath(path).parts[-2]
+        if only and category not in only:
+            continue
+        if path not in produced:
+            stale.append(path)
+    return sorted(stale)
+
+
 def merge_ties(existing: Dict[str, Dict[str, dict]], fresh: Dict[str, Dict[str, dict]],
                processed: Set[str]) -> Dict[str, Dict[str, dict]]:
     """Replace the ties of every stem this run processed; keep every other stem's verbatim.
@@ -394,20 +433,16 @@ def merge_ties(existing: Dict[str, Dict[str, dict]], fresh: Dict[str, Dict[str, 
 
 
 def generate(
-    db: duckdbcli.DuckDB, only: Optional[str]
+    db: duckdbcli.DuckDB, only: Optional[Sequence[str]]
 ) -> Tuple[Dict[str, str], Dict[str, Dict[str, dict]], Set[str]]:
-    """Render every docqueries file, returning ({output path: file body}, ties, processed stems)."""
+    """Render every selected docqueries file, returning ({output path: file body}, ties, processed stems)."""
     implemented = implemented_names(db)
     skips = json.loads(pathlib.Path(SKIP_FILE).read_text())
     rendered: Dict[str, str] = {}
     ties: Dict[str, Dict[str, dict]] = {}
     processed: Set[str] = set()
-    for pg in sorted(pathlib.Path(DOCQUERIES).glob("*/*.pg")):
+    for pg in select_stems(pathlib.Path(DOCQUERIES), implemented, only):
         category, stem = pg.parent.name, pg.stem
-        if only and category != only:
-            continue
-        if not (pg.parent / (stem + ".result")).exists():
-            continue
         processed.add("{}/{}.pg".format(category, stem))
         items = process(category, stem, db, implemented, skips, ties)
         if not any(isinstance(item, Emitted) for item in items):
@@ -433,7 +468,8 @@ def _raw_preamble() -> str:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--duckdb", default=duckdbcli.default_binary())
-    parser.add_argument("--category", default=None)
+    parser.add_argument("--category", action="append", default=None,
+                        help="restrict the run to this docqueries category (repeatable; for debugging)")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
 
@@ -443,6 +479,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     existing_ties = json.loads(ties_path.read_text()) if ties_path.exists() else {}
     ties = merge_ties(existing_ties, fresh_ties, processed)
     rendered[TIES_FILE] = json.dumps(ties, indent=2, sort_keys=True) + "\n"
+
+    existing = sorted(p.as_posix() for p in pathlib.Path(OUT_ROOT).glob("*/*.test"))
+    stale = stale_outputs(existing, [p for p in rendered if p != TIES_FILE], args.category)
 
     failures = 0
     for path, body in sorted(rendered.items()):
@@ -463,6 +502,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(body)
             print("wrote {}".format(path))
+    for path in stale:
+        if args.check:
+            failures += 1
+            print("{}: no longer generated (its stem is not selected or emits nothing)".format(path))
+        else:
+            pathlib.Path(path).unlink()
+            print("removed {}".format(path))
     if args.check and failures:
         print("\n{} generated file(s) are stale".format(failures), file=sys.stderr)
         return 1

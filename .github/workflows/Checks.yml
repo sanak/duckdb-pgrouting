@@ -89,12 +89,12 @@ jobs:
       #   3. A real regression in the extension. Response: revert or fix.
       # Only a failing build separates them; a check that passed quietly would hide (2) and (3)
       # behind (1).
-      # --category dijkstra: without it the generator globs all 31 upstream docquery categories,
-      # including ones with no pgr_ call for the translator to rewrite (e.g. contraction's plain
-      # `SELECT id, is_contracted FROM vertices`), which then fails to bind against this
-      # repository's five-table fixture. dijkstra is the only category this extension implements.
+      # No --category: the generator processes each implemented function's own documentation
+      # page (docqueries/<category>/<stem>.pg with pgr_<stem> implemented) and nothing else.
+      # Other pages that merely call an implemented function as a helper usually depend on
+      # tables an earlier block of that page created, which the generator never executes.
       - name: Layer 1 - generated docqueries tests are up to date
-        run: python3 scripts/gen_docqueries_tests.py --category dijkstra --check
+        run: python3 scripts/gen_docqueries_tests.py --check
 
       - name: Unit tests for the tooling
         run: python3 -m unittest discover -s scripts/tests

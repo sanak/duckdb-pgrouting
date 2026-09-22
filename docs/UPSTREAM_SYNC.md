@@ -13,18 +13,18 @@ the following checklist, in order. Every step either passes or tells you exactly
    extension replaces them) and do not list an upstream file that upstream's own CMake omits.
 3. Re-export the fixtures: `python3 scripts/export_sampledata.py`. A diff here means upstream
    changed the sample graph, which changes every expected result below it.
-4. Regenerate the documentation-query tests: `python3 scripts/gen_docqueries_tests.py --category
-   dijkstra`. This runs every translated query against the build you just made, so it reports
-   three different things and they must not be confused:
+4. Regenerate the documentation-query tests: `python3 scripts/gen_docqueries_tests.py`. This runs
+   every translated query against the build you just made, so it reports three different things
+   and they must not be confused:
    - a clean run with no diff: nothing to do;
    - a diff in `test/pgrouting_ties.json`: an equal-cost tie now falls the other way. That is a
      Boost, vcpkg or row-order change, not a routing defect. Review it and commit it.
    - a non-zero exit with a `Mismatch`: this build's answer is not an equal-cost alternative to
      upstream's. Investigate before committing anything.
-   Read the diff against upstream's release notes either way. The `--category` flag stays
-   `dijkstra` until the generator gains a skip reason for a query that fails to bind against this
-   repository's five-table fixture (see `docs/BACKLOG.md`); running it with no category today
-   aborts on categories the fixture set was never meant to cover.
+   Read the diff against upstream's release notes either way.
+   Only each implemented function's own documentation page is processed; a generated file that
+   is no longer produced (its function's page vanished upstream, or it emits nothing) is removed
+   by a regenerating run and reported by `--check`.
 5. Run `python3 scripts/check_signatures.py`. It reports signatures that upstream added, removed
    or retyped. Adapt `src/functions/function_spec.hpp` for new, changed or removed overloads. For
    a new upstream function whose stripped name collides with a DuckDB name, or which does not

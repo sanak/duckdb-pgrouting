@@ -8,6 +8,7 @@ still run on a machine that has not built the extension.
 import pathlib
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -46,6 +47,14 @@ class TestDuckDB(unittest.TestCase):
             "SELECT count(*) AS n FROM duckdb_functions() WHERE tags['ext'] = 'routing'"
         ).rows
         self.assertGreater(rows[0][0], 0)
+
+
+class TimeoutTest(unittest.TestCase):
+    def test_every_query_runs_with_a_timeout(self):
+        completed = mock.Mock(returncode=0, stdout="[]", stderr="")
+        with mock.patch("duckdbcli.subprocess.run", return_value=completed) as run:
+            duckdbcli.DuckDB("duckdb")._run("SELECT 1")
+        self.assertEqual(duckdbcli.TIMEOUT_SECONDS, run.call_args.kwargs["timeout"])
 
 
 if __name__ == "__main__":

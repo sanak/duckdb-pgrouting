@@ -3,6 +3,7 @@
 
 import pathlib
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -252,6 +253,56 @@ class TestMergeTies(unittest.TestCase):
     def test_drops_a_processed_stem_that_has_no_tie_left(self):
         merged = gen.merge_ties(self.OLD, {}, {"dijkstra/dijkstra.pg"})
         self.assertNotIn("dijkstra/dijkstra.pg", merged)
+
+
+class TestSelectStems(unittest.TestCase):
+    def _tree(self, files):
+        root = tempfile.TemporaryDirectory()
+        self.addCleanup(root.cleanup)
+        for name in files:
+            path = pathlib.Path(root.name) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("")
+        return pathlib.Path(root.name)
+
+    def test_selects_the_page_of_an_implemented_function_case_insensitively(self):
+        root = self._tree(["dijkstra/dijkstraCost.pg", "dijkstra/dijkstraCost.result"])
+        selected = gen.select_stems(root, {"pgr_dijkstracost": "dijkstraCost"}, None)
+        self.assertEqual([root / "dijkstra/dijkstraCost.pg"], selected)
+
+    def test_skips_a_page_whose_stem_names_no_implemented_function(self):
+        # contraction.pg calls pgr_dijkstra somewhere, but it is not pgr_dijkstra's own page.
+        root = self._tree(["contraction/contraction.pg", "contraction/contraction.result",
+                           "bdDijkstra/bdDijkstra-large.pg", "bdDijkstra/bdDijkstra-large.result"])
+        self.assertEqual([], gen.select_stems(root, IMPLEMENTED, None))
+
+    def test_skips_a_page_without_a_transcript(self):
+        root = self._tree(["dijkstra/dijkstra.pg"])
+        self.assertEqual([], gen.select_stems(root, IMPLEMENTED, None))
+
+    def test_category_filter_is_repeatable(self):
+        root = self._tree(["dijkstra/dijkstra.pg", "dijkstra/dijkstra.result",
+                           "other/dijkstra.pg", "other/dijkstra.result"])
+        self.assertEqual([root / "dijkstra/dijkstra.pg"],
+                         gen.select_stems(root, IMPLEMENTED, ["dijkstra"]))
+        self.assertEqual(2, len(gen.select_stems(root, IMPLEMENTED, ["dijkstra", "other"])))
+
+
+class TestStaleOutputs(unittest.TestCase):
+    EXISTING = ["test/sql/pgrouting/dijkstra/dijkstra.test",
+                "test/sql/pgrouting/dijkstra/dijkstraVia.test",
+                "test/sql/pgrouting/withPoints/withPoints.test"]
+
+    def test_an_unscoped_run_reports_every_file_it_did_not_produce(self):
+        rendered = ["test/sql/pgrouting/dijkstra/dijkstra.test"]
+        self.assertEqual(["test/sql/pgrouting/dijkstra/dijkstraVia.test",
+                          "test/sql/pgrouting/withPoints/withPoints.test"],
+                         gen.stale_outputs(self.EXISTING, rendered, None))
+
+    def test_a_scoped_run_only_judges_its_own_categories(self):
+        rendered = ["test/sql/pgrouting/dijkstra/dijkstra.test"]
+        self.assertEqual(["test/sql/pgrouting/dijkstra/dijkstraVia.test"],
+                         gen.stale_outputs(self.EXISTING, rendered, ["dijkstra"]))
 
 
 if __name__ == "__main__":

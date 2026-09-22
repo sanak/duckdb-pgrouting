@@ -93,7 +93,7 @@ and none of them ever writes under `third_party/pgrouting`.
 The generators execute queries against the release binary, so build it first:
 
 ```bash
-GEN=ninja make release && python3 scripts/gen_docqueries_tests.py --category dijkstra
+GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
 GEN=ninja make release && python3 scripts/export_sampledata.py
 python3 -m unittest discover -s scripts/tests
 ```
