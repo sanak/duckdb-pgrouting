@@ -230,6 +230,32 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
      OldStyleFlags(DriverKind::EDWARD_MOORE, false, ResultColumns::PATH)},
     {"pgr_edwardMoore", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED},
      OldStyleFlags(DriverKind::EDWARD_MOORE, false, ResultColumns::PATH)},
+
+    // pgr_dagShortestPath: no directed and no defaulted parameter; only_cost = false and
+    // normal = true on every signature, many-to-one included (dagShortestPath.sql; the
+    // combinations C entry passes normal = true).
+    {"pgr_dagShortestPath", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {},
+     OldStyleFlags(DriverKind::DAG_SHORTEST_PATH, false, ResultColumns::PATH)},
+    {"pgr_dagShortestPath", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {},
+     OldStyleFlags(DriverKind::DAG_SHORTEST_PATH, false, ResultColumns::PATH)},
+    {"pgr_dagShortestPath", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {},
+     OldStyleFlags(DriverKind::DAG_SHORTEST_PATH, false, ResultColumns::PATH)},
+    {"pgr_dagShortestPath", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {},
+     OldStyleFlags(DriverKind::DAG_SHORTEST_PATH, false, ResultColumns::PATH)},
+    {"pgr_dagShortestPath", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {},
+     OldStyleFlags(DriverKind::DAG_SHORTEST_PATH, false, ResultColumns::PATH)},
+
+    // pgr_binaryBreadthFirstSearch (sql/breadthFirstSearch): the driver takes no only_cost.
+    {"pgr_binaryBreadthFirstSearch", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {DIRECTED},
+     OldStyleFlags(DriverKind::BINARY_BFS, false, ResultColumns::PATH)},
+    {"pgr_binaryBreadthFirstSearch", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::BINARY_BFS, false, ResultColumns::PATH)},
+    {"pgr_binaryBreadthFirstSearch", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {DIRECTED},
+     OldStyleFlags(DriverKind::BINARY_BFS, false, ResultColumns::PATH)},
+    {"pgr_binaryBreadthFirstSearch", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::BINARY_BFS, false, ResultColumns::PATH)},
+    {"pgr_binaryBreadthFirstSearch", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED},
+     OldStyleFlags(DriverKind::BINARY_BFS, false, ResultColumns::PATH)},
 };
 
 } // namespace duckdb_routing

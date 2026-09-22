@@ -27,6 +27,8 @@ bdDijkstra	pgr_bdDijkstra
 bdDijkstraCost	pgr_bdDijkstraCost
 bdDijkstraCostMatrix	pgr_bdDijkstraCostMatrix
 bellmanFord	pgr_bellmanFord
+binaryBreadthFirstSearch	pgr_binaryBreadthFirstSearch
+dagShortestPath	pgr_dagShortestPath
 dijkstra	pgr_dijkstra
 dijkstraCost	pgr_dijkstraCost
 dijkstraCostMatrix	pgr_dijkstraCostMatrix

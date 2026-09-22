@@ -70,6 +70,18 @@
       "upstream_rows": 22
     }
   },
+  "dagShortestPath/dagShortestPath.pg": {
+    "q5": {
+      "differing_rows": 3,
+      "reason": "equal-cost tie",
+      "upstream_rows": 13
+    },
+    "q6": {
+      "differing_rows": 5,
+      "reason": "equal-cost tie",
+      "upstream_rows": 16
+    }
+  },
   "dijkstra/dijkstra.pg": {
     "q133": {
       "differing_rows": 2,
@@ -110,6 +122,23 @@
       "differing_rows": 2,
       "reason": "equal-cost tie",
       "upstream_rows": 10
+    }
+  },
+  "traversal/binaryBreadthFirstSearch.pg": {
+    "q2": {
+      "differing_rows": 2,
+      "reason": "equal-cost tie",
+      "upstream_rows": 11
+    },
+    "q3": {
+      "differing_rows": 4,
+      "reason": "equal-cost tie",
+      "upstream_rows": 11
+    },
+    "q4": {
+      "differing_rows": 6,
+      "reason": "equal-cost tie",
+      "upstream_rows": 18
     }
   }
 }

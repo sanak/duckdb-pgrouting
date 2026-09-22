@@ -1,0 +1,101 @@
+# name: test/sql/dag_shortest_path.test
+# description: dagShortestPath: variants, agreement with dijkstra on a DAG, the cycle error, STRICT
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require routing
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# Without reverse_cost only the forward edges exist, and they form a DAG.
+statement ok
+CREATE MACRO dag() AS 'SELECT id, source, target, cost FROM edges';
+
+# No defaulted parameter: one variant per signature.
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dagShortestPath' AND tags['ext'] = 'routing';
+----
+5
+
+# Upstream's q2 (docqueries dagShortestPath): 5 -> 11 costs 3.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM dagShortestPath(dag(), 5, 11) WHERE edge = -1;
+----
+5	11	3
+
+# On a DAG every shape reaches dijkstra's optimum, both ways round (many-to-one included, which
+# upstream runs with normal = true).
+query I
+SELECT count(*) FROM (
+  (SELECT start_vid, end_vid, agg_cost FROM dagShortestPath(dag(), [5, 10, 11], [5, 10, 11, 17]) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(dag(), [5, 10, 11], [5, 10, 11, 17]) WHERE edge = -1)
+  UNION ALL
+  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(dag(), [5, 10, 11], [5, 10, 11, 17]) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dagShortestPath(dag(), [5, 10, 11], [5, 10, 11, 17]) WHERE edge = -1));
+----
+0
+
+query I
+SELECT count(*) FROM (
+  (SELECT start_vid, end_vid, agg_cost FROM dagShortestPath(dag(), [5, 10], 11) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(dag(), [5, 10], 11) WHERE edge = -1)
+  UNION ALL
+  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(dag(), [5, 10], 11) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dagShortestPath(dag(), [5, 10], 11) WHERE edge = -1));
+----
+0
+
+query I
+SELECT count(*) FROM (
+  (SELECT start_vid, end_vid, agg_cost FROM dagShortestPath(dag(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(dag(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1)
+  UNION ALL
+  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(dag(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dagShortestPath(dag(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1));
+----
+0
+
+# A cycle reachable from the start is an error: upstream's driver reports Boost's not_a_dag. With
+# reverse_cost, 5 -> 6 -> 5 is such a cycle. No HINT: that path sets no log message.
+statement error
+SELECT * FROM dagShortestPath('SELECT id, source, target, cost, reverse_cost FROM edges', 5, 6);
+----
+Invalid Input Error: The graph must be a DAG.
+
+# A cycle the search never reaches is not: Boost only walks the vertices reachable from the start.
+statement ok
+CREATE TABLE loop (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE);
+
+statement ok
+INSERT INTO loop VALUES (1,1,2,1),(2,3,4,1),(3,4,3,1);
+
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM dagShortestPath('SELECT id, source, target, cost FROM loop', 1, 2) WHERE edge = -1;
+----
+1	2	1
+
+# Upstream declares no directed parameter here, and neither does this extension.
+statement error
+SELECT * FROM dagShortestPath(dag(), 5, 11, directed := false);
+----
+Invalid named parameter
+
+statement error
+SELECT * FROM dagShortestPath('SELECT id, source, target FROM edges', 5, 11);
+----
+Invalid Input Error: Column 'cost' not Found
+HINT: SELECT id, source, target FROM edges
+
+# STRICT.
+query I
+SELECT count(*) FROM dagShortestPath(dag(), NULL::BIGINT[], 11);
+----
+0

@@ -23,7 +23,7 @@ require routing
 query I
 SELECT count(DISTINCT function_name) FROM duckdb_functions() WHERE tags['ext'] = 'routing';
 ----
-15
+17
 
 # The collision check. Any row here is a name this extension publishes that something else
 # publishes too.
