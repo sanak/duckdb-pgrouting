@@ -21,12 +21,13 @@ decision rather than an oversight.
   CLI's own JSON renderer, not in anything `duckdbcli` decides.
 - **`duckdbcli.query()` starts two subprocesses per query** — one for `DESCRIBE`, one for the query
   itself — and each one reruns the whole SQL preamble, which now loads five CSV fixtures. Across
-  the 66 blocks that reach `db.query()` out of the 67 total across the five selected pages
-  (`dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`, `dijkstraNear`, `dijkstraNearCost`; one block
-  is skipped), that is 132 process starts; each call now has a 120-second timeout. Acceptable for
-  a tool that only runs at regeneration time, not in any inner loop a developer waits on
-  repeatedly. Measured with the five dijkstra-family functions implemented: 4.4 s for the whole
-  argument-free run.
+  the 81 blocks that reach `db.query()` out of the 88 total across the eight selected pages
+  (`dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`, `dijkstraNear`, `dijkstraNearCost`,
+  `withPoints`, `withPointsCost`, `withPointsCostMatrix`; seven blocks are skipped), that is 162
+  process starts; each call now has a 120-second timeout. Acceptable for a tool that only runs at
+  regeneration time, not in any inner loop a developer waits on repeatedly. Measured with the
+  eight dijkstra- and withPoints-family functions implemented: 5.25 s for the whole argument-free
+  run.
 - **`pgr_dijkstravia` is listed in `test/pgrouting_not_ported.json`** although it is only outside
   the MVP, not meaningless in DuckDB; `pgr_withPointsVia`, `pgr_withPointsDD` and
   `pgr_withPointsKSP` are treated as merely unimplemented instead. Revisit when the MVP is
@@ -132,6 +133,6 @@ Each of these would be a change no test could observe, so none of them is made:
   between runs. Adding `ORDER BY _pgr_row` would buy reproducibility at the price of a sort over
   the whole edge set on every query, and DuckDB struct ordering does not cover every child type, so
   it would need verification of its own. It may belong behind a setting rather than as a default.
-  Not decided. The `withPoints` derived inputs planned next (edges of points, edges without
-  points) will share the property: they are built by joins whose output order DuckDB does not
+  Not decided. The `withPoints` derived inputs (edges of points, edges without points) share the
+  property: they are built by a join and an anti-join whose output order DuckDB does not
   guarantee either.

@@ -10,10 +10,11 @@ code (`third_party/pgrouting`, a submodule pinned to a release tag) is compiled 
 statically linked; only its PostgreSQL-specific layers are replaced. License: GPL-2.0-or-later.
 
 Current state: the extension registers `dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`,
-`dijkstraNear` and `dijkstraNearCost` — pgRouting's nineteen corresponding signatures, each
-registered once per number of its defaulted parameters passed positionally — and
-`DuckDB_pgRouting_Version()`. Every call is rewritten into a call to pgRouting's own unified
-`do_shortestPath` driver.
+`dijkstraNear`, `dijkstraNearCost`, `withPoints`, `withPointsCost` and `withPointsCostMatrix` —
+pgRouting's forty-one corresponding signatures, each registered once per number of its defaulted
+parameters passed positionally — and `DuckDB_pgRouting_Version()`. Every call is rewritten into a
+call to pgRouting's own unified `do_shortestPath` driver; with points given, DuckDB also
+materializes the two edge queries that driver derives from the edge and points SQL.
 
 ## Layout
 
@@ -28,7 +29,8 @@ registered once per number of its defaulted parameters passed positionally — a
   a macro and DuckDB has an enumerator of that name, so the two must never meet in one
   translation unit. `src/include/routing/input_access.hpp` is the seam between the two worlds
   and includes neither.
-- `src/exec/` — input registry, driver invocation and the internal in-out table function.
+- `src/exec/` — input registry, driver invocation, the internal in-out table function, and the copy
+  of upstream's withPoints derived-query key template (`withpoints_keys.cpp`).
 - `src/functions/` — the declarative overload table (`shortest_path_specs.cpp`) and the public
   function registration.
 - `test/sql/` — sqllogictests. `test/sql/pgrouting/<category>/<name>.test` is generated from
