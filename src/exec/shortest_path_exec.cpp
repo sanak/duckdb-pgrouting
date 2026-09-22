@@ -276,6 +276,14 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	request.details = NamedOr<bool>(input, "details", true);
 	const auto driving_side = NamedStringOr(input, "driving_side", " ");
 	request.driving_side = driving_side.empty() ? ' ' : driving_side[0];
+	const auto driver = NamedStringOr(input, "driver", duckdb_routing::DriverKindName(duckdb_routing::DriverKind::SHORTEST_PATH));
+	if (!duckdb_routing::ParseDriverKind(driver, request.driver)) {
+		throw InvalidInputException("_pgr_shortestpath_exec: unknown driver '%s'", driver);
+	}
+	if (request.driver != duckdb_routing::DriverKind::SHORTEST_PATH && !request.points_sql.empty()) {
+		throw InvalidInputException("_pgr_shortestpath_exec: points_sql is only supported by driver '%s'",
+		                            duckdb_routing::DriverKindName(duckdb_routing::DriverKind::SHORTEST_PATH));
+	}
 	data->null_input = NamedOr<bool>(input, "null_input", false);
 
 	const auto result_kind = NamedStringOr(input, "result_kind", "path");
@@ -453,6 +461,7 @@ void RegisterShortestPathExec(ExtensionLoader &loader) {
 	exec.named_parameters["details"] = LogicalType::BOOLEAN;
 	exec.named_parameters["null_input"] = LogicalType::BOOLEAN;
 	exec.named_parameters["result_kind"] = LogicalType::VARCHAR;
+	exec.named_parameters["driver"] = LogicalType::VARCHAR;
 	loader.RegisterFunction(exec);
 	TagExecFunction(loader);
 }

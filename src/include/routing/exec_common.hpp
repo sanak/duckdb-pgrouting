@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "routing/driver_kind.hpp"
+
 struct Path_rt;
 
 namespace duckdb {
@@ -16,7 +18,7 @@ namespace duckdb_routing {
 
 class InputRegistry;
 
-// Everything do_shortestPath needs, in this extension's own vocabulary. The exec table function
+// Everything a pgRouting driver needs, in this extension's own vocabulary. The exec table function
 // fills it; the public overloads decide the fixed flags.
 struct DriverRequest {
 	std::string edges_sql;
@@ -34,6 +36,9 @@ struct DriverRequest {
 	char driving_side = ' ';
 	bool details = true;
 	int32_t which = 0;
+	// Which driver runs the request; only SHORTEST_PATH reads points_sql, n_goals, global,
+	// driving_side, details and which.
+	DriverKind driver = DriverKind::SHORTEST_PATH;
 };
 
 // Owns the driver's malloc'd tuple array and frees it.

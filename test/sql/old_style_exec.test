@@ -1,0 +1,161 @@
+# name: test/sql/old_style_exec.test
+# description: _pgr_shortestpath_exec with the driver argument: dispatch to each per-family driver
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require routing
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# Each driver answers upstream's documented 6 -> 10 (docqueries bdDijkstra q2, bellmanFord q2,
+# edwardMoore q2, binaryBreadthFirstSearch q1): cost 5. Only the closing row is asserted, so an
+# equal-cost tie cannot make this flaky. combinations_sql is '' here, as the public array forms
+# pass it: the adapter must hand the driver NULL, or it would look '' up as a combinations query.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
+  directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
+  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driver := 'bd_dijkstra')
+WHERE edge = -1;
+----
+6	10	5
+
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
+  directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
+  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driver := 'bellman_ford')
+WHERE edge = -1;
+----
+6	10	5
+
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
+  directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
+  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driver := 'edward_moore')
+WHERE edge = -1;
+----
+6	10	5
+
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
+  directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
+  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driver := 'binary_bfs')
+WHERE edge = -1;
+----
+6	10	5
+
+# dagShortestPath needs an acyclic graph: without reverse_cost only the forward edges exist, and
+# upstream's documented 5 -> 11 (docqueries dagShortestPath q2) costs 3.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost FROM edges) e) AS edges,
+          NULL AS combinations, [5]::BIGINT[] AS starts, [11]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost FROM edges', combinations_sql := '',
+  directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
+  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driver := 'dag_shortest_path')
+WHERE edge = -1;
+----
+5	11	3
+
+# only_cost reaches the driver: bdDijkstra then returns exactly one row per pair.
+query IIIR
+SELECT start_vid, end_vid, edge, agg_cost FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
+  directed := true, only_cost := true, normal := true, n_goals := 0, global := false, which := 0,
+  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driver := 'bd_dijkstra');
+----
+6	10	-1	5
+
+# directed reaches the driver: undirected, 6 -> 10 is edge 2 alone.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
+  directed := false, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
+  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driver := 'bellman_ford')
+WHERE edge = -1;
+----
+6	10	1
+
+# The combinations form: the combinations query is registered under its own kind and fetched.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          (SELECT list(c) FROM (SELECT 6 AS source, 10 AS target) c) AS combinations),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  combinations_sql := 'SELECT 6 AS source, 10 AS target',
+  directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
+  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driver := 'edward_moore')
+WHERE edge = -1;
+----
+6	10	5
+
+# The error mapping is shared: an old-style driver's err/log pair arrives as the unified driver's
+# does (compare dijkstra_errors.test).
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target FROM edges) e) AS edges,
+          NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target FROM edges', combinations_sql := '',
+  directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
+  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driver := 'bd_dijkstra');
+----
+Invalid Input Error: Column 'cost' not Found
+HINT: SELECT id, source, target FROM edges
+
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT NULL AS edges, NULL AS combinations, []::BIGINT[] AS starts, []::BIGINT[] AS ends),
+  edges_sql := '', driver := 'dijkstra');
+----
+_pgr_shortestpath_exec: unknown driver 'dijkstra'
+
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT NULL AS edges, NULL AS combinations, []::BIGINT[] AS starts, []::BIGINT[] AS ends),
+  edges_sql := '', points_sql := 'SELECT 1', driver := 'bellman_ford');
+----
+_pgr_shortestpath_exec: points_sql is only supported by driver 'shortest_path'
+
+# Without the argument the exec function keeps using the unified driver.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
+  directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
+  driving_side := ' ', details := true, null_input := false, result_kind := 'path')
+WHERE edge = -1;
+----
+6	10	5

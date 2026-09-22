@@ -30,6 +30,7 @@ set(ROUTING_SOURCES
     src/functions/shortest_path_functions.cpp
     src/functions/shortest_path_specs.cpp
     src/pg_compat/src/get_check_data.cpp
+    src/pg_compat/src/old_style_drivers.cpp
     src/pg_compat/src/pg_types.cpp)
 
 set(EXTENSION_SOURCES ${ROUTING_SOURCES} ${PGROUTING_SOURCES})

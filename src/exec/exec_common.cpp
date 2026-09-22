@@ -13,6 +13,7 @@
 #include "drivers/shortestPath_driver.hpp"
 #include "routing/driver_input.hpp"
 #include "routing/input_registry.hpp"
+#include "routing/old_style_drivers.hpp"
 
 namespace duckdb_routing {
 
@@ -44,33 +45,50 @@ DriverResult &DriverResult::operator=(DriverResult &&other) noexcept {
 
 DriverResult RunShortestPath(duckdb::ClientContext &context, InputRegistry &registry, const DriverRequest &request) {
 	DriverResult result;
-	std::ostringstream log;
-	std::ostringstream notice;
-	std::ostringstream err;
+	std::string log_text;
+	std::string notice_text;
+	std::string err_text;
 
 	ScopedIntArray starts(request.starts);
 	ScopedIntArray ends(request.ends);
+	auto *starts_arg = request.has_starts ? starts.get() : nullptr;
+	auto *ends_arg = request.has_ends ? ends.get() : nullptr;
 
 	{
 		ScopedRoutingContext scope(context, registry);
-		do_shortestPath(request.edges_sql, request.points_sql, request.combinations_sql,
-		                request.has_starts ? starts.get() : nullptr, request.has_ends ? ends.get() : nullptr,
-		                request.directed, request.only_cost, request.normal, request.n_goals, request.global,
-		                request.driving_side, request.details, request.which, result.is_matrix, result.rows,
-		                result.count, log, notice, err);
+		if (request.driver == DriverKind::SHORTEST_PATH) {
+			std::ostringstream log;
+			std::ostringstream notice;
+			std::ostringstream err;
+			do_shortestPath(request.edges_sql, request.points_sql, request.combinations_sql, starts_arg, ends_arg,
+			                request.directed, request.only_cost, request.normal, request.n_goals, request.global,
+			                request.driving_side, request.details, request.which, result.is_matrix, result.rows,
+			                result.count, log, notice, err);
+			log_text = log.str();
+			notice_text = notice.str();
+			err_text = err.str();
+		} else {
+			// The families pgRouting has not moved onto do_shortestPath (old_style_drivers.cpp).
+			auto out = RunOldStyle(request.driver, request.edges_sql, request.combinations_sql, starts_arg, ends_arg,
+			                       request.directed, request.only_cost, request.normal);
+			result.rows = out.rows;
+			result.count = out.count;
+			log_text = std::move(out.log);
+			notice_text = std::move(out.notice);
+			err_text = std::move(out.err);
+		}
 
-		// The driver catches every exception, so an interrupt only shows up as a flag.
+		// The drivers catch every exception, so an interrupt only shows up as a flag.
 		if (WasInterrupted()) {
 			ClearInterrupted();
 			throw duckdb::InterruptException();
 		}
 	}
 
-	const auto err_text = err.str();
 	if (!err_text.empty()) {
 		// Upstream's process layer drops partial results when err is set; so do we.
 		result = DriverResult();
-		const auto hint = log.str();
+		const auto &hint = log_text;
 		// A prefix match, not a substring one: this is the only arm that raises
 		// InternalException, which invalidates the whole database instance, and err text can carry
 		// the user's own SQL (LookupInput interpolates it), so a query that merely mentions the
@@ -84,7 +102,8 @@ DriverResult RunShortestPath(duckdb::ClientContext &context, InputRegistry &regi
 		// std::bad_alloc raised anywhere inside pgRouting is instead caught by the driver's
 		// catch (std::exception &), whose whole body is `err << except.what();` -- nothing before
 		// it, nothing after it, into the stream this function just created -- so err is exactly
-		// what(). That text is spelled by the standard library rather than by pgRouting; it is
+		// what(). The old-style drivers copy what() into their err message the same way. That
+		// text is spelled by the standard library rather than by pgRouting; it is
 		// "std::bad_alloc" on the libc++ toolchain this was verified against. A standard library
 		// that spells it differently falls through to the InvalidInputException below, which is
 		// where every unrecognised err text already goes and is what this arm used to do.
@@ -101,11 +120,9 @@ DriverResult RunShortestPath(duckdb::ClientContext &context, InputRegistry &regi
 
 	// The two-argument macro form is the one that passes the message through unchanged: a third
 	// argument would be read as a format parameter for the second.
-	const auto notice_text = notice.str();
 	if (!notice_text.empty()) {
 		DUCKDB_LOG_INFO(context, notice_text);
 	}
-	const auto log_text = log.str();
 	if (!log_text.empty()) {
 		DUCKDB_LOG_DEBUG(context, log_text);
 	}

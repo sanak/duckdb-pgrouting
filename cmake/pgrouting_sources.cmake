@@ -36,7 +36,12 @@ set(PGROUTING_SOURCES
 # Sources that reach PostgreSQL only through symbols this extension replaces
 # (src/pg_compat provides the stub headers and the replaced definitions).
 list(APPEND PGROUTING_SOURCES
+    ${PGROUTING_DIR}/src/bdDijkstra/bdDijkstra_driver.cpp
+    ${PGROUTING_DIR}/src/bellman_ford/bellman_ford_driver.cpp
+    ${PGROUTING_DIR}/src/bellman_ford/edwardMoore_driver.cpp
+    ${PGROUTING_DIR}/src/breadthFirstSearch/binaryBreadthFirstSearch_driver.cpp
     ${PGROUTING_DIR}/src/cpp_common/combinations.cpp
     ${PGROUTING_DIR}/src/cpp_common/pgdata_fetchers.cpp
     ${PGROUTING_DIR}/src/cpp_common/pgdata_getters.cpp
+    ${PGROUTING_DIR}/src/dagShortestPath/dagShortestPath_driver.cpp
     ${PGROUTING_DIR}/src/dijkstra/shortestPath_driver.cpp)
