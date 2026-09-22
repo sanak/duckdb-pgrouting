@@ -34,7 +34,7 @@ SELECT count(*) FROM duckdb_functions() WHERE function_name = 'pgr_withPoints' A
 ----
 30
 
-# Upstream's q1 (docqueries pgr_withPoints): -1 -> 10 costs 6.4.
+# Upstream's q1 (docqueries withPoints): -1 -> 10 costs 6.4.
 query IIR
 SELECT start_vid, end_vid, round(agg_cost, 6) FROM pgr_withPoints(e(), p(), -1, 10, details := true) WHERE edge = -1;
 ----

@@ -172,7 +172,7 @@ class TestExpectedCells(unittest.TestCase):
 class TestRender(unittest.TestCase):
     def test_emits_a_well_formed_sqllogictest(self):
         items = [
-            gen.Emitted("q2", "IIR", "SELECT * FROM Dijkstra('x', 6, 10);", [["1", "1", "0"]]),
+            gen.Emitted("q2", "IIR", "SELECT * FROM pgr_Dijkstra('x', 6, 10);", [["1", "1", "0"]]),
             gen.Skipped("q99", "not implemented: pgr_dijkstraVia"),
         ]
         text = gen.render("dijkstra", "dijkstra", items)
@@ -181,7 +181,7 @@ class TestRender(unittest.TestCase):
         self.assertIn("# SPDX-License-Identifier: GPL-2.0-or-later\n", text)
         self.assertIn("GENERATED FILE", text)
         self.assertIn("require pgrouting\n", text)
-        self.assertIn("# q2\nquery IIR\nSELECT * FROM Dijkstra('x', 6, 10);\n----\n1\t1\t0\n", text)
+        self.assertIn("# q2\nquery IIR\nSELECT * FROM pgr_Dijkstra('x', 6, 10);\n----\n1\t1\t0\n", text)
         self.assertIn("# q99: skipped - not implemented: pgr_dijkstraVia\n", text)
         self.assertTrue(text.endswith("\n"))
         self.assertIn(export_sampledata.LOADER_SQL.strip(), text)

@@ -1,5 +1,5 @@
 # name: test/sql/dijkstra_near.test
-# description: pgr_dijkstraNear and pgr_dijkstraNearCost: shape, upstream's documented answer, COST_OF_PATH regression
+# description: pgr_dijkstraNear, pgr_dijkstraNearCost: shape, upstream answer, COST_OF_PATH
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later

@@ -1,5 +1,5 @@
 # name: test/sql/dijkstra_cost.test
-# description: pgr_dijkstraCost and pgr_dijkstraCostMatrix: shape, STRICT, agreement with pgr_dijkstra
+# description: pgr_dijkstraCost, pgr_dijkstraCostMatrix: shape, STRICT, agreement with pgr_dijkstra
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -51,7 +51,8 @@ SELECT * FROM pgr_dijkstraCost(e(), 6, 10);
 6	10	5
 
 # Every other signature agrees with pgr_dijkstra's closing rows (edge = -1), both ways round.
-# Many-to-one runs with normal = true here and normal = false in pgr_dijkstra; the totals must agree.
+# Many-to-one runs with normal = true here and normal = false in pgr_dijkstra; the totals must
+# agree.
 query I
 SELECT count(*) FROM (
   (SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 7], [10, 11]) WHERE edge = -1

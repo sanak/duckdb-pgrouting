@@ -15,10 +15,10 @@ INSERT INTO edges VALUES
   (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
   (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
 
-# Each driver answers upstream's documented 6 -> 10 (docqueries pgr_bdDijkstra q2, pgr_bellmanFord q2,
-# pgr_edwardMoore q2, pgr_binaryBreadthFirstSearch q1): cost 5. Only the closing row is asserted, so an
-# equal-cost tie cannot make this flaky. combinations_sql is '' here, as the public array forms
-# pass it: the adapter must hand the driver NULL, or it would look '' up as a combinations query.
+# Each driver answers upstream's documented 6 -> 10 (docqueries bdDijkstra q2, bellmanFord q2,
+# edwardMoore q2, binaryBreadthFirstSearch q1): cost 5. Only the closing row is asserted, so an
+# equal-cost tie cannot make this flaky. combinations_sql is '' here, as the public array forms pass
+# it: the adapter must hand the driver NULL, or it would look '' up as a combinations query.
 query IIR
 SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
@@ -68,7 +68,7 @@ WHERE edge = -1;
 6	10	5
 
 # pgr_dagShortestPath needs an acyclic graph: without reverse_cost only the forward edges exist, and
-# upstream's documented 5 -> 11 (docqueries pgr_dagShortestPath q2) costs 3.
+# upstream's documented 5 -> 11 (docqueries dagShortestPath q2) costs 3.
 query IIR
 SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost FROM edges) e) AS edges,

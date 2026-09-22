@@ -1,5 +1,5 @@
 # name: test/sql/dag_shortest_path.test
-# description: pgr_dagShortestPath: variants, agreement with pgr_dijkstra on a DAG, the cycle error, STRICT
+# description: pgr_dagShortestPath: variants, agreement with pgr_dijkstra, cycle error, STRICT
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -25,7 +25,7 @@ SELECT count(*) FROM duckdb_functions() WHERE function_name = 'pgr_dagShortestPa
 ----
 5
 
-# Upstream's q2 (docqueries pgr_dagShortestPath): 5 -> 11 costs 3.
+# Upstream's q2 (docqueries dagShortestPath): 5 -> 11 costs 3.
 query IIR
 SELECT start_vid, end_vid, agg_cost FROM pgr_dagShortestPath(dag(), 5, 11) WHERE edge = -1;
 ----

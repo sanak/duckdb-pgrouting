@@ -1,5 +1,5 @@
 # name: test/sql/binary_bfs.test
-# description: pgr_binaryBreadthFirstSearch: variants, agreement with pgr_dijkstra, the edge-cost condition, STRICT
+# description: pgr_binaryBreadthFirstSearch: variants, agreement, edge-cost condition, STRICT
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -23,7 +23,7 @@ SELECT count(*) FROM duckdb_functions() WHERE function_name = 'pgr_binaryBreadth
 ----
 10
 
-# Upstream's q1 (docqueries pgr_binaryBreadthFirstSearch): 6 -> 10 costs 5.
+# Upstream's q1 (docqueries binaryBreadthFirstSearch): 6 -> 10 costs 5.
 query IIR
 SELECT start_vid, end_vid, agg_cost FROM pgr_binaryBreadthFirstSearch(e(), 6, 10) WHERE edge = -1;
 ----

@@ -25,7 +25,7 @@ INSERT INTO pois VALUES (1,1,'l',0.4),(2,15,'r',0.4),(3,12,'l',0.6),(4,6,'r',0.3
 # The three inputs are hand-built here, the way the public pgr_withPoints overloads will build them:
 # the points rows, and the rows of upstream's two derived queries. The exec function registers
 # them under points_sql and under the two key strings it derives from edges_sql and points_sql.
-# Upstream's documented answer for -1 -> 10 (docqueries pgr_withPoints q1) is 6.4; the route is the
+# Upstream's documented answer for -1 -> 10 (docqueries withPoints q1) is 6.4; the route is the
 # only one of that cost, and agg_cost of the closing row is tie-independent anyway.
 query IIR
 SELECT start_vid, end_vid, round(agg_cost, 6) FROM _pgr_shortestpath_exec(

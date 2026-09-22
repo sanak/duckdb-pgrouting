@@ -1,5 +1,5 @@
 # name: test/sql/bd_dijkstra.test
-# description: pgr_bdDijkstra, pgr_bdDijkstraCost, pgr_bdDijkstraCostMatrix: variants, agreement, errors, STRICT
+# description: pgr_bdDijkstra, pgr_bdDijkstraCost, pgr_bdDijkstraCostMatrix: variants, STRICT
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -28,7 +28,7 @@ pgr_bdDijkstra	10
 pgr_bdDijkstraCost	10
 pgr_bdDijkstraCostMatrix	2
 
-# Upstream's q2 (docqueries pgr_bdDijkstra): 6 -> 10 costs 5.
+# Upstream's q2 (docqueries bdDijkstra): 6 -> 10 costs 5.
 query IIR
 SELECT start_vid, end_vid, agg_cost FROM pgr_bdDijkstra(e(), 6, 10) WHERE edge = -1;
 ----
@@ -108,7 +108,7 @@ SELECT count(*) FROM (
 0
 
 # CostMatrix passes the array as both starts and ends: upstream's q2 (docqueries
-# pgr_bdDijkstraCostMatrix) has 12 rows for 4 vertices, undirected, and no vertex paired with itself.
+# bdDijkstraCostMatrix) has 12 rows for 4 vertices, undirected, and no vertex paired with itself.
 query IIR
 SELECT * FROM pgr_bdDijkstraCostMatrix(e(), [5, 6, 10, 15], false) ORDER BY 1, 2;
 ----
@@ -125,7 +125,8 @@ SELECT * FROM pgr_bdDijkstraCostMatrix(e(), [5, 6, 10, 15], false) ORDER BY 1, 2
 15	6	2
 15	10	1
 
-# ... which is exactly pgr_bdDijkstraCost over the same array twice, and pgr_dijkstraCostMatrix's answer.
+# ... which is exactly pgr_bdDijkstraCost over the same array twice, and
+# pgr_dijkstraCostMatrix's answer.
 query I
 SELECT count(*) FROM (
   (SELECT * FROM pgr_bdDijkstraCostMatrix(e(), [5, 6, 10, 15]) EXCEPT SELECT * FROM pgr_bdDijkstraCost(e(), [5, 6, 10, 15], [5, 6, 10, 15]))

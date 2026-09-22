@@ -14,11 +14,11 @@ require pgrouting
 # get_combinations() in third_party/pgrouting/src/cpp_common/combinations.cpp) - one opportunity
 # to observe the deadline per start vertex, in ascending start-vertex order.
 #
-# A single scalar END_VID (pgr_dijkstra(sql, starts, end_vid), the other many-to-one signature) is not
-# usable for this test: pgRouting implements that overload by reversing the graph and swapping
+# A single scalar END_VID (pgr_dijkstra(sql, starts, end_vid), the other many-to-one signature) is
+# not usable for this test: pgRouting implements that overload by reversing the graph and swapping
 # starts/ends, which collapses all requested start vertices into a single combinations-map entry
-# (one departure, many destinations), so it calls CHECK_FOR_INTERRUPTS() exactly once for the
-# whole query no matter how many start vertices are requested.
+# (one departure, many destinations), so it calls CHECK_FOR_INTERRUPTS() exactly once for the whole
+# query no matter how many start vertices are requested.
 #
 # DuckDB's ClientContext::InterruptCheck() (duckdb/src/main/client_context.cpp) re-reads the query
 # deadline only on every 256th call to it, through a thread_local counter that only advances while

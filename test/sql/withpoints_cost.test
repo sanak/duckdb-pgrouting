@@ -1,5 +1,5 @@
 # name: test/sql/withpoints_cost.test
-# description: pgr_withPointsCost and pgr_withPointsCostMatrix: shape, agreement with pgr_withPoints, STRICT
+# description: pgr_withPointsCost, pgr_withPointsCostMatrix: shape, agreement, STRICT
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -45,14 +45,14 @@ start_vid	BIGINT
 end_vid	BIGINT
 agg_cost	DOUBLE
 
-# Upstream's q1 (docqueries pgr_withPointsCost).
+# Upstream's q1 (docqueries withPointsCost).
 query IIR
 SELECT start_vid, end_vid, round(agg_cost, 6) FROM pgr_withPointsCost(e(), p(), -1, 10);
 ----
 -1	10	6.4
 
-# Every shape agrees with pgr_withPoints' closing rows, both ways round, for a derived and an explicit
-# driving side. Many-to-one runs with normal = false in both.
+# Every shape agrees with pgr_withPoints' closing rows, both ways round, for a derived and an
+# explicit driving side. Many-to-one runs with normal = false in both.
 query I
 SELECT count(*) FROM (
   (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPoints(e(), p(), [5, -1], [-2, -3, -6, 10, 11]) WHERE edge = -1

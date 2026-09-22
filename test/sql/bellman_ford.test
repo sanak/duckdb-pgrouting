@@ -1,5 +1,5 @@
 # name: test/sql/bellman_ford.test
-# description: pgr_bellmanFord and pgr_edwardMoore: variants, agreement with pgr_dijkstra, negative edges, errors, STRICT
+# description: pgr_bellmanFord, pgr_edwardMoore: variants, agreement, errors, STRICT
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -26,7 +26,7 @@ GROUP BY ALL ORDER BY 1;
 pgr_bellmanFord	10
 pgr_edwardMoore	10
 
-# Upstream's q2 (docqueries pgr_bellmanFord, pgr_edwardMoore): 6 -> 10 costs 5.
+# Upstream's q2 (docqueries bellmanFord, edwardMoore): 6 -> 10 costs 5.
 query IIR
 SELECT start_vid, end_vid, agg_cost FROM pgr_bellmanFord(e(), 6, 10) WHERE edge = -1;
 ----

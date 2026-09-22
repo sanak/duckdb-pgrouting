@@ -157,12 +157,12 @@ vector<int64_t> ReadIdList(DataChunk &input, idx_t column, const char *name, boo
 	for (auto &child : ListValue::GetChildren(value)) {
 		if (child.IsNull()) {
 			// A NULL element inside an otherwise well-typed LIST(BIGINT) is reachable from the
-			// public API too (dijkstra(sql, [1, NULL]::BIGINT[], 3)), not only from a direct call.
-			// BigIntValue::Get on a NULL Value does not assert -- the Value still carries the
-			// BIGINT physical type, only its payload is unset -- so it would silently read
-			// whatever bytes happen to sit in that union and use them as a vertex id. PostgreSQL
-			// and pgRouting reject a NULL array element outright; match that instead of returning
-			// an answer that depends on uninitialized memory.
+			// public API too (pgr_dijkstra(sql, [1, NULL]::BIGINT[], 3)), not only from a direct
+			// call. BigIntValue::Get on a NULL Value does not assert -- the Value still carries the
+			// BIGINT physical type, only its payload is unset -- so it would silently read whatever
+			// bytes happen to sit in that union and use them as a vertex id. PostgreSQL and
+			// pgRouting reject a NULL array element outright; match that instead of returning an
+			// answer that depends on uninitialized memory.
 			throw InvalidInputException("_pgr_shortestpath_exec: column '%s' contains a NULL id", name);
 		}
 		ids.push_back(BigIntValue::Get(child));
