@@ -74,7 +74,11 @@ OldStyleOutput RunOldStyle(DriverKind kind, const std::string &edges_sql, const 
 		}
 	} catch (const std::string &message) {
 		// The drivers catch everything their body throws, but to_pg_msg can still throw
-		// "Out of memory!" from inside one of those catch blocks.
+		// "Out of memory!" from inside one of those catch blocks. Catching it here relies on a
+		// C++ exception crossing the drivers' extern "C" declarations, as pgr_compat_ereport
+		// (pg_types.cpp) already does to report every other pgRouting error; MSVC's default
+		// /EHsc assumes this cannot happen. The exposure is narrow: only to_pg_msg running out
+		// of memory inside a driver's own catch block reaches this handler that way.
 		out.err = message;
 	}
 	out.log = TakeMessage(log);

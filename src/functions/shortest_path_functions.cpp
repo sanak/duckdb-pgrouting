@@ -362,7 +362,8 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 				break;
 			case duckdb_routing::ArgKind::VIDS:
 				// One array as both starts and ends: the old-style drivers only read the arrays when
-				// both are given, and pair every start with every end (never a vertex with itself).
+				// both are given, and pair every start with every end; a vertex paired with itself
+				// yields no row.
 				starts_expr = Named(IdListCast(input.inputs[i]), "starts");
 				ends_expr = Named(IdListCast(input.inputs[i]), "ends");
 				break;

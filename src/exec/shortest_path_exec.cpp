@@ -276,7 +276,8 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	request.details = NamedOr<bool>(input, "details", true);
 	const auto driving_side = NamedStringOr(input, "driving_side", " ");
 	request.driving_side = driving_side.empty() ? ' ' : driving_side[0];
-	const auto driver = NamedStringOr(input, "driver", duckdb_routing::DriverKindName(duckdb_routing::DriverKind::SHORTEST_PATH));
+	const auto driver =
+	    NamedStringOr(input, "driver", duckdb_routing::DriverKindName(duckdb_routing::DriverKind::SHORTEST_PATH));
 	if (!duckdb_routing::ParseDriverKind(driver, request.driver)) {
 		throw InvalidInputException("_pgr_shortestpath_exec: unknown driver '%s'", driver);
 	}
