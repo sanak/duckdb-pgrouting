@@ -100,7 +100,8 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
     {"pgr_dijkstraNearCost", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED, CAP, GLOBAL},
      Flags(false, true, true, ResultColumns::COST_OF_PATH)},
 
-    // pgr_withPoints: details defaults to false. normal = false on many-to-one, as pgr_dijkstra.
+    // pgr_withPoints: details defaults to false. normal = false on many-to-one and many-to-many,
+    // unlike pgr_dijkstra and pgr_withPointsCost (which pass it on many-to-one only).
     {"pgr_withPoints",
      {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VID, ArgKind::END_VID, ArgKind::DRIVING_SIDE},
      {DIRECTED, DETAILS}, WithPointsFlags(false, true, CHAR_SIDE, ResultColumns::PATH)},
@@ -112,7 +113,7 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
      {DIRECTED, DETAILS}, WithPointsFlags(false, false, CHAR_SIDE, ResultColumns::PATH)},
     {"pgr_withPoints",
      {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS, ArgKind::DRIVING_SIDE},
-     {DIRECTED, DETAILS}, WithPointsFlags(false, true, CHAR_SIDE, ResultColumns::PATH)},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, false, CHAR_SIDE, ResultColumns::PATH)},
     {"pgr_withPoints",
      {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::COMBINATIONS_SQL, ArgKind::DRIVING_SIDE},
      {DIRECTED, DETAILS}, WithPointsFlags(false, true, CHAR_SIDE, ResultColumns::PATH)},
@@ -123,12 +124,12 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
     {"pgr_withPoints", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VID},
      {DIRECTED, DETAILS}, WithPointsFlags(false, false, SIDE_OF_DIRECTED, ResultColumns::PATH)},
     {"pgr_withPoints", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS},
-     {DIRECTED, DETAILS}, WithPointsFlags(false, true, SIDE_OF_DIRECTED, ResultColumns::PATH)},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, false, SIDE_OF_DIRECTED, ResultColumns::PATH)},
     {"pgr_withPoints", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::COMBINATIONS_SQL},
      {DIRECTED, DETAILS}, WithPointsFlags(false, true, SIDE_OF_DIRECTED, ResultColumns::PATH)},
 
     // pgr_withPointsCost: only_cost, a constant details = true, no details parameter; normal =
-    // false on many-to-one (withPointsCost.sql), as pgr_withPoints and unlike pgr_dijkstraCost.
+    // false only on many-to-one (withPointsCost.sql), unlike pgr_dijkstraCost.
     {"pgr_withPointsCost",
      {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VID, ArgKind::END_VID, ArgKind::DRIVING_SIDE},
      {DIRECTED}, WithPointsFlags(true, true, CHAR_SIDE, ResultColumns::COST)},
