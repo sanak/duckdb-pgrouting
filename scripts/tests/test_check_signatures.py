@@ -48,30 +48,50 @@ class MapUpstreamTypesTest(unittest.TestCase):
             cs.map_upstream_types(("geometry",))
 
 
-class CandidateKeysTest(unittest.TestCase):
-    def test_named_form_appends_named_types_sorted_by_name(self):
-        keys = cs.candidate_keys(["col0", "col1", "col2", "directed"],
-                                 ["VARCHAR", "BIGINT", "BIGINT", "BOOLEAN"])
-        self.assertIn(("VARCHAR", "BIGINT", "BIGINT", "BOOLEAN"), keys)
-        self.assertIn(("VARCHAR", "BIGINT", "BIGINT"), keys)
+class CoversTest(unittest.TestCase):
+    DIJKSTRA = ("VARCHAR", "BIGINT", "BIGINT", "BOOLEAN")
+    NEAR_AA = ("VARCHAR", "BIGINT[]", "BIGINT[]", "BOOLEAN", "BIGINT", "BOOLEAN")
 
-    def test_positional_form_key_matches_the_upstream_argument_list(self):
-        keys = cs.candidate_keys(["col0", "col1", "col2", "col3", "directed"],
-                                 ["VARCHAR", "BIGINT", "BIGINT", "BOOLEAN", "BOOLEAN"])
-        self.assertIn(("VARCHAR", "BIGINT", "BIGINT", "BOOLEAN"), keys)
+    def test_named_directed_variant_covers_the_signature(self):
+        self.assertTrue(cs.covers(["col0", "col1", "col2", "directed"],
+                                  ["VARCHAR", "BIGINT", "BIGINT", "BOOLEAN"], self.DIJKSTRA))
 
-    def test_a_variant_without_named_parameters_yields_one_key(self):
-        self.assertEqual(cs.candidate_keys(["col0", "col1"], ["VARCHAR", "BIGINT"]),
-                         {("VARCHAR", "BIGINT")})
+    def test_positional_directed_variant_covers_the_signature(self):
+        self.assertTrue(cs.covers(["col0", "col1", "col2", "col3", "directed"],
+                                  ["VARCHAR", "BIGINT", "BIGINT", "BOOLEAN", "BOOLEAN"], self.DIJKSTRA))
+
+    def test_named_parameters_reported_in_any_order_still_cover(self):
+        # duckdb_functions() does not keep declaration order; cap sorts before directed.
+        for p in (0, 1, 2, 3):
+            positional = ["col%d" % i for i in range(3 + p)]
+            positional_types = list(self.NEAR_AA[:3 + p])
+            named = ["cap", "directed", "global"]
+            named_types = ["BIGINT", "BOOLEAN", "BOOLEAN"]
+            with self.subTest(p=p):
+                self.assertTrue(cs.covers(positional + named, positional_types + named_types,
+                                          self.NEAR_AA))
+
+    def test_a_variant_with_a_missing_optional_does_not_cover(self):
+        self.assertFalse(cs.covers(["col0", "col1", "col2", "directed"],
+                                   ["VARCHAR", "BIGINT[]", "BIGINT[]", "BOOLEAN"], self.NEAR_AA))
+
+    def test_a_different_required_type_does_not_cover(self):
+        self.assertFalse(cs.covers(["col0", "col1", "col2", "directed"],
+                                   ["VARCHAR", "BIGINT[]", "BIGINT", "BOOLEAN"], self.DIJKSTRA))
+
+    def test_a_variant_without_named_parameters_covers_only_its_exact_list(self):
+        self.assertTrue(cs.covers(["col0", "col1"], ["VARCHAR", "BIGINT"], ("VARCHAR", "BIGINT")))
+        self.assertFalse(cs.covers(["col0", "col1"], ["VARCHAR", "BIGINT"],
+                                   ("VARCHAR", "BIGINT", "BOOLEAN")))
 
     def test_list_types_survive_the_cli_quoting(self):
-        keys = cs.candidate_keys(["col0", "col1", "col2", "directed"],
-                                 ["VARCHAR", "'BIGINT[]'", "'BIGINT[]'", "BOOLEAN"])
-        self.assertIn(("VARCHAR", "BIGINT[]", "BIGINT[]", "BOOLEAN"), keys)
+        self.assertTrue(cs.covers(["col0", "col1", "col2", "directed"],
+                                  ["VARCHAR", "'BIGINT[]'", "'BIGINT[]'", "BOOLEAN"],
+                                  ("VARCHAR", "BIGINT[]", "BIGINT[]", "BOOLEAN")))
 
     def test_rejects_mismatched_lengths(self):
         with self.assertRaises(ValueError):
-            cs.candidate_keys(["col0"], ["VARCHAR", "BIGINT"])
+            cs.split_variant(["col0"], ["VARCHAR", "BIGINT"])
 
 
 class SigFilePathTest(unittest.TestCase):

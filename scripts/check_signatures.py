@@ -3,7 +3,9 @@
 
 Upstream declares its SQL API in third_party/pgrouting/sql/sigs/pgrouting--<major>.<minor>.sig.
 DuckDB reports what this extension actually registered in duckdb_functions(). This script compares
-the two and fails when either side has something the other does not.
+the two and fails when either side has something the other does not. A registered variant covers
+an upstream signature if its positional types match the signature's prefix, and its named types
+form a multiset equal to the signature's remaining types plus a suffix of the positional types.
 """
 
 import argparse
@@ -11,6 +13,7 @@ import json
 import os
 import re
 import sys
+from collections import Counter
 
 import duckdbcli
 
@@ -57,13 +60,11 @@ def map_upstream_types(args):
     return tuple(mapped)
 
 
-def candidate_keys(parameters, parameter_types):
-    """Return the upstream-shaped argument lists this registered variant could be covering.
+def split_variant(parameters, parameter_types):
+    """Return (positional types, named types) of one registered variant.
 
-    A parameter is positional exactly when its name matches ^col\\d+$; parameter_types lists the
-    positional types first and the named ones after. Key A is the named form, where `directed` is
-    a trailing named parameter; key B is the positional form, where it is another colN. A variant
-    with no named parameter collapses to a single key.
+    A parameter is positional exactly when its name matches ^col\\d+$. Types are cleaned of the
+    quoting the CLI puts around list types ('BIGINT[]').
     """
     if len(parameters) != len(parameter_types):
         raise ValueError("parameters and parameter_types differ in length")
@@ -74,10 +75,28 @@ def candidate_keys(parameters, parameter_types):
         if POSITIONAL_RE.match(name):
             positional.append(cleaned)
         else:
-            named.append((name, cleaned))
-    key_b = tuple(positional)
-    key_a = key_b + tuple(t for _, t in sorted(named))
-    return {key_a, key_b}
+            named.append(cleaned)
+    return tuple(positional), tuple(named)
+
+
+def covers(parameters, parameter_types, signature):
+    """Whether this registered variant implements upstream `signature` (DuckDB type names).
+
+    Every variant accepts all of an overload's defaulted parameters by name, and passes the
+    first m of them positionally as well, because DuckDB never matches a named parameter
+    positionally. duckdb_functions() does not report named parameters in declaration order, so
+    the named part is compared as a multiset: the last m positional types plus the signature's
+    remaining types must be exactly the named parameters' types.
+    """
+    positional, named = split_variant(parameters, parameter_types)
+    signature = tuple(signature)
+    if signature[:len(positional)] != positional:
+        return False
+    rest = signature[len(positional):]
+    m = len(named) - len(rest)
+    if m < 0 or m > len(positional):
+        return False
+    return Counter(positional[len(positional) - m:] + rest) == Counter(named)
 
 
 def sig_file_path(version):
@@ -162,15 +181,14 @@ def main(argv=None):
             failures.append("%s: registered here but absent from %s" % (name, path))
             continue
         sigs = [map_upstream_types(a) for a in upstream[name]]
-        keys = [candidate_keys(p, t) for p, t in variants[name]]
         for sig, raw in zip(sigs, upstream[name]):
-            hits = sum(1 for key in keys if sig in key)
+            hits = sum(1 for p, t in variants[name] if covers(p, t, sig))
             if hits == 0:
                 failures.append("%s(%s): no registered variant covers it" % (name, ",".join(raw)))
             else:
                 lines.append("  %s(%s) covered by %d variant(s)" % (name, ",".join(raw), hits))
-        for (_, types), key in zip(variants[name], keys):
-            if not any(sig in key for sig in sigs):
+        for params, types in variants[name]:
+            if not any(covers(params, types, sig) for sig in sigs):
                 failures.append("%s variant (%s) covers no upstream signature"
                                 % (name, ", ".join(types)))
 
