@@ -23,7 +23,7 @@ import sys
 import textwrap
 from dataclasses import dataclass
 from itertools import zip_longest
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -381,25 +381,39 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Dict[st
     return items
 
 
+def merge_ties(existing: Dict[str, Dict[str, dict]], fresh: Dict[str, Dict[str, dict]],
+               processed: Set[str]) -> Dict[str, Dict[str, dict]]:
+    """Replace the ties of every stem this run processed; keep every other stem's verbatim.
+
+    A scoped run (--category) must not erase what another stem recorded, and a processed stem
+    whose blocks are no longer ties must lose its entry.
+    """
+    merged = {key: value for key, value in existing.items() if key not in processed}
+    merged.update(fresh)
+    return merged
+
+
 def generate(
     db: duckdbcli.DuckDB, only: Optional[str]
-) -> Tuple[Dict[str, str], Dict[str, Dict[str, dict]]]:
-    """Render every docqueries file, returning ({output path: file body}, ties)."""
+) -> Tuple[Dict[str, str], Dict[str, Dict[str, dict]], Set[str]]:
+    """Render every docqueries file, returning ({output path: file body}, ties, processed stems)."""
     implemented = implemented_names(db)
     skips = json.loads(pathlib.Path(SKIP_FILE).read_text())
     rendered: Dict[str, str] = {}
     ties: Dict[str, Dict[str, dict]] = {}
+    processed: Set[str] = set()
     for pg in sorted(pathlib.Path(DOCQUERIES).glob("*/*.pg")):
         category, stem = pg.parent.name, pg.stem
         if only and category != only:
             continue
         if not (pg.parent / (stem + ".result")).exists():
             continue
+        processed.add("{}/{}.pg".format(category, stem))
         items = process(category, stem, db, implemented, skips, ties)
         if not any(isinstance(item, Emitted) for item in items):
             continue
         rendered["{}/{}/{}.test".format(OUT_ROOT, category, stem)] = render(category, stem, items)
-    return rendered, ties
+    return rendered, ties, processed
 
 
 def _raw_preamble() -> str:
@@ -424,7 +438,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     db = duckdbcli.DuckDB(args.duckdb, preamble=_raw_preamble())
-    rendered, ties = generate(db, args.category)
+    rendered, fresh_ties, processed = generate(db, args.category)
+    ties_path = pathlib.Path(TIES_FILE)
+    existing_ties = json.loads(ties_path.read_text()) if ties_path.exists() else {}
+    ties = merge_ties(existing_ties, fresh_ties, processed)
     rendered[TIES_FILE] = json.dumps(ties, indent=2, sort_keys=True) + "\n"
 
     failures = 0

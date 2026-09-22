@@ -234,5 +234,25 @@ class TestTieClassification(unittest.TestCase):
         )
 
 
+class TestMergeTies(unittest.TestCase):
+    OLD = {
+        "dijkstra/dijkstra.pg": {"q4": {"reason": "equal-cost tie", "upstream_rows": 5, "differing_rows": 2}},
+        "withPoints/withPoints.pg": {"q2": {"reason": "equal-cost tie", "upstream_rows": 7, "differing_rows": 1}},
+    }
+
+    def test_keeps_the_entries_of_a_stem_this_run_did_not_process(self):
+        merged = gen.merge_ties(self.OLD, {}, {"dijkstra/dijkstra.pg"})
+        self.assertEqual(self.OLD["withPoints/withPoints.pg"], merged["withPoints/withPoints.pg"])
+
+    def test_replaces_a_processed_stem_wholesale(self):
+        fresh = {"dijkstra/dijkstra.pg": {"q5": {"reason": "equal-cost tie", "upstream_rows": 3, "differing_rows": 1}}}
+        merged = gen.merge_ties(self.OLD, fresh, {"dijkstra/dijkstra.pg"})
+        self.assertEqual(fresh["dijkstra/dijkstra.pg"], merged["dijkstra/dijkstra.pg"])
+
+    def test_drops_a_processed_stem_that_has_no_tie_left(self):
+        merged = gen.merge_ties(self.OLD, {}, {"dijkstra/dijkstra.pg"})
+        self.assertNotIn("dijkstra/dijkstra.pg", merged)
+
+
 if __name__ == "__main__":
     unittest.main()
