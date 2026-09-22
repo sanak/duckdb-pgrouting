@@ -176,6 +176,16 @@ class CollectVariantsTest(unittest.TestCase):
         ])
         self.assertEqual(len(cs.collect_variants(db)["pgr_dijkstra"]), 2)
 
+    def test_folds_a_camelcase_tag_to_lowercase(self):
+        # PostgreSQL case-folds unquoted identifiers, so upstream's own
+        # `CREATE FUNCTION pgr_dijkstraCost(...)` is named `pgr_dijkstracost` there, and that is
+        # the spelling the .sig file records; the tag this extension carries keeps upstream's
+        # CREATE FUNCTION spelling verbatim, so collect_variants must fold it to match.
+        db = self._FakeDB([["pgr_dijkstraCost", "col0", "VARCHAR"]])
+        variants = cs.collect_variants(db)
+        self.assertIn("pgr_dijkstracost", variants)
+        self.assertNotIn("pgr_dijkstraCost", variants)
+
 
 if __name__ == "__main__":
     unittest.main()

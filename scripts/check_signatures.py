@@ -137,6 +137,13 @@ def collect_variants(db):
 
     tags['ext'] = 'routing' also matches _pgr_shortestpath_exec, the internal in-out table
     function, which carries no pgrouting_name; the NULL filter drops it.
+
+    The key is the tag lowercased. PostgreSQL case-folds unquoted identifiers, so a
+    `CREATE FUNCTION pgr_dijkstraCost(...)` in upstream's SQL is actually named `pgr_dijkstracost`
+    there, and that is the spelling `sql/sigs/pgrouting--<ver>.sig` (and
+    test/pgrouting_not_ported.json) record. This extension's own `pgrouting_name` tag keeps
+    upstream's CREATE FUNCTION spelling verbatim (camelCase and all), so it has to be folded here
+    to line up with the already-folded signature file.
     """
     result = db.query(
         "SELECT tags['pgrouting_name'], "
@@ -150,7 +157,7 @@ def collect_variants(db):
     for name, parameters, parameter_types in result.rows:
         params = tuple(parameters.split(_LIST_SEP)) if parameters else ()
         types = tuple(parameter_types.split(_LIST_SEP)) if parameter_types else ()
-        variants.setdefault(name, []).append((params, types))
+        variants.setdefault(name.lower(), []).append((params, types))
     return variants
 
 
