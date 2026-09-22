@@ -36,6 +36,38 @@ class TestSplitBlocks(unittest.TestCase):
         self.assertIn("q154", [b.name for b in blocks])
 
 
+class TestExtraFloatDigits(unittest.TestCase):
+    def test_reads_the_preamble_setting(self):
+        text = "license header\nSET extra_float_digits=-3;\n/* -- q1 */\nSELECT 1;\n"
+        self.assertEqual(-3, pgparse.extra_float_digits(text))
+
+    def test_absent_is_none(self):
+        text = "license header\n/* -- q1 */\nSELECT 1;\n"
+        self.assertIsNone(pgparse.extra_float_digits(text))
+
+    def test_tolerates_case_and_whitespace_around_equals(self):
+        text = "set  EXTRA_FLOAT_DIGITS  =  -3 ;\n/* -- q1 */\nSELECT 1;\n"
+        self.assertEqual(-3, pgparse.extra_float_digits(text))
+
+    def test_a_positive_value_is_read_too(self):
+        text = "SET extra_float_digits=3;\n/* -- q1 */\nSELECT 1;\n"
+        self.assertEqual(3, pgparse.extra_float_digits(text))
+
+    def test_a_statement_inside_a_named_block_does_not_count(self):
+        # Only the preamble split_blocks drops is read; a SET inside a block sets its own value
+        # for its own block, deliberately not the page's documented default.
+        text = "/* -- q1 */\nSET extra_float_digits=-3;\nSELECT 1;\n"
+        self.assertIsNone(pgparse.extra_float_digits(text))
+
+    def test_real_withpoints_pg_sets_minus_three(self):
+        text = (REPO / "third_party/pgrouting/docqueries/withPoints/withPoints.pg").read_text()
+        self.assertEqual(-3, pgparse.extra_float_digits(text))
+
+    def test_real_dijkstra_pg_has_no_setting(self):
+        text = (REPO / "third_party/pgrouting/docqueries/dijkstra/dijkstra.pg").read_text()
+        self.assertIsNone(pgparse.extra_float_digits(text))
+
+
 class TestParseAligned(unittest.TestCase):
     TABLE = [
         " id | name  | cost ",

@@ -23,6 +23,7 @@ MARKER_RE = re.compile(r"/\*\s*--\s*([A-Za-z][\w]*(?:-[\w]+)*)\s*\*/")
 
 _SEPARATOR_RE = re.compile(r"^-+(?:\+-+)*$")
 _ROWCOUNT_RE = re.compile(r"^\((\d+) rows?\)$")
+_EXTRA_FLOAT_DIGITS_RE = re.compile(r"(?i)\bSET\s+extra_float_digits\s*=\s*(-?\d+)\s*;")
 
 
 @dataclass
@@ -55,6 +56,22 @@ def split_blocks(text: str) -> List[Block]:
 def nonempty(blocks: List[Block]) -> List[Block]:
     """Drop the markers upstream leaves empty as documentation anchors."""
     return [b for b in blocks if b.sql.strip()]
+
+
+def extra_float_digits(text: str) -> Optional[int]:
+    """The value of a ``SET extra_float_digits = <int>;`` statement in a .pg file's preamble.
+
+    PostgreSQL's ``float8out`` prints ``DBL_DIG + extra_float_digits`` significant digits when
+    that setting is not positive, so this session setting is why a handful of pages' committed
+    transcripts show a clean ``0.3`` for a value a plain IEEE double computes as
+    ``0.30000000000000004``. Only the text split_blocks drops -- everything before the first
+    ``/* -- <name> */`` marker -- is read; a page that sets it again inside a named block is
+    setting it for that block alone, deliberately not the page's documented default, so that
+    occurrence is not read here.
+    """
+    preamble = MARKER_RE.split(text, maxsplit=1)[0]
+    match = _EXTRA_FLOAT_DIGITS_RE.search(preamble)
+    return int(match.group(1)) if match else None
 
 
 def parse_aligned(lines: List[str], i: int) -> Tuple[Optional[AlignedTable], int]:

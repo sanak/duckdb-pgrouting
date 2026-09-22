@@ -71,6 +71,27 @@ class TestCoerce(unittest.TestCase):
         self.assertIs(False, gen.coerce("f", "T"))
 
 
+class TestActual(unittest.TestCase):
+    def test_leaves_a_value_alone_when_no_page_setting_is_given(self):
+        self.assertEqual(1.0 - 0.7, gen._actual(1.0 - 0.7, "R"))
+
+    def test_leaves_a_value_alone_when_the_setting_is_positive(self):
+        # PostgreSQL then prints shortest-exact, same as with no setting at all.
+        self.assertEqual(1.0 - 0.7, gen._actual(1.0 - 0.7, "R", float_digits=3))
+
+    def test_rounds_to_psqls_display_width_when_the_setting_is_not_positive(self):
+        # float8out prints DBL_DIG (15) + extra_float_digits significant digits; at -3 that is
+        # 12, which is exactly what hides the last couple of ULPs 1.0 - 0.7 leaves behind.
+        self.assertEqual(0.3, gen._actual(1.0 - 0.7, "R", float_digits=-3))
+
+    def test_rounds_at_zero_too(self):
+        self.assertEqual(0.3, gen._actual(1.0 - 0.7, "R", float_digits=0))
+
+    def test_does_not_touch_non_float_types(self):
+        self.assertEqual(7, gen._actual(7, "I", float_digits=-3))
+        self.assertEqual("abc", gen._actual("abc", "T", float_digits=-3))
+
+
 class TestCheckColumnCount(unittest.TestCase):
     def test_raises_when_upstream_has_more_columns_than_this_build(self):
         import pgparse
@@ -225,6 +246,25 @@ class TestTieClassification(unittest.TestCase):
         result = duckdbcli.QueryResult(columns, ["BIGINT", "BIGINT", "DOUBLE"], [[6, 17, 5.0]])
         self.assertIsNone(gen.tie_shape(columns, result.rows, "IIR"))
         self.assertEqual("defect", gen.classify(table, result, "IIR"))
+
+    # The exact values withPoints.pg q1 disagreed on: upstream's committed transcript (captured
+    # under `SET extra_float_digits=-3;`) against this build's raw double for `1.0 - 0.7`.
+    FP_NOISE_UPSTREAM = [["1", "1", "-1", "10", "-6", "4", "0.3", "2.1"]]
+    FP_NOISE_OURS = [[1, 1, -1, 10, -6, 4, 0.30000000000000004, 2.0999999999999996]]
+
+    def test_fp_noise_is_a_defect_without_the_pages_extra_float_digits(self):
+        self.assertEqual(
+            "defect",
+            gen.classify(self._table(self.FP_NOISE_UPSTREAM), self._result(self.FP_NOISE_OURS),
+                        self.DIRECTIVE),
+        )
+
+    def test_the_same_fp_noise_is_a_match_under_the_pages_extra_float_digits(self):
+        self.assertEqual(
+            "match",
+            gen.classify(self._table(self.FP_NOISE_UPSTREAM), self._result(self.FP_NOISE_OURS),
+                        self.DIRECTIVE, float_digits=-3),
+        )
 
     def test_companion_wraps_the_query(self):
         self.assertEqual(

@@ -135,23 +135,38 @@ def coerce(cell: Optional[str], slt_type: str) -> Any:
     return text
 
 
-def _actual(value: Any, slt_type: str) -> Any:
-    """One value from DuckDB, brought onto the same footing as a coerced upstream cell."""
+def _actual(value: Any, slt_type: str, float_digits: Optional[int] = None) -> Any:
+    """One value from DuckDB, brought onto the same footing as a coerced upstream cell.
+
+    ``float_digits`` is the page's ``SET extra_float_digits`` value (``pgparse.extra_float_digits``),
+    or None when the page never set it. PostgreSQL's ``float8out`` prints ``DBL_DIG`` (15)
+    ``+ extra_float_digits`` significant digits when that setting is not positive, which is why a
+    handful of pages' committed transcripts show a clean ``0.3`` for a value this build's IEEE
+    double computes as ``0.30000000000000004`` (the classic ``1.0 - 0.7`` artifact): upstream's
+    psql rounded its display before printing it, and the comparison has to do the same rounding
+    to land on the same text. A positive setting or no setting at all means psql printed the
+    shortest round-trip representation, same as this build's own float formatting, so nothing
+    changes.
+    """
     if value is None:
         return None
     if slt_type == "I":
         return int(value)
     if slt_type == "R":
-        return float(value)
+        value = float(value)
+        if float_digits is not None and float_digits <= 0:
+            value = float("%.{}g".format(15 + float_digits) % value)
+        return value
     if isinstance(value, bool):
         return value
     return str(value)
 
 
-def _diff(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str) -> str:
+def _diff(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str,
+          float_digits: Optional[int] = None) -> str:
     """A unified diff of upstream's rows against this build's, both brought onto one footing."""
     expected = [[coerce(cell, t) for cell, t in zip(row, directive)] for row in table.rows]
-    actual = [[_actual(v, t) for v, t in zip(row, directive)] for row in result.rows]
+    actual = [[_actual(v, t, float_digits) for v, t in zip(row, directive)] for row in result.rows]
     return "\n".join(
         difflib.unified_diff(
             [repr(r) for r in expected],
@@ -163,15 +178,16 @@ def _diff(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive:
     )
 
 
-def _differing(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str) -> int:
+def _differing(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str,
+               float_digits: Optional[int] = None) -> int:
     """How many rows are not identical between upstream's table and this build's result."""
     expected = [[coerce(cell, t) for cell, t in zip(row, directive)] for row in table.rows]
-    actual = [[_actual(v, t) for v, t in zip(row, directive)] for row in result.rows]
+    actual = [[_actual(v, t, float_digits) for v, t in zip(row, directive)] for row in result.rows]
     return sum(1 for e, a in zip_longest(expected, actual, fillvalue=object()) if e != a)
 
 
-def tie_shape(columns: Sequence[str], rows: Sequence[Sequence[Any]],
-              directive: str) -> Optional[List[Tuple[Any, Any, int, Any]]]:
+def tie_shape(columns: Sequence[str], rows: Sequence[Sequence[Any]], directive: str,
+              float_digits: Optional[int] = None) -> Optional[List[Tuple[Any, Any, int, Any]]]:
     """The per-path summary upstream guarantees: endpoints, row count, total cost.
 
     Returns None when this result carries no route, in which case there is nothing a tie could
@@ -187,21 +203,23 @@ def tie_shape(columns: Sequence[str], rows: Sequence[Sequence[Any]],
     agg = lowered.index("agg_cost")
     groups: Dict[Tuple[Any, Any], List[Any]] = {}
     for row in rows:
-        key = (_actual(row[start], directive[start]), _actual(row[end], directive[end]))
-        groups.setdefault(key, []).append(_actual(row[agg], directive[agg]))
+        key = (_actual(row[start], directive[start], float_digits),
+               _actual(row[end], directive[end], float_digits))
+        groups.setdefault(key, []).append(_actual(row[agg], directive[agg], float_digits))
     return sorted(
         (key[0], key[1], len(costs), max(costs)) for key, costs in groups.items()
     )
 
 
-def classify(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str) -> str:
+def classify(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str,
+             float_digits: Optional[int] = None) -> str:
     """"match", "tie" or "defect" for one block."""
     expected = [[coerce(cell, t) for cell, t in zip(row, directive)] for row in table.rows]
-    actual = [[_actual(v, t) for v, t in zip(row, directive)] for row in result.rows]
+    actual = [[_actual(v, t, float_digits) for v, t in zip(row, directive)] for row in result.rows]
     if expected == actual:
         return "match"
-    upstream_shape = tie_shape(table.columns, table.rows, directive)
-    ours_shape = tie_shape(result.columns, result.rows, directive)
+    upstream_shape = tie_shape(table.columns, table.rows, directive, float_digits)
+    ours_shape = tie_shape(result.columns, result.rows, directive, float_digits)
     if upstream_shape is None or ours_shape is None:
         return "defect"
     return "tie" if upstream_shape == ours_shape else "defect"
@@ -323,7 +341,9 @@ def expected_cells(table: pgparse.AlignedTable, directive: str) -> List[List[str
 def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Dict[str, str],
             skips: Dict[str, Dict[str, str]], ties: Dict[str, Dict[str, dict]]) -> List[Item]:
     root = pathlib.Path(DOCQUERIES) / category
-    pg_blocks = pgparse.nonempty(pgparse.split_blocks((root / (stem + ".pg")).read_text()))
+    pg_text = (root / (stem + ".pg")).read_text()
+    pg_blocks = pgparse.nonempty(pgparse.split_blocks(pg_text))
+    float_digits = pgparse.extra_float_digits(pg_text)
     transcripts = {
         block.name: pgparse.parse_result_block(block.name, block.sql)
         for block in pgparse.split_blocks((root / (stem + ".result")).read_text())
@@ -353,19 +373,19 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Dict[st
         if any(t == "T" and cell.strip() == "" for row in table.rows for cell, t in zip(row, directive)):
             items.append(Skipped(block.name, "blank cell in a text column"))
             continue
-        verdict = classify(table, result, directive)
+        verdict = classify(table, result, directive, float_digits)
         if verdict == "defect":
             raise Mismatch(
                 "{}/{}.pg {}: this build's answer is not an equal-cost alternative to "
                 "upstream's\n{}".format(
-                    category, stem, block.name, _diff(table, result, directive)
+                    category, stem, block.name, _diff(table, result, directive, float_digits)
                 )
             )
         if verdict == "tie":
             ties.setdefault("{}/{}.pg".format(category, stem), {})[block.name] = {
                 "reason": "equal-cost tie",
                 "upstream_rows": table.row_count,
-                "differing_rows": _differing(table, result, directive),
+                "differing_rows": _differing(table, result, directive, float_digits),
             }
             items.append(
                 Emitted(
