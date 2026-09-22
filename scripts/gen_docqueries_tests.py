@@ -117,22 +117,26 @@ def coerce(cell: Optional[str], slt_type: str) -> Any:
     """One upstream text cell as the value it denotes.
 
     psql renders a NULL and an empty string identically, so a blank is read as NULL and a caller
-    that has a text column must refuse the block rather than guess.
+    that has a text column must refuse the block rather than guess. pgparse.parse_aligned only
+    drops psql's own one-space margin and trailing padding, deliberately keeping a right-aligned
+    number's extra left padding and a text value's own genuine leading space (see its docstring):
+    an "I"/"R" cell, which can never have a genuine leading space, is fully stripped here because
+    this layer is the one that knows the column's type; a "T" cell is returned exactly as
+    parse_aligned produced it, so a value like ' visits' round-trips.
     """
     if cell is None:
         return None
-    text = cell.strip()
-    if text == "":
+    if cell.strip() == "":
         return None
     if slt_type == "I":
-        return int(text)
+        return int(cell.strip())
     if slt_type == "R":
-        return float(text)
-    if text == "t":
+        return float(cell.strip())
+    if cell.strip() == "t":
         return True
-    if text == "f":
+    if cell.strip() == "f":
         return False
-    return text
+    return cell
 
 
 def _actual(value: Any, slt_type: str, float_digits: Optional[int] = None) -> Any:
@@ -322,18 +326,26 @@ def expected_cells(table: pgparse.AlignedTable, directive: str) -> List[List[str
     A boolean-typed cell is rendered as ``true``/``false``, mirroring ``coerce()``'s reading of
     psql's ``t``/``f`` and the ``T`` directive the column gets: DuckDB itself prints a BOOLEAN as
     ``true``/``false``, and AGENTS.md documents that as the convention a boolean column follows.
+    An "I"/"R" cell is stripped in full here, same as in ``coerce()``, because
+    pgparse.parse_aligned deliberately leaves a right-aligned number's own extra left padding in
+    place; a plain "T" cell is written out exactly as parse_aligned produced it (DuckDB's
+    sqllogictest runner splits an expected row on tabs without trimming, so a leading space
+    written into the generated file here survives), which is what lets a value like ' visits'
+    round-trip into the emitted test.
     """
     out = []
     for row in table.rows:
         cells = []
         for cell, slt_type in zip(row, directive):
-            text = cell.strip()
-            if text == "":
+            stripped = cell.strip()
+            if stripped == "":
                 cells.append("NULL")
-            elif slt_type == "T" and text in ("t", "f"):
-                cells.append("true" if text == "t" else "false")
+            elif slt_type == "T" and stripped in ("t", "f"):
+                cells.append("true" if stripped == "t" else "false")
+            elif slt_type == "T":
+                cells.append(cell)
             else:
-                cells.append(text)
+                cells.append(stripped)
         out.append(cells)
     return out
 

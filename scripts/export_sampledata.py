@@ -112,7 +112,12 @@ def _project(table: pgparse.AlignedTable, columns: List[str]) -> Rows:
     if missing:
         raise SystemExit(f"{RESULT_FILE}: columns {missing} absent from {table.columns}")
     picks = [table.columns.index(name) for name in columns]
-    return [[row[pick] for pick in picks] for row in table.rows]
+    # pgparse.parse_aligned only drops psql's own one-space margin, deliberately leaving a
+    # right-aligned number's (or array literal's) extra left padding for the consumer to strip:
+    # this fixture is plain ids, numbers and array literals with no genuine leading or trailing
+    # whitespace to preserve, unlike a documentation query's text sentences, so a full strip here
+    # is exactly right.
+    return [[row[pick].strip() for pick in picks] for row in table.rows]
 
 
 def _edge_literals(repo: pathlib.Path) -> Rows:

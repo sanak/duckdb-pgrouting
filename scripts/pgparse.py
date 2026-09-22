@@ -92,10 +92,31 @@ def parse_aligned(lines: List[str], i: int) -> Tuple[Optional[AlignedTable], int
     # row may be padded differently.
     spans.append((start, None))
 
-    def cut(line: str) -> List[str]:
-        return [line[a:b].strip() for a, b in spans]
+    def slice_cells(line: str) -> List[str]:
+        return [line[a:b] for a, b in spans]
 
-    columns = cut(lines[i])
+    # The header names a column; psql centers it in the column width regardless of how the data
+    # below is aligned, so it carries no data to lose and is stripped in full.
+    columns = [cell.strip() for cell in slice_cells(lines[i])]
+
+    def cut(line: str) -> List[str]:
+        cells = []
+        for raw in slice_cells(line):
+            # psql's aligned format writes exactly one left margin space before every data cell,
+            # whichever alignment its column uses, and then the value: text is left-aligned and
+            # right-padded to the column's width, a number is right-aligned and left-padded.
+            # Dropping only that one margin space -- never every leading space -- plus all
+            # trailing whitespace (always padding, never data, on either alignment) is what lets a
+            # text value that genuinely starts with a space round-trip (pgRouting's withPoints.pg
+            # q7 builds sentences this way, e.g. returning ' visits'). A right-aligned number still
+            # carries its own extra left padding after this; coerce() strips the rest of it because
+            # an "I"/"R" column can never have a genuine leading space. What this cannot recover: a
+            # text value's own trailing space is indistinguishable from psql's own padding, so it
+            # is lost the same way it always was.
+            trimmed = raw[1:] if raw.startswith(" ") else raw
+            cells.append(trimmed.rstrip())
+        return cells
+
     rows: List[List[str]] = []
     j = i + 2
     while j < len(lines):

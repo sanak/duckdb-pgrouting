@@ -70,6 +70,16 @@ class TestCoerce(unittest.TestCase):
         self.assertIs(True, gen.coerce("t", "T"))
         self.assertIs(False, gen.coerce("f", "T"))
 
+    def test_a_text_cells_own_leading_space_survives(self):
+        # pgparse.parse_aligned only drops psql's one-space margin, keeping a genuine leading
+        # space (e.g. withPoints.pg q7's ' visits'); coerce() must not strip it back off.
+        self.assertEqual(" visits", gen.coerce(" visits", "T"))
+
+    def test_a_numeric_cells_leftover_right_align_padding_is_still_stripped(self):
+        # pgparse.parse_aligned leaves a right-aligned number's own padding beyond the margin
+        # (e.g. "  7" for a wide column); coerce() knows the type and strips the rest of it.
+        self.assertEqual(7, gen.coerce("  7", "I"))
+
 
 class TestActual(unittest.TestCase):
     def test_leaves_a_value_alone_when_no_page_setting_is_given(self):
@@ -144,6 +154,18 @@ class TestExpectedCells(unittest.TestCase):
         import pgparse
 
         table = pgparse.AlignedTable(["i"], [["7"]], 1)
+        self.assertEqual([["7"]], gen.expected_cells(table, "I"))
+
+    def test_a_text_cells_own_leading_space_is_emitted_verbatim(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["status"], [[" visits"]], 1)
+        self.assertEqual([[" visits"]], gen.expected_cells(table, "T"))
+
+    def test_a_numeric_cells_leftover_padding_is_stripped_on_emission_too(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["i"], [["  7"]], 1)
         self.assertEqual([["7"]], gen.expected_cells(table, "I"))
 
 
@@ -273,6 +295,17 @@ class TestTieClassification(unittest.TestCase):
             "GROUP BY start_vid, end_vid ORDER BY 1, 2;",
             gen.companion_sql("SELECT * FROM Dijkstra('x', 6, 10);"),
         )
+
+
+class TestClassifyTextLeadingSpace(unittest.TestCase):
+    def test_a_text_cells_leading_space_is_a_match_not_a_defect(self):
+        import pgparse
+
+        # withPoints.pg q7's regression: a documentation query deliberately returns ' visits',
+        # and this build's raw DuckDB text for it must classify as identical to upstream's.
+        table = pgparse.AlignedTable(["status"], [[" visits"]], 1)
+        result = duckdbcli.QueryResult(["status"], ["VARCHAR"], [[" visits"]])
+        self.assertEqual("match", gen.classify(table, result, "T"))
 
 
 class TestMergeTies(unittest.TestCase):

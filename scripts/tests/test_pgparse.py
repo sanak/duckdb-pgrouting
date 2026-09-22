@@ -69,6 +69,9 @@ class TestExtraFloatDigits(unittest.TestCase):
 
 
 class TestParseAligned(unittest.TestCase):
+    # Every cell here carries only psql's own one-space margin plus alignment padding: the id and
+    # cost columns are numbers (right-aligned, so their padding is extra leading spaces beyond
+    # the margin), and name is text (left-aligned, so its padding is trailing).
     TABLE = [
         " id | name  | cost ",
         "----+-------+------",
@@ -80,7 +83,10 @@ class TestParseAligned(unittest.TestCase):
     def test_reads_columns_rows_and_count(self):
         table, nxt = pgparse.parse_aligned(self.TABLE, 0)
         self.assertEqual(["id", "name", "cost"], table.columns)
-        self.assertEqual([["1", "a|b", "1"], ["2", "", "-1"]], table.rows)
+        # Only the one-space margin and trailing padding are dropped here: a numeric column's own
+        # right-align padding (the extra leading space before "1") survives parse_aligned and is
+        # stripped the rest of the way downstream, by coerce(), which knows the column is numeric.
+        self.assertEqual([[" 1", "a|b", "   1"], [" 2", "", "  -1"]], table.rows)
         self.assertEqual(2, table.row_count)
         self.assertEqual(5, nxt)
 
@@ -95,6 +101,36 @@ class TestParseAligned(unittest.TestCase):
         table, nxt = pgparse.parse_aligned(["BEGIN", "SET"], 0)
         self.assertIsNone(table)
         self.assertEqual(0, nxt)
+
+    def test_a_left_aligned_text_cell_keeps_its_own_leading_space(self):
+        # A documentation query can deliberately return a string starting with a space (pgRouting's
+        # withPoints.pg q7 does, building a sentence out of `status || ' ' || ...`-shaped pieces).
+        # psql's own left-align padding is only ever trailing, so the single margin space is the
+        # only leading whitespace parse_aligned may remove.
+        lines = [
+            "        status        | id ",
+            "----------------------+----",
+            "  visits              |   6",
+            "  passes by           |  11",
+            "(2 rows)",
+        ]
+        table, _ = pgparse.parse_aligned(lines, 0)
+        self.assertEqual([[" visits", "  6"], [" passes by", " 11"]], table.rows)
+
+    def test_a_right_aligned_number_only_loses_the_margin_here(self):
+        lines = [" count", "-------", "     42", "(1 rows)"]
+        table, _ = pgparse.parse_aligned(lines, 0)
+        # "     42" minus the one margin space is "    42": still left-padded, exactly as a
+        # right-aligned number always is; coerce() strips the rest because "I"/"R" can never have
+        # a genuine leading space.
+        self.assertEqual([["    42"]], table.rows)
+
+    def test_a_blank_cell_is_still_empty_after_the_margin_is_dropped(self):
+        lines = [" id | name ", "----+------", "  1 |      ", "(1 rows)"]
+        table, _ = pgparse.parse_aligned(lines, 0)
+        # "  1 " loses only its margin space too, same as any right-aligned number; coerce() is
+        # what fully strips a numeric cell.
+        self.assertEqual([[" 1", ""]], table.rows)
 
 
 class TestParseResultBlock(unittest.TestCase):
@@ -114,7 +150,8 @@ class TestParseResultBlock(unittest.TestCase):
         self.assertEqual(["No edges found"], block.notices)
         self.assertEqual("boom", block.error)
         self.assertEqual(1, len(block.tables))
-        self.assertEqual([["1"]], block.tables[0].rows)
+        # "  1 " loses only its one margin space, same as any right-aligned number.
+        self.assertEqual([[" 1"]], block.tables[0].rows)
 
 
 if __name__ == "__main__":
