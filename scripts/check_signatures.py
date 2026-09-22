@@ -171,7 +171,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     db = duckdbcli.DuckDB(args.duckdb or duckdbcli.default_binary())
-    version = db.query("SELECT DuckDB_pgRouting_Version();").rows[0][0]
+    version = db.query("SELECT pgr_version();").rows[0][0]
     path = sig_file_path(version)
     if not os.path.exists(path):
         print("FAIL: no signature file %s for pgRouting %s" % (path, version))

@@ -15,7 +15,7 @@ Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_
 `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`, `pgr_bellmanFord`, `pgr_edwardMoore`,
 `pgr_dagShortestPath` and `pgr_binaryBreadthFirstSearch` — pgRouting's seventy-two corresponding
 signatures, each registered once per number of its defaulted parameters passed positionally — and
-`DuckDB_pgRouting_Version()`. The `pgr_dijkstra` and `pgr_withPoints` families call pgRouting's unified
+`pgr_version()`. The `pgr_dijkstra` and `pgr_withPoints` families call pgRouting's unified
 `do_shortestPath` driver; with points given, DuckDB also materializes the two edge queries that
 driver derives from the edge and points SQL. The other five families call their own per-family
 `pgr_do_*` drivers through one adapter on the pg_compat side.

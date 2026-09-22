@@ -1,3 +1,4 @@
 {
-  "pgr_dijkstravia": {"reason": "out of the MVP function set"}
+  "pgr_dijkstravia": {"reason": "out of the MVP function set"},
+  "pgr_full_version": {"reason": "reports the PostgreSQL version, compiler, system and build hash of a PostgreSQL build; none of that describes a DuckDB extension, and the pgRouting version is pgr_version() while the extension's own version is duckdb_extensions().extension_version"}
 }

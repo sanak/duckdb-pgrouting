@@ -6,10 +6,17 @@
 
 require pgrouting
 
+# The bundled pgRouting version, under upstream's own function name.
 query T
-SELECT DuckDB_pgRouting_Version();
+SELECT pgr_version();
 ----
 4.0.2
+
+# The pre-rename spelling is gone rather than kept as an alias.
+statement error
+SELECT DuckDB_pgRouting_Version();
+----
+does not exist
 
 query T
 SELECT list_contains(list(function_name), 'pgr_dijkstra')
@@ -35,6 +42,7 @@ pgr_dijkstraCostMatrix	pgr_dijkstraCostMatrix
 pgr_dijkstraNear	pgr_dijkstraNear
 pgr_dijkstraNearCost	pgr_dijkstraNearCost
 pgr_edwardMoore	pgr_edwardMoore
+pgr_version	pgr_version
 pgr_withPoints	pgr_withPoints
 pgr_withPointsCost	pgr_withPointsCost
 pgr_withPointsCostMatrix	pgr_withPointsCostMatrix

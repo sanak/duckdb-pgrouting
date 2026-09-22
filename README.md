@@ -7,7 +7,7 @@ statically linked; only its PostgreSQL-specific layers are replaced.
 Status: early development — implemented so far: `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`,
 `pgr_dijkstraNear`, `pgr_dijkstraNearCost`, `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`,
 `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`, `pgr_bellmanFord`, `pgr_edwardMoore`,
-`pgr_dagShortestPath` and `pgr_binaryBreadthFirstSearch`.
+`pgr_dagShortestPath` and `pgr_binaryBreadthFirstSearch`, plus `pgr_version()`.
 
 ## Building
 

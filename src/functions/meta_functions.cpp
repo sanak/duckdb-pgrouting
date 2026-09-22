@@ -28,21 +28,23 @@ void PgRoutingVersionFunction(DataChunk &args, ExpressionState &, Vector &result
 } // namespace
 
 void RegisterMetaFunctions(ExtensionLoader &loader) {
-	ScalarFunction version("DuckDB_pgRouting_Version", {}, LogicalType::VARCHAR, PgRoutingVersionFunction);
+	ScalarFunction version("pgr_version", {}, LogicalType::VARCHAR, PgRoutingVersionFunction);
 	loader.RegisterFunction(version);
 
-	// Tagged like every other function this extension publishes, so the name-collision check can
-	// select this extension's names by tag rather than by guessing at a prefix.
+	// pgr_version is upstream's own function, so it carries pgrouting_name like every other
+	// upstream-equivalent function: check_signatures.py and the docqueries generator select it by
+	// that tag.
 	auto &db = loader.GetDatabaseInstance();
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
 	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
-	auto entry = schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY,
-	                              Identifier("DuckDB_pgRouting_Version"));
+	auto entry = schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier("pgr_version"));
 	if (!entry) {
-		throw InternalException("pgrouting: DuckDB_pgRouting_Version was not registered");
+		throw InternalException("pgrouting: pgr_version was not registered");
 	}
-	entry->Cast<FunctionEntry>().tags.insert("ext", "pgrouting");
+	auto &function_entry = entry->Cast<FunctionEntry>();
+	function_entry.tags.insert("ext", "pgrouting");
+	function_entry.tags.insert("pgrouting_name", "pgr_version");
 }
 
 } // namespace duckdb
