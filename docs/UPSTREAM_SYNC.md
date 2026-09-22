@@ -36,7 +36,10 @@ the following checklist, in order. Every step either passes or tells you exactly
    Diff `src/exec/withpoints_keys.cpp` against the anonymous-namespace `get_new_queries` in
    `third_party/pgrouting/src/dijkstra/shortestPath_driver.cpp` and copy any change verbatim:
    those strings are the keys the driver looks the withPoints inputs up by. A drift shows up as
-   every withPoints query failing with "no 'edges' input registered for query".
+   every withPoints query failing with "no 'edges' input registered for query". Upstream keeps a
+   second copy of the same template in `third_party/pgrouting/src/withPoints/get_new_queries.cpp`,
+   used by the withPoints drivers not ported yet (Via, DD, KSP); a port of those must use the same
+   keys.
 6. Run the full suite: `make test_debug`, then push and let CI cover the remaining eight native
    platforms and the three Wasm variants.
 7. Update `AGENTS.md` if the bump changed build commands, layout or conventions.

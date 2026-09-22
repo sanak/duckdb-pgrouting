@@ -347,6 +347,9 @@ void RunOnce(ClientContext &context, const ShortestPathExecBindData &bind, Short
 	auto request = bind.request;
 	// The materialized inputs reference this chunk, so nothing here may outlive the driver call.
 	state.registry = duckdb_routing::InputRegistry();
+	// Offered here even when points_sql is set below (where the driver never reads edges_sql
+	// itself); that is a no-op only because the public overloads pass 'edges' as an untyped NULL
+	// in that case, so it has no bound row shape and RegisterRowList registers nothing for it.
 	RegisterRowList(context, state.registry, input, bind.edges_column, bind.edges_schema, request.edges_sql,
 	                duckdb_routing::KIND_EDGES);
 	RegisterRowList(context, state.registry, input, bind.combinations_column, bind.combinations_schema,

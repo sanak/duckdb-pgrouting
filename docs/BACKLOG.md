@@ -21,9 +21,9 @@ decision rather than an oversight.
   CLI's own JSON renderer, not in anything `duckdbcli` decides.
 - **`duckdbcli.query()` starts two subprocesses per query** — one for `DESCRIBE`, one for the query
   itself — and each one reruns the whole SQL preamble, which now loads five CSV fixtures. Across
-  the 81 blocks that reach `db.query()` out of the 88 total across the eight selected pages
+  the 82 blocks that reach `db.query()` out of the 88 total across the eight selected pages
   (`dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`, `dijkstraNear`, `dijkstraNearCost`,
-  `withPoints`, `withPointsCost`, `withPointsCostMatrix`; seven blocks are skipped), that is 162
+  `withPoints`, `withPointsCost`, `withPointsCostMatrix`; 6 blocks are skipped), that is 164
   process starts; each call now has a 120-second timeout. Acceptable for a tool that only runs at
   regeneration time, not in any inner loop a developer waits on repeatedly. Measured with the
   eight dijkstra- and withPoints-family functions implemented: 5.25 s for the whole argument-free
