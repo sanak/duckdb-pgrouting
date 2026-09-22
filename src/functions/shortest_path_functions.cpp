@@ -224,6 +224,7 @@ LogicalType TypeOf(duckdb_routing::ArgKind kind) {
 		return LogicalType::BIGINT;
 	case ArgKind::START_VIDS:
 	case ArgKind::END_VIDS:
+	case ArgKind::VIDS:
 		return LogicalType::LIST(LogicalType::BIGINT);
 	}
 	throw InternalException("Unhandled ArgKind");
@@ -359,6 +360,12 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 			case duckdb_routing::ArgKind::END_VIDS:
 				ends_expr = Named(IdListCast(input.inputs[i]), "ends");
 				break;
+			case duckdb_routing::ArgKind::VIDS:
+				// One array as both starts and ends: the old-style drivers only read the arrays when
+				// both are given, and pair every start with every end (never a vertex with itself).
+				starts_expr = Named(IdListCast(input.inputs[i]), "starts");
+				ends_expr = Named(IdListCast(input.inputs[i]), "ends");
+				break;
 			case duckdb_routing::ArgKind::POINTS_SQL:
 				points_sql = StringValue::Get(input.inputs[i]);
 				has_points = true;
@@ -405,6 +412,7 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	args.push_back(Named(Constant(Value(driving_side)), "driving_side"));
 	args.push_back(Named(Constant(Value::BOOLEAN(details)), "details"));
 	args.push_back(Named(Constant(Value::BOOLEAN(null_input)), "null_input"));
+	args.push_back(Named(Constant(Value(duckdb_routing::DriverKindName(spec.flags.driver))), "driver"));
 	// The exec function always returns the path columns; the public overload's shape is the
 	// outer projection below.
 	args.push_back(Named(Constant(Value("path")), "result_kind"));

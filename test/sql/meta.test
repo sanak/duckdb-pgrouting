@@ -23,6 +23,9 @@ FROM duckdb_functions()
 WHERE tags['ext'] = 'routing' AND tags['pgrouting_name'] IS NOT NULL
 GROUP BY ALL ORDER BY 1, 2;
 ----
+bdDijkstra	pgr_bdDijkstra
+bdDijkstraCost	pgr_bdDijkstraCost
+bdDijkstraCostMatrix	pgr_bdDijkstraCostMatrix
 dijkstra	pgr_dijkstra
 dijkstraCost	pgr_dijkstraCost
 dijkstraCostMatrix	pgr_dijkstraCostMatrix

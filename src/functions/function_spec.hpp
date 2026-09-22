@@ -10,6 +10,8 @@
 
 #include "duckdb.hpp"
 
+#include "routing/driver_kind.hpp"
+
 namespace duckdb_routing {
 
 // What a required positional argument of a public function means.
@@ -21,7 +23,8 @@ enum class ArgKind : uint8_t {
 	START_VIDS,       // BIGINT[]
 	END_VIDS,         // BIGINT[]
 	POINTS_SQL,       // VARCHAR
-	DRIVING_SIDE      // VARCHAR; upstream's CHAR, of which only the first character is used
+	DRIVING_SIDE,     // VARCHAR; upstream's CHAR, of which only the first character is used
+	VIDS              // BIGINT[] passed as both the starts and the ends, as pgr_bdDijkstraCostMatrix does
 };
 
 enum class OptionalType : uint8_t { BOOLEAN, BIGINT };
@@ -65,7 +68,8 @@ enum class ResultColumns : uint8_t {
 
 // The driver flags that are fixed per overload rather than chosen by the caller. n_goals, global
 // and details are only fallbacks: an overload that declares `cap`, `global` or `details` takes
-// them from the call.
+// them from the call. driver selects pgRouting's unified do_shortestPath or one of the
+// per-family drivers.
 struct DriverFlags {
 	bool only_cost = false;
 	bool normal = true;
@@ -75,6 +79,7 @@ struct DriverFlags {
 	bool details = true;
 	int32_t which = 0;
 	ResultColumns columns = ResultColumns::PATH;
+	DriverKind driver = DriverKind::SHORTEST_PATH;
 };
 
 struct FunctionSpec {

@@ -10,6 +10,11 @@
 // Every public pgr_withPoints* function calls _pgr_withPoints_v4, whose C entry
 // (src/withPoints/withPoints.c) passes which = 1 for the array and the combinations forms alike,
 // and hardcodes n_goals = 0, global = true whatever the SQL wrapper passes.
+//
+// The bdDijkstra, bellmanFord, edwardMoore, dagShortestPath and binaryBreadthFirstSearch families
+// run pgRouting's per-family drivers (DriverKind). Their wrappers (sql/bdDijkstra,
+// sql/bellman_ford, sql/dagShortestPath, sql/breadthFirstSearch) pass only directed and only_cost,
+// plus normal for dagShortestPath; those drivers have no n_goals, global, driving side or details.
 
 #include "function_spec.hpp"
 
@@ -44,6 +49,18 @@ DriverFlags WithPointsFlags(bool only_cost, bool normal, DrivingSideSource side,
 
 constexpr auto CHAR_SIDE = DrivingSideSource::ARGUMENT;
 constexpr auto SIDE_OF_DIRECTED = DrivingSideSource::FROM_DIRECTED;
+
+// The flags an old-style wrapper passes. normal is read only by the dagShortestPath driver, and
+// every dagShortestPath wrapper passes true (sql/dagShortestPath/dagShortestPath.sql and the
+// combinations C entry); the other drivers hardcode it.
+DriverFlags OldStyleFlags(DriverKind driver, bool only_cost, ResultColumns columns) {
+	DriverFlags flags;
+	flags.only_cost = only_cost;
+	flags.normal = true;
+	flags.columns = columns;
+	flags.driver = driver;
+	return flags;
+}
 
 } // namespace
 
@@ -161,6 +178,34 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
      {DIRECTED}, WithPointsFlags(true, true, CHAR_SIDE, ResultColumns::COST)},
     {"pgr_withPointsCostMatrix", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS},
      {DIRECTED}, WithPointsFlags(true, true, SIDE_OF_DIRECTED, ResultColumns::COST)},
+
+    // pgr_bdDijkstra: only_cost = false; many-to-one passes the arrays unswapped (no normal).
+    {"pgr_bdDijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, false, ResultColumns::PATH)},
+    {"pgr_bdDijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, false, ResultColumns::PATH)},
+    {"pgr_bdDijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, false, ResultColumns::PATH)},
+    {"pgr_bdDijkstra", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, false, ResultColumns::PATH)},
+    {"pgr_bdDijkstra", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, false, ResultColumns::PATH)},
+
+    // pgr_bdDijkstraCost: only_cost = true on every signature.
+    {"pgr_bdDijkstraCost", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, true, ResultColumns::COST)},
+    {"pgr_bdDijkstraCost", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, true, ResultColumns::COST)},
+    {"pgr_bdDijkstraCost", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, true, ResultColumns::COST)},
+    {"pgr_bdDijkstraCost", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, true, ResultColumns::COST)},
+    {"pgr_bdDijkstraCost", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, true, ResultColumns::COST)},
+    // pgr_bdDijkstraCostMatrix: the vertex array is both starts and ends
+    // (bdDijkstraCostMatrix.sql), unlike pgr_dijkstraCostMatrix's starts without ends.
+    {"pgr_bdDijkstraCostMatrix", {ArgKind::EDGES_SQL, ArgKind::VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::BD_DIJKSTRA, true, ResultColumns::COST)},
 };
 
 } // namespace duckdb_routing
