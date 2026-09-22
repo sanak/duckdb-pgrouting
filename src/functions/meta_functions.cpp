@@ -10,6 +10,9 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+
+#include "function_docs.hpp"
 
 namespace duckdb {
 
@@ -28,8 +31,11 @@ void PgRoutingVersionFunction(DataChunk &args, ExpressionState &, Vector &result
 } // namespace
 
 void RegisterMetaFunctions(ExtensionLoader &loader) {
-	ScalarFunction version("pgr_version", {}, LogicalType::VARCHAR, PgRoutingVersionFunction);
-	loader.RegisterFunction(version);
+	CreateScalarFunctionInfo version(
+	    ScalarFunction("pgr_version", {}, LogicalType::VARCHAR, PgRoutingVersionFunction));
+	version.descriptions.push_back(duckdb_pgrouting::DescriptionOf("pgr_version"));
+	version.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	loader.RegisterFunction(std::move(version));
 
 	// pgr_version is upstream's own function, so it carries pgrouting_name like every other
 	// upstream-equivalent function: check_signatures.py and the docqueries generator select it by

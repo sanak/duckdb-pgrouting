@@ -26,6 +26,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/exec/input_registry.cpp
     src/exec/shortest_path_exec.cpp
     src/exec/withpoints_keys.cpp
+    src/functions/function_docs.cpp
     src/functions/meta_functions.cpp
     src/functions/shortest_path_functions.cpp
     src/functions/shortest_path_specs.cpp

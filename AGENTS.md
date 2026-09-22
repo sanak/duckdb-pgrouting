@@ -18,7 +18,9 @@ signatures, each registered once per number of its defaulted parameters passed p
 `pgr_version()`. The `pgr_dijkstra` and `pgr_withPoints` families call pgRouting's unified
 `do_shortestPath` driver; with points given, DuckDB also materializes the two edge queries that
 driver derives from the edge and points SQL. The other five families call their own per-family
-`pgr_do_*` drivers through one adapter on the pg_compat side.
+`pgr_do_*` drivers through one adapter on the pg_compat side. Every public function carries a
+catalog description and an example (`duckdb_functions().description` / `.examples`), registered
+from `src/functions/function_docs.cpp`.
 
 ## Layout
 
@@ -37,8 +39,8 @@ driver derives from the edge and points SQL. The other five families call their 
   reaches it through `src/include/pgrouting/old_style_drivers.hpp`, which includes neither world.
 - `src/exec/` — input registry, driver invocation, the internal in-out table function, and the copy
   of upstream's withPoints derived-query key template (`withpoints_keys.cpp`).
-- `src/functions/` — the declarative overload table (`shortest_path_specs.cpp`) and the public
-  function registration.
+- `src/functions/` — the declarative overload table (`shortest_path_specs.cpp`), the catalog
+  descriptions and examples (`function_docs.cpp`), and the public function registration.
 - `test/sql/` — sqllogictests. `test/sql/pgrouting/<category>/<name>.test` is generated from
   upstream's documentation queries and is never hand-edited.
 - `test/data/pgrouting_sample/` — CSV fixtures rebuilt from upstream's committed sample data.
@@ -152,6 +154,11 @@ equal-cost tie has flipped, or something regressed, and all three want a human.
   edge set the same query on the same data may return different equal-cost routes between runs.
   Every answer is still cost-optimal, and PostgreSQL's unordered scans give pgRouting the same
   property.
+- Every public function has a row in `src/functions/function_docs.cpp`: a one-line description
+  and one example, written in this project's own words (pgRouting's documentation is CC-BY-SA
+  and is never copied). Registration throws when a row is missing, `test/sql/descriptions.test`
+  asserts every `pgrouting_name`-tagged function has both, and
+  `scripts/tests/test_catalog_examples.py` runs every example on the sample graph.
 
 ## Conventions
 

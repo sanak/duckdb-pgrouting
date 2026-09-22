@@ -1,0 +1,40 @@
+# name: test/sql/descriptions.test
+# description: Every upstream-equivalent function carries a catalog description and an example
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# duckdb_functions().description and .examples are what DuckDB's generated extension page and
+# its documentation tooling show. Selecting by the pgrouting_name tag means a function added later
+# cannot ship without both.
+
+require pgrouting
+
+# Sanity: the selection is not empty, so the zero below means "none missing".
+query I
+SELECT count(DISTINCT function_name) FROM duckdb_functions()
+WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL;
+----
+16
+
+# No overload of any of them lacks a description or an example.
+query I
+SELECT count(*) FROM duckdb_functions()
+WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL
+  AND (description IS NULL OR description = '' OR len(examples) = 0 OR list_contains(examples, ''));
+----
+0
+
+# One description per function: every overload of a name reports the same text.
+query I
+SELECT count(*) FROM (
+  SELECT function_name FROM duckdb_functions()
+  WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL
+  GROUP BY function_name HAVING count(DISTINCT description) <> 1);
+----
+0
+
+query T
+SELECT DISTINCT examples[1] FROM duckdb_functions() WHERE function_name = 'pgr_version';
+----
+SELECT pgr_version()

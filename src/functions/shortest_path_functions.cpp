@@ -29,6 +29,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -40,6 +41,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
 #include "function_spec.hpp"
+#include "function_docs.hpp"
 
 namespace duckdb {
 
@@ -494,7 +496,13 @@ void RegisterShortestPathFunctions(ExtensionLoader &loader) {
 		}
 	}
 	for (auto &pair : sets) {
-		loader.RegisterFunction(pair.second);
+		CreateTableFunctionInfo info(std::move(pair.second));
+		// One description with no parameter_types: duckdb_functions() then reports it for every
+		// overload of the name.
+		info.descriptions.push_back(duckdb_pgrouting::DescriptionOf(pair.first));
+		// What ExtensionLoader::RegisterFunction(TableFunctionSet) sets before delegating here.
+		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+		loader.RegisterFunction(std::move(info));
 	}
 	TagFunctions(loader);
 }
