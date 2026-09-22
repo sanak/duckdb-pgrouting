@@ -19,7 +19,9 @@ enum class ArgKind : uint8_t {
 	START_VID,        // BIGINT
 	END_VID,          // BIGINT
 	START_VIDS,       // BIGINT[]
-	END_VIDS          // BIGINT[]
+	END_VIDS,         // BIGINT[]
+	POINTS_SQL,       // VARCHAR
+	DRIVING_SIDE      // VARCHAR; upstream's CHAR, of which only the first character is used
 };
 
 enum class OptionalType : uint8_t { BOOLEAN, BIGINT };
@@ -38,6 +40,12 @@ struct OptionalParam {
 constexpr OptionalParam DIRECTED {"directed", OptionalType::BOOLEAN, 1};
 constexpr OptionalParam CAP {"cap", OptionalType::BIGINT, 1};
 constexpr OptionalParam GLOBAL {"global", OptionalType::BOOLEAN, 1};
+constexpr OptionalParam DETAILS {"details", OptionalType::BOOLEAN, 0};
+
+// Where an overload's driving side comes from. NONE: the overload has none (which = 0 ignores it).
+// ARGUMENT: the CHAR signatures of the withPoints family take it as a required argument.
+// FROM_DIRECTED: the other withPoints signatures pass (CASE WHEN directed THEN 'r' ELSE 'b' END).
+enum class DrivingSideSource : uint8_t { NONE, ARGUMENT, FROM_DIRECTED };
 
 // Which columns a public overload returns. The exec function always produces the eight path
 // columns; COST is the projection upstream's Cost wrappers apply on top of the same driver call.
@@ -55,14 +63,15 @@ enum class ResultColumns : uint8_t {
 	COST_OF_PATH
 };
 
-// The driver flags that are fixed per overload rather than chosen by the caller. n_goals and
-// global are only fallbacks: an overload that declares `cap` or `global` takes them from the call.
+// The driver flags that are fixed per overload rather than chosen by the caller. n_goals, global
+// and details are only fallbacks: an overload that declares `cap`, `global` or `details` takes
+// them from the call.
 struct DriverFlags {
 	bool only_cost = false;
 	bool normal = true;
 	int64_t n_goals = 0;
 	bool global = false;
-	char driving_side = ' ';
+	DrivingSideSource driving_side = DrivingSideSource::NONE;
 	bool details = true;
 	int32_t which = 0;
 	ResultColumns columns = ResultColumns::PATH;

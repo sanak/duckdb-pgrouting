@@ -1,0 +1,195 @@
+# name: test/sql/withpoints.test
+# description: withPoints: variants, driving side, details, points semantics, STRICT
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require routing
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# A TEMP table: the points query runs in the caller's own connection, so it sees one.
+statement ok
+CREATE TEMP TABLE pois (pid BIGINT, edge_id BIGINT, side VARCHAR, fraction DOUBLE);
+
+statement ok
+INSERT INTO pois VALUES (1,1,'l',0.4),(2,15,'r',0.4),(3,12,'l',0.6),(4,6,'r',0.3),(5,5,'l',0.8),(6,4,'b',0.7);
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+statement ok
+CREATE MACRO p() AS 'SELECT pid, edge_id, fraction, side FROM pois';
+
+# Two defaulted parameters (directed, details), ten signatures: 3 variants each.
+query I
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'withPoints' AND tags['ext'] = 'routing';
+----
+30
+
+# Upstream's q1 (docqueries withPoints): -1 -> 10 costs 6.4.
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 6) FROM withPoints(e(), p(), -1, 10, details := true) WHERE edge = -1;
+----
+-1	10	6.4
+
+# details keeps the points passed on the way (upstream's route passes point 6 on edge 4); without
+# it they are removed and only the endpoints remain negative.
+query I
+SELECT count(*) FROM withPoints(e(), p(), -1, 10, details := true) WHERE node < 0 AND node <> -1;
+----
+1
+
+query I
+SELECT count(*) FROM withPoints(e(), p(), -1, 10) WHERE node < 0 AND node <> -1;
+----
+0
+
+# details positionally (p = 2) and by name agree.
+query I
+SELECT count(*) FROM (
+  SELECT * FROM withPoints(e(), p(), -1, 10, true, true)
+  EXCEPT SELECT * FROM withPoints(e(), p(), -1, 10, details := true));
+----
+0
+
+# The non-CHAR signature derives 'r' from directed = true: identical to the CHAR signature with 'r',
+# both ways round.
+query I
+SELECT count(*) FROM (
+  (SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1]) EXCEPT SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1], 'r'))
+  UNION ALL
+  (SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1], 'r') EXCEPT SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1])));
+----
+0
+
+# Only the first character counts, and upstream lower-cases it.
+query I
+SELECT count(*) FROM (
+  (SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1], 'right') EXCEPT SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1], 'r'))
+  UNION ALL
+  (SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1], 'L') EXCEPT SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1], 'l')));
+----
+0
+
+# Any other driving side is rejected in every form. All public signatures run with which = 1,
+# the combinations form included (upstream's _pgr_withpoints_v4 C entry).
+statement error
+SELECT * FROM withPoints(e(), p(), -1, 10, 'x');
+----
+Invalid value of 'driving side'
+
+statement error
+SELECT * FROM withPoints(e(), p(), -1, 10, '');
+----
+Invalid value of 'driving side'
+
+statement error
+SELECT * FROM withPoints(e(), p(), 'SELECT -1 AS source, 10 AS target', 'x');
+----
+Invalid value of 'driving side'
+
+# Overload resolution: a VARCHAR in the driving-side position binds the CHAR variant (the 'x'
+# reaches the driver and is rejected there), a BOOLEAN binds the variant with a positional
+# directed. Both positions, every shape.
+statement error
+SELECT * FROM withPoints(e(), p(), -1, [-3, 7], 'x');
+----
+Invalid value of 'driving side'
+
+statement error
+SELECT * FROM withPoints(e(), p(), [-1, 6], -3, 'x');
+----
+Invalid value of 'driving side'
+
+statement error
+SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1], 'x');
+----
+Invalid value of 'driving side'
+
+statement error
+SELECT * FROM withPoints(e(), p(), -1, 10, 'x', true);
+----
+Invalid value of 'driving side'
+
+statement error
+SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1], 'x', true);
+----
+Invalid value of 'driving side'
+
+statement error
+SELECT * FROM withPoints(e(), p(), 'SELECT -1 AS source, 10 AS target', 'x', true);
+----
+Invalid value of 'driving side'
+
+statement ok
+SELECT * FROM withPoints(e(), p(), -1, 10, false);
+
+statement ok
+SELECT * FROM withPoints(e(), p(), -1, [-3, 7], false);
+
+statement ok
+SELECT * FROM withPoints(e(), p(), [-1, 6], -3, false);
+
+statement ok
+SELECT * FROM withPoints(e(), p(), [-1, 6], [-3, 1], false);
+
+statement ok
+SELECT * FROM withPoints(e(), p(), 'SELECT -1 AS source, 10 AS target', false);
+
+statement ok
+SELECT * FROM withPoints(e(), p(), -1, 10, false, true);
+
+statement ok
+SELECT * FROM withPoints(e(), p(), 'SELECT -1 AS source, 10 AS target', false, true);
+
+# A point's edge_id is required: upstream's points fetcher reads it strictly, before any edge.
+statement error
+SELECT * FROM withPoints(e(), 'SELECT 7 AS pid, NULL::BIGINT AS edge_id, 0.5 AS fraction', -7, 10);
+----
+Unexpected Null value in column edge_id
+
+# No points at all: every edge is an edge without points, so the answer is dijkstra's.
+query I
+SELECT count(*) FROM (
+  (SELECT start_vid, end_vid, agg_cost FROM withPoints(e(), 'SELECT pid, edge_id, fraction, side FROM pois WHERE false', 5, 10) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), 5, 10) WHERE edge = -1)
+  UNION ALL
+  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), 5, 10) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM withPoints(e(), 'SELECT pid, edge_id, fraction, side FROM pois WHERE false', 5, 10) WHERE edge = -1));
+----
+0
+
+# No edges: upstream reports "No edges found" as a notice and returns nothing.
+query I
+SELECT count(*) FROM withPoints('SELECT id, source, target, cost, reverse_cost FROM edges WHERE false', p(), -1, 10);
+----
+0
+
+# STRICT: a NULL in any argument, positional or named, gives an empty result with the columns.
+query I
+SELECT count(*) FROM withPoints(e(), NULL, -1, 10);
+----
+0
+
+query I
+SELECT count(*) FROM withPoints(e(), p(), -1, 10, NULL::VARCHAR);
+----
+0
+
+query I
+SELECT count(*) FROM withPoints(e(), p(), -1, 10, details := NULL);
+----
+0
+
+query I
+SELECT count(*) FROM (DESCRIBE SELECT * FROM withPoints(e(), NULL, -1, 10));
+----
+8

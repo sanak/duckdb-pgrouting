@@ -3,5 +3,10 @@
     "q1": {
       "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
     }
+  },
+  "withPoints/withPoints.pg": {
+    "q8": {
+      "reason": "equal-cost tie the generator cannot downgrade: from vertex 7 to 17 the routes through 11-16 (edges 8, 9, 15) and through 8-12 (edges 10, 12, 13) both cost 3, and this query folds start_vid, end_vid and path_seq into text and drops agg_cost, so no tie-insensitive assertion survives its projection"
+    }
   }
 }

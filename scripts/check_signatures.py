@@ -23,6 +23,7 @@ NOT_PORTED_PATH = os.path.join(REPO_ROOT, "test", "pgrouting_not_ported.json")
 
 TYPE_MAP = {
     "text": "VARCHAR",
+    "character": "VARCHAR",
     "bigint": "BIGINT",
     "boolean": "BOOLEAN",
     "integer": "INTEGER",

@@ -47,6 +47,11 @@ class MapUpstreamTypesTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             cs.map_upstream_types(("geometry",))
 
+    def test_maps_character_to_varchar(self):
+        # The withPoints family declares its driving side as CHAR; DuckDB has no fixed-width
+        # character type, so the registered argument is VARCHAR.
+        self.assertEqual(("VARCHAR",), cs.map_upstream_types(("character",)))
+
 
 class CoversTest(unittest.TestCase):
     DIJKSTRA = ("VARCHAR", "BIGINT", "BIGINT", "BOOLEAN")

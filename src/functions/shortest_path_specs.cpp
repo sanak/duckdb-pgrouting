@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // The overload table. Each row transcribes one CREATE FUNCTION of
-// third_party/pgrouting/sql/dijkstra/*.sql: its required arguments, its DEFAULT parameters in
-// declaration order, and the constant flags its body passes to _pgr_dijkstra_v4
-// (edges, starts, ends, directed, only_cost, normal, n_goals, global) or, for a combinations
-// signature, (edges, combinations, directed, only_cost, n_goals, global) with normal = true.
+// third_party/pgrouting/sql/dijkstra/*.sql or sql/withPoints/*.sql: its required arguments, its
+// DEFAULT parameters in declaration order, and the constant flags its body passes to
+// _pgr_dijkstra_v4 (edges, starts, ends, directed, only_cost, normal, n_goals, global) or, for a
+// combinations signature, (edges, combinations, directed, only_cost, n_goals, global) with
+// normal = true.
+//
+// Every public pgr_withPoints* function calls _pgr_withPoints_v4, whose C entry
+// (src/withPoints/withPoints.c) passes which = 1 for the array and the combinations forms alike,
+// and hardcodes n_goals = 0, global = true whatever the SQL wrapper passes.
 
 #include "function_spec.hpp"
 
@@ -21,6 +26,24 @@ DriverFlags Flags(bool only_cost, bool normal, bool global, ResultColumns column
 	flags.columns = columns;
 	return flags;
 }
+
+// The flags a pgr_withPoints* wrapper passes (see the file-top comment). details = true is the
+// fallback for overloads that have no details parameter: the Cost and CostMatrix wrappers pass a
+// constant true.
+DriverFlags WithPointsFlags(bool only_cost, bool normal, DrivingSideSource side, ResultColumns columns) {
+	DriverFlags flags;
+	flags.only_cost = only_cost;
+	flags.normal = normal;
+	flags.global = true;
+	flags.driving_side = side;
+	flags.details = true;
+	flags.which = 1;
+	flags.columns = columns;
+	return flags;
+}
+
+constexpr auto CHAR_SIDE = DrivingSideSource::ARGUMENT;
+constexpr auto SIDE_OF_DIRECTED = DrivingSideSource::FROM_DIRECTED;
 
 } // namespace
 
@@ -76,6 +99,33 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
      {DIRECTED, CAP, GLOBAL}, Flags(false, true, true, ResultColumns::COST_OF_PATH)},
     {"pgr_dijkstraNearCost", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED, CAP, GLOBAL},
      Flags(false, true, true, ResultColumns::COST_OF_PATH)},
+
+    // pgr_withPoints: details defaults to false. normal = false on many-to-one, as pgr_dijkstra.
+    {"pgr_withPoints",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VID, ArgKind::END_VID, ArgKind::DRIVING_SIDE},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, true, CHAR_SIDE, ResultColumns::PATH)},
+    {"pgr_withPoints",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VID, ArgKind::END_VIDS, ArgKind::DRIVING_SIDE},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, true, CHAR_SIDE, ResultColumns::PATH)},
+    {"pgr_withPoints",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VID, ArgKind::DRIVING_SIDE},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, false, CHAR_SIDE, ResultColumns::PATH)},
+    {"pgr_withPoints",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS, ArgKind::DRIVING_SIDE},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, true, CHAR_SIDE, ResultColumns::PATH)},
+    {"pgr_withPoints",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::COMBINATIONS_SQL, ArgKind::DRIVING_SIDE},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, true, CHAR_SIDE, ResultColumns::PATH)},
+    {"pgr_withPoints", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VID, ArgKind::END_VID},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, true, SIDE_OF_DIRECTED, ResultColumns::PATH)},
+    {"pgr_withPoints", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VID, ArgKind::END_VIDS},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, true, SIDE_OF_DIRECTED, ResultColumns::PATH)},
+    {"pgr_withPoints", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VID},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, false, SIDE_OF_DIRECTED, ResultColumns::PATH)},
+    {"pgr_withPoints", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, true, SIDE_OF_DIRECTED, ResultColumns::PATH)},
+    {"pgr_withPoints", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::COMBINATIONS_SQL},
+     {DIRECTED, DETAILS}, WithPointsFlags(false, true, SIDE_OF_DIRECTED, ResultColumns::PATH)},
 };
 
 } // namespace duckdb_routing
