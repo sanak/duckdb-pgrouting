@@ -206,6 +206,30 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
     // (bdDijkstraCostMatrix.sql), unlike pgr_dijkstraCostMatrix's starts without ends.
     {"pgr_bdDijkstraCostMatrix", {ArgKind::EDGES_SQL, ArgKind::VIDS}, {DIRECTED},
      OldStyleFlags(DriverKind::BD_DIJKSTRA, true, ResultColumns::COST)},
+
+    // pgr_bellmanFord: only_cost = false (bellman_ford.sql); no Cost variant exists.
+    {"pgr_bellmanFord", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {DIRECTED},
+     OldStyleFlags(DriverKind::BELLMAN_FORD, false, ResultColumns::PATH)},
+    {"pgr_bellmanFord", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::BELLMAN_FORD, false, ResultColumns::PATH)},
+    {"pgr_bellmanFord", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {DIRECTED},
+     OldStyleFlags(DriverKind::BELLMAN_FORD, false, ResultColumns::PATH)},
+    {"pgr_bellmanFord", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::BELLMAN_FORD, false, ResultColumns::PATH)},
+    {"pgr_bellmanFord", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED},
+     OldStyleFlags(DriverKind::BELLMAN_FORD, false, ResultColumns::PATH)},
+
+    // pgr_edwardMoore: the driver takes no only_cost.
+    {"pgr_edwardMoore", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {DIRECTED},
+     OldStyleFlags(DriverKind::EDWARD_MOORE, false, ResultColumns::PATH)},
+    {"pgr_edwardMoore", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::EDWARD_MOORE, false, ResultColumns::PATH)},
+    {"pgr_edwardMoore", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {DIRECTED},
+     OldStyleFlags(DriverKind::EDWARD_MOORE, false, ResultColumns::PATH)},
+    {"pgr_edwardMoore", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {DIRECTED},
+     OldStyleFlags(DriverKind::EDWARD_MOORE, false, ResultColumns::PATH)},
+    {"pgr_edwardMoore", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED},
+     OldStyleFlags(DriverKind::EDWARD_MOORE, false, ResultColumns::PATH)},
 };
 
 } // namespace duckdb_routing

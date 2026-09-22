@@ -26,11 +26,13 @@ GROUP BY ALL ORDER BY 1, 2;
 bdDijkstra	pgr_bdDijkstra
 bdDijkstraCost	pgr_bdDijkstraCost
 bdDijkstraCostMatrix	pgr_bdDijkstraCostMatrix
+bellmanFord	pgr_bellmanFord
 dijkstra	pgr_dijkstra
 dijkstraCost	pgr_dijkstraCost
 dijkstraCostMatrix	pgr_dijkstraCostMatrix
 dijkstraNear	pgr_dijkstraNear
 dijkstraNearCost	pgr_dijkstraNearCost
+edwardMoore	pgr_edwardMoore
 withPoints	pgr_withPoints
 withPointsCost	pgr_withPointsCost
 withPointsCostMatrix	pgr_withPointsCostMatrix

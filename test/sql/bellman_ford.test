@@ -1,0 +1,118 @@
+# name: test/sql/bellman_ford.test
+# description: bellmanFord and edwardMoore: variants, agreement with dijkstra, negative edges, errors, STRICT
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require routing
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name IN ('bellmanFord', 'edwardMoore') AND tags['ext'] = 'routing'
+GROUP BY ALL ORDER BY 1;
+----
+bellmanFord	10
+edwardMoore	10
+
+# Upstream's q2 (docqueries bellmanFord, edwardMoore): 6 -> 10 costs 5.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM bellmanFord(e(), 6, 10) WHERE edge = -1;
+----
+6	10	5
+
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM edwardMoore(e(), 6, 10) WHERE edge = -1;
+----
+6	10	5
+
+# With non-negative costs both reach dijkstra's optimum for every shape, both ways round.
+query I
+SELECT count(*) FROM (
+  (SELECT start_vid, end_vid, agg_cost FROM bellmanFord(e(), [7, 10, 15], [7, 10, 15]) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [7, 10, 15], [7, 10, 15]) WHERE edge = -1)
+  UNION ALL
+  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [7, 10, 15], [7, 10, 15]) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM bellmanFord(e(), [7, 10, 15], [7, 10, 15]) WHERE edge = -1));
+----
+0
+
+query I
+SELECT count(*) FROM (
+  (SELECT start_vid, end_vid, agg_cost FROM edwardMoore(e(), [6, 1], [10, 17], false) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 1], [10, 17], false) WHERE edge = -1)
+  UNION ALL
+  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 1], [10, 17], false) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM edwardMoore(e(), [6, 1], [10, 17], false) WHERE edge = -1));
+----
+0
+
+query I
+SELECT count(*) FROM (
+  (SELECT start_vid, end_vid, agg_cost FROM bellmanFord(e(), [6, 1], 17, directed := false) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM edwardMoore(e(), [6, 1], 17, directed := false) WHERE edge = -1)
+  UNION ALL
+  (SELECT start_vid, end_vid, agg_cost FROM edwardMoore(e(), [6, 1], 17, directed := false) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM bellmanFord(e(), [6, 1], 17, directed := false) WHERE edge = -1));
+----
+0
+
+query I
+SELECT count(*) FROM (
+  (SELECT start_vid, end_vid, agg_cost FROM edwardMoore(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM bellmanFord(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1)
+  UNION ALL
+  (SELECT start_vid, end_vid, agg_cost FROM bellmanFord(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM edwardMoore(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1));
+----
+0
+
+# A negative cost is not a negative weight here: pgr_bellmanFord, like every pgRouting function,
+# drops an edge whose cost is negative when it builds the graph (upstream's base graph), so
+# 1 -> 3 goes 1 -> 2 -> 3 at cost 2, not over the -5 edge. Negative weights belong to upstream's
+# _pgr_bellmanFordNeg, which this extension does not port.
+statement ok
+CREATE TABLE neg (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE);
+
+statement ok
+INSERT INTO neg VALUES (1,1,2,1),(2,2,3,1),(3,1,3,-5);
+
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM bellmanFord('SELECT id, source, target, cost FROM neg', 1, 3) WHERE edge = -1;
+----
+1	3	2
+
+# The shared error mapping, through both drivers.
+statement error
+SELECT * FROM bellmanFord('SELECT id, source, target FROM edges', 6, 10);
+----
+Invalid Input Error: Column 'cost' not Found
+HINT: SELECT id, source, target FROM edges
+
+statement error
+SELECT * FROM edwardMoore('SELECT id, source, target FROM edges', 6, 10);
+----
+Invalid Input Error: Column 'cost' not Found
+HINT: SELECT id, source, target FROM edges
+
+# STRICT.
+query I
+SELECT count(*) FROM bellmanFord(e(), 6, 10, directed := NULL);
+----
+0
+
+query I
+SELECT count(*) FROM edwardMoore(NULL, 'SELECT 6 AS source, 10 AS target');
+----
+0

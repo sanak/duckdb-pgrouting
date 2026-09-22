@@ -26,6 +26,50 @@
       "upstream_rows": 22
     }
   },
+  "bellman_ford/bellmanFord.pg": {
+    "q5": {
+      "differing_rows": 4,
+      "reason": "equal-cost tie",
+      "upstream_rows": 18
+    },
+    "q6": {
+      "differing_rows": 4,
+      "reason": "equal-cost tie",
+      "upstream_rows": 22
+    },
+    "q7": {
+      "differing_rows": 4,
+      "reason": "equal-cost tie",
+      "upstream_rows": 22
+    }
+  },
+  "bellman_ford/edwardMoore.pg": {
+    "q3": {
+      "differing_rows": 2,
+      "reason": "equal-cost tie",
+      "upstream_rows": 11
+    },
+    "q4": {
+      "differing_rows": 4,
+      "reason": "equal-cost tie",
+      "upstream_rows": 11
+    },
+    "q5": {
+      "differing_rows": 6,
+      "reason": "equal-cost tie",
+      "upstream_rows": 18
+    },
+    "q6": {
+      "differing_rows": 5,
+      "reason": "equal-cost tie",
+      "upstream_rows": 22
+    },
+    "q7": {
+      "differing_rows": 5,
+      "reason": "equal-cost tie",
+      "upstream_rows": 22
+    }
+  },
   "dijkstra/dijkstra.pg": {
     "q133": {
       "differing_rows": 2,
