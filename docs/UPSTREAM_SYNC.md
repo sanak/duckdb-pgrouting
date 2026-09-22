@@ -4,15 +4,17 @@ pgRouting is a submodule pinned to a release tag and is never modified. Moving t
 the following checklist, in order. Every step either passes or tells you exactly what changed.
 
 1. Bump `third_party/pgrouting` to the new tag and build (`GEN=ninja make release`). Compile
-   errors are expected only in `src/exec` (a driver signature changed) or in `src/pg_compat` (a
-   new PostgreSQL seam appeared).
+   errors are expected only in `src/exec` (a driver signature changed), in `src/pg_compat` (a
+   new PostgreSQL seam appeared), or in `src/pg_compat/src/old_style_drivers.cpp` (a per-family
+   driver's signature changed — it is no longer only `src/exec`).
+   An error anywhere else means an upstream file joined the compiled set without being added to
+   `cmake/pgrouting_sources.cmake`.
+
    If upstream moved one of the per-family drivers (bdDijkstra, bellmanFord, edwardMoore,
    dagShortestPath, binaryBreadthFirstSearch) onto `do_shortestPath`, delete its case in
    `src/pg_compat/src/old_style_drivers.cpp`, switch that family's rows in
    `src/functions/shortest_path_specs.cpp` to `DriverKind::SHORTEST_PATH` with the flags its new
    SQL wrapper passes, and drop its driver file from `cmake/pgrouting_sources.cmake`.
-   An error anywhere else means an upstream file joined the compiled set without being added to
-   `cmake/pgrouting_sources.cmake`.
 2. Update `cmake/pgrouting_sources.cmake` for added or removed upstream files, one entry at a
    time. Never glob: the list is deliberately explicit so that a new upstream file is a decision
    rather than an accident. Do not list a `*_process.cpp` (those talk to PostgreSQL and this

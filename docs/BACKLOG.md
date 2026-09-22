@@ -45,6 +45,13 @@ decision rather than an oversight.
   same rows as `cap := 2` (the positional value), not `cap := 1` (the named one); PostgreSQL
   rejects such a call outright. DuckDB resolves named and positional arguments independently and
   this extension does not add its own check for the overlap.
+- **`bdDijkstra*` and `binaryBreadthFirstSearch` cannot be cancelled once the algorithm is
+  running.** Upstream's `include/bdDijkstra/bdDijkstra.hpp`, `include/cpp_common/bidirectional.hpp`
+  and `include/breadthFirstSearch/binaryBreadthFirstSearch.hpp` never call
+  `CHECK_FOR_INTERRUPTS`, unlike `bellmanFord`, `edwardMoore` and `dagShortestPath`, whose headers
+  do poll it inside their main loop. PostgreSQL runs the same unmodified algorithm bodies and is
+  equally uncancellable there, so this is not a regression introduced by the shared interrupt
+  path.
 
 ## Closed as declined
 
@@ -71,6 +78,12 @@ decision rather than an oversight.
   contributor who wants an exact-row regression signal for one of these three specifically, rather
   than relying on q96's coverage of the same tie, should add a hand-written block for it to
   `test/sql/dijkstra.test` the way q4/q5/q6/q7/q96 already have one.
+  The old-style families' own tie-downgraded blocks (18 in `test/pgrouting_ties.json` across
+  bdDijkstra, bellmanFord, edwardMoore, dagShortestPath and binaryBreadthFirstSearch) are pinned
+  the same way: by `start_vid`/`end_vid`, row count and `agg_cost` only, never the specific
+  node/edge route on the tie. The hand-written layer-3 tests for those families
+  (`test/sql/bd_dijkstra.test`, `test/sql/bellman_ford.test`, `test/sql/dag_shortest_path.test` and
+  `test/sql/binary_bfs.test`) likewise assert `start_vid`, `end_vid` and `agg_cost`, never a path.
 
 ## Unreachable today
 

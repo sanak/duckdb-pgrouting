@@ -5,7 +5,9 @@ with pgRouting's SQL API minus the `pgr_` prefix. pgRouting's C++ code is reused
 statically linked; only its PostgreSQL-specific layers are replaced.
 
 Status: early development — implemented so far: `dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`,
-`dijkstraNear` and `dijkstraNearCost`.
+`dijkstraNear`, `dijkstraNearCost`, `withPoints`, `withPointsCost`, `withPointsCostMatrix`,
+`bdDijkstra`, `bdDijkstraCost`, `bdDijkstraCostMatrix`, `bellmanFord`, `edwardMoore`,
+`dagShortestPath` and `binaryBreadthFirstSearch`.
 
 ## Building
 
