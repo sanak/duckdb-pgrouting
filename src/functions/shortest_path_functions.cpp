@@ -122,6 +122,13 @@ struct ShortestPathFunctionInfo : public TableFunctionInfo {
 	idx_t spec_index;
 };
 
+const vector<const char *> &OutputColumns(duckdb_routing::ResultColumns columns) {
+	static const vector<const char *> PATH = {"seq", "path_seq", "start_vid", "end_vid",
+	                                          "node", "edge", "cost", "agg_cost"};
+	static const vector<const char *> COST = {"start_vid", "end_vid", "agg_cost"};
+	return columns == duckdb_routing::ResultColumns::COST ? COST : PATH;
+}
+
 LogicalType TypeOf(duckdb_routing::ArgKind kind) {
 	using duckdb_routing::ArgKind;
 	switch (kind) {
@@ -271,13 +278,15 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	args.push_back(Named(Constant(Value(string(1, spec.flags.driving_side))), "driving_side"));
 	args.push_back(Named(Constant(Value::BOOLEAN(spec.flags.details)), "details"));
 	args.push_back(Named(Constant(Value::BOOLEAN(null_input)), "null_input"));
-	args.push_back(Named(Constant(Value(spec.flags.result_kind)), "result_kind"));
+	// The exec function always returns the path columns; the public overload's shape is the
+	// outer projection below.
+	args.push_back(Named(Constant(Value("path")), "result_kind"));
 
 	auto fref = make_uniq<TableFunctionRef>();
 	fref->function = make_uniq<FunctionExpression>(Identifier("_pgr_shortestpath_exec"), std::move(args));
 
 	auto outer = make_uniq<SelectNode>();
-	for (const auto *column : {"seq", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"}) {
+	for (const auto *column : OutputColumns(spec.flags.columns)) {
 		outer->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(column)));
 	}
 	outer->from_table = std::move(fref);

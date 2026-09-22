@@ -39,6 +39,13 @@ constexpr OptionalParam DIRECTED {"directed", OptionalType::BOOLEAN, 1};
 constexpr OptionalParam CAP {"cap", OptionalType::BIGINT, 1};
 constexpr OptionalParam GLOBAL {"global", OptionalType::BOOLEAN, 1};
 
+// Which columns a public overload returns. The exec function always produces the eight path
+// columns; COST is the projection upstream's Cost wrappers apply on top of the same driver call.
+enum class ResultColumns : uint8_t {
+	PATH, // seq, path_seq, start_vid, end_vid, node, edge, cost, agg_cost
+	COST  // start_vid, end_vid, agg_cost
+};
+
 // The driver flags that are fixed per overload rather than chosen by the caller. n_goals and
 // global are only fallbacks: an overload that declares `cap` or `global` takes them from the call.
 struct DriverFlags {
@@ -49,7 +56,7 @@ struct DriverFlags {
 	char driving_side = ' ';
 	bool details = true;
 	int32_t which = 0;
-	const char *result_kind = "path";
+	ResultColumns columns = ResultColumns::PATH;
 };
 
 struct FunctionSpec {

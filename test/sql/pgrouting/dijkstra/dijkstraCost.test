@@ -37,13 +37,43 @@ CREATE TABLE restrictions AS
   SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
   FROM read_csv_auto('test/data/pgrouting_sample/restrictions.csv');
 
-# q2: skipped - not implemented: pgr_dijkstraCost
+# q2
+query IIR
+SELECT * FROM dijkstraCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  6, 10, true);
+----
+6	10	5
 
-# q3: skipped - not implemented: pgr_dijkstraCost
+# q3
+query IIR
+SELECT * FROM dijkstraCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  6, ARRAY[10, 17]);
+----
+6	10	5
+6	17	4
 
-# q4: skipped - not implemented: pgr_dijkstraCost
+# q4
+query IIR
+SELECT * FROM dijkstraCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[6, 1], 17);
+----
+1	17	5
+6	17	4
 
-# q5: skipped - not implemented: pgr_dijkstraCost
+# q5
+query IIR
+SELECT * FROM dijkstraCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[6, 1], ARRAY[10, 17],
+  directed => false);
+----
+1	10	4
+1	17	5
+6	10	1
+6	17	4
 
 # q51
 query II
@@ -55,11 +85,51 @@ SELECT source, target FROM combinations;
 6	15
 6	14
 
-# q52: skipped - not implemented: pgr_dijkstraCost
+# q52
+query IIR
+SELECT * FROM dijkstraCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT source, target FROM combinations',
+  false);
+----
+5	6	1
+5	10	2
+6	5	1
+6	15	2
 
-# q6: skipped - not implemented: pgr_dijkstraCost
+# q6
+query IIR
+SELECT * FROM dijkstraCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15]);
+----
+7	10	4
+7	15	3
+10	7	2
+10	15	3
+15	7	3
+15	10	1
 
-# q7: skipped - not implemented: pgr_dijkstraCost
+# q7
+query IIR
+SELECT * FROM dijkstraCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  ARRAY[7, 10, 15], ARRAY[7, 10, 15]);
+----
+7	10	4
+7	15	3
+10	7	2
+10	15	3
+15	7	3
+15	10	1
 
-# q8: skipped - not implemented: pgr_dijkstraCost
+# q8
+query IIR
+SELECT * FROM dijkstraCost(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS combinations (source, target)');
+----
+6	7	1
+6	10	5
+12	10	4
 
