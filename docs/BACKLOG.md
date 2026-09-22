@@ -22,8 +22,20 @@ decision rather than an oversight.
 - **`duckdbcli.query()` starts two subprocesses per query** — one for `DESCRIBE`, one for the query
   itself — and each one reruns the whole SQL preamble, which now loads five CSV fixtures. Across
   the roughly 46 blocks the dijkstra docqueries generator runs, that is on the order of 90-some
-  process starts, and `subprocess.run` is called with no timeout either. Acceptable for a tool that
-  only runs at regeneration time, not in any inner loop a developer waits on repeatedly.
+  process starts; each call now has a 120-second timeout. Acceptable for a tool that only runs at
+  regeneration time, not in any inner loop a developer waits on repeatedly. Measured at the end of
+  Phase 4a: 4.4 s for the whole argument-free run.
+- **`pgr_dijkstravia` is listed in `test/pgrouting_not_ported.json`** although it is only outside
+  the MVP, not meaningless in DuckDB; `pgr_withPointsVia`, `pgr_withPointsDD` and
+  `pgr_withPointsKSP` are treated as merely unimplemented instead. Revisit when the MVP is
+  complete.
+- **`dijkstraNearCost` runs pgRouting's driver in path mode (`only_cost = false`) and keeps each
+  path's closing row (`edge = -1`)**, because the pinned release's only_cost `Path` constructor in
+  `include/cpp_common/path.hpp` leaves `m_tot_cost` uninitialized, which `post_process` then sorts
+  and truncates by. Fixed upstream on `develop` by commit `b27576bd58`. Cost: `dijkstraNearCost`
+  materializes full paths instead of just their costs. Revert (switch the NearCost overloads back
+  to `only_cost = true` and `ResultColumns::COST`) once the pinned release initializes
+  `m_tot_cost`; see the `ResultColumns::COST_OF_PATH` comment in `src/functions/function_spec.hpp`.
 
 ## Closed as declined
 
@@ -36,15 +48,6 @@ decision rather than an oversight.
 
 ## Test tooling gaps
 
-- **The docqueries generator has no skip reason for a block whose SQL simply cannot run against the
-  sample fixtures.** Its skip reasons cover an unimplemented function, an empty result set, more
-  than one result set, and a blank cell in a text column — but not a query that fails to bind. This
-  is why regeneration is currently run scoped to `--category dijkstra`: several other upstream
-  categories query columns the five-table sample fixture does not carry (for example
-  `contraction`'s plain `SELECT id, is_contracted FROM vertices`, which has no `pgr_` call for the
-  translator to touch and so reaches the database unchanged), and the generator aborts on the first
-  one instead of skipping it. Widening the regenerated category set means adding that fifth skip
-  reason first.
 - **Three of the eight tie-downgraded `dijkstra` blocks have no exact-row counterpart anywhere in
   the repository.** `q93`, `q133` and `q136` are pinned only by the `differing_rows` count recorded
   for them in `test/pgrouting_ties.json`; `test/sql/dijkstra.test` keeps an exact-row block for
@@ -59,13 +62,6 @@ decision rather than an oversight.
   contributor who wants an exact-row regression signal for one of these three specifically, rather
   than relying on q96's coverage of the same tie, should add a hand-written block for it to
   `test/sql/dijkstra.test` the way q4/q5/q6/q7/q96 already have one.
-- **Regenerating one category currently rewrites the whole ties file.** `gen_docqueries_tests.py`'s
-  `main` writes `test/pgrouting_ties.json` from only the categories it just processed, so once a
-  second category with tie-classified blocks exists, regenerating either one on its own would drop
-  the other's entries. Harmless today because `dijkstra` is the only category with tie-classified
-  blocks, and CI's category-scoped `--check` would still catch the loss loudly (as a diff) rather
-  than silently. The real fix is to merge newly generated ties into the file's existing contents
-  instead of replacing them, for the categories a given run did not touch.
 
 ## Unreachable today
 
@@ -102,15 +98,21 @@ Each of these would be a change no test could observe, so none of them is made:
   but any claim that the mapping is covered has to carry this qualifier — it is never true
   unqualified.
 - **Two of the six stems in the `dijkstra` category, `dijkstraCostMatrix` and `dijkstraVia`,
-  produce no generated test file at all.** Every block in each one calls a function this extension
-  does not implement (`pgr_dijkstraCostMatrix` and `pgr_TSP` for the former, `pgr_dijkstravia` for
-  the latter), so the generator has nothing left to write once the unimplemented ones are skipped,
-  and it does not emit a file with zero assertions. The category itself still has generated files —
-  `dijkstra.test`, `dijkstraCost.test`, `dijkstraNear.test` and `dijkstraNearCost.test` all exist —
-  only these two stems within it have none. Coverage for "what upstream offers here that this build
-  does not" is recorded by layer 4 (the signature comparison) for all three functions, and by
-  `test/pgrouting_not_ported.json` only for `pgr_dijkstravia`; the other two surface solely through
-  `check_signatures.py`'s unimplemented-function list.
+  produce no generated test file at all.** `dijkstraVia` produces none because its page is not
+  selected: `pgr_dijkstraVia` is not implemented. `dijkstraCostMatrix` produces none either: its
+  only runnable block, q1, passes a scalar subquery
+  (`(SELECT array_agg(id) FROM vertices WHERE id IN (...))`) as the vertex array, which DuckDB
+  rejects in the argument of a table function that is not in-out (`Table function cannot contain
+  subqueries`), so it is skipped in `test/pgrouting_skip.json`; q2 calls `pgr_TSP`, which this
+  extension does not implement. Coverage for `dijkstraCostMatrix` instead comes from the
+  hand-written `test/sql/dijkstra_cost.test`. The workaround for the scalar-subquery shape, used
+  there and available to any caller: `SET VARIABLE ids = (SELECT list(id) FROM vertices WHERE ...);`
+  then pass `getvariable('ids')` as the vertex-array argument. The category itself still has
+  generated files — `dijkstra.test`, `dijkstraCost.test`, `dijkstraNear.test` and
+  `dijkstraNearCost.test` all exist — only these two stems within it have none. Coverage for "what
+  upstream offers here that this build does not" is recorded by layer 4 (the signature comparison)
+  for all three functions, and by `test/pgrouting_not_ported.json` only for `pgr_dijkstravia`; the
+  other two surface solely through `check_signatures.py`'s unimplemented-function list.
 
 ## Open decision
 
@@ -122,4 +124,6 @@ Each of these would be a change no test could observe, so none of them is made:
   between runs. Adding `ORDER BY _pgr_row` would buy reproducibility at the price of a sort over
   the whole edge set on every query, and DuckDB struct ordering does not cover every child type, so
   it would need verification of its own. It may belong behind a setting rather than as a default.
-  Not decided.
+  Not decided. The `withPoints` derived inputs planned for the next sub-phase (edges of points,
+  edges without points) will share the property: they are built by joins whose output order
+  DuckDB does not guarantee either.

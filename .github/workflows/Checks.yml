@@ -101,7 +101,8 @@ jobs:
 
       # Layer 4. Upstream's sql/sigs/pgrouting--<ver>.sig against duckdb_functions(), matched
       # through the pgrouting_name tag rather than by row count: one upstream signature is
-      # intentionally registered as two DuckDB variants.
+      # intentionally registered as several DuckDB variants, one per number of its defaulted
+      # parameters passed positionally.
       - name: Layer 4 - signature coverage
         run: python3 scripts/check_signatures.py
 

@@ -9,10 +9,11 @@ with pgRouting's SQL API minus the `pgr_` prefix (`pgr_dijkstra` → `dijkstra`)
 code (`third_party/pgrouting`, a submodule pinned to a release tag) is compiled **unmodified** and
 statically linked; only its PostgreSQL-specific layers are replaced. License: GPL-2.0-or-later.
 
-Current state: the extension registers `dijkstra` — pgRouting's five `pgr_dijkstra` signatures,
-each in a short form and a positional-`directed` form, ten DuckDB table functions in total — and
-`DuckDB_pgRouting_Version()`. Every `dijkstra` call is rewritten into a call to pgRouting's own
-unified `do_shortestPath` driver.
+Current state: the extension registers `dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`,
+`dijkstraNear` and `dijkstraNearCost` — pgRouting's nineteen corresponding signatures, each
+registered once per number of its defaulted parameters passed positionally — and
+`DuckDB_pgRouting_Version()`. Every call is rewritten into a call to pgRouting's own unified
+`do_shortestPath` driver.
 
 ## Layout
 
@@ -28,7 +29,8 @@ unified `do_shortestPath` driver.
   translation unit. `src/include/routing/input_access.hpp` is the seam between the two worlds
   and includes neither.
 - `src/exec/` — input registry, driver invocation and the internal in-out table function.
-- `src/functions/` — the declarative overload table and the public function registration.
+- `src/functions/` — the declarative overload table (`shortest_path_specs.cpp`) and the public
+  function registration.
 - `test/sql/` — sqllogictests. `test/sql/pgrouting/<category>/<name>.test` is generated from
   upstream's documentation queries and is never hand-edited.
 - `test/data/pgrouting_sample/` — CSV fixtures rebuilt from upstream's committed sample data.
@@ -88,7 +90,8 @@ and none of them ever writes under `third_party/pgrouting`.
   equal-cost tie from a defect. `--check` regenerates and fails on any difference.
 - `scripts/check_signatures.py` — compares upstream's `sql/sigs/pgrouting--<ver>.sig` against
   `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
-  signature is intentionally registered as two DuckDB variants.
+  signature is intentionally registered as several DuckDB variants, one per number of its
+  defaulted parameters passed positionally.
 
 The generators execute queries against the release binary, so build it first:
 
@@ -130,8 +133,10 @@ equal-cost tie has flipped, or something regressed, and all three want a human.
 - `src/pg_compat/include` must precede `third_party/pgrouting/include` on the include path; that
   ordering is what replaces upstream's PostgreSQL-dependent headers.
 - PostgreSQL allows a parameter with a default to be passed positionally or by name; DuckDB never
-  matches a named parameter positionally. Every upstream signature is therefore registered twice,
-  with and without a trailing positional `directed`.
+  matches a named parameter positionally. An upstream signature with k defaulted parameters is
+  therefore registered k + 1 times, passing the first 0..k of them positionally, and every
+  variant accepts all k by name. The defaulted parameters are data (`OptionalParam` in
+  `src/functions/function_spec.hpp`), in upstream's declaration order.
 - The order in which an input query's rows reach pgRouting is not guaranteed stable: DuckDB's
   `list()` does not preserve scan order once the scan runs on several threads, and `ORDER BY` in
   the caller's own SQL does not change that. Boost breaks an equal-cost predecessor tie by
