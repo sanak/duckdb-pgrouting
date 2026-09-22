@@ -1,0 +1,120 @@
+# name: test/sql/withpoints_exec.test
+# description: _pgr_shortestpath_exec with points: registration of the points and derived inputs
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require routing
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# upstream's pointsOfInterest sample (docqueries), without its unused distance column.
+statement ok
+CREATE TABLE pois (pid BIGINT, edge_id BIGINT, side VARCHAR, fraction DOUBLE);
+
+statement ok
+INSERT INTO pois VALUES (1,1,'l',0.4),(2,15,'r',0.4),(3,12,'l',0.6),(4,6,'r',0.3),(5,5,'l',0.8),(6,4,'b',0.7);
+
+# The three inputs are hand-built here, the way the public withPoints overloads will build them:
+# the points rows, and the rows of upstream's two derived queries. The exec function registers
+# them under points_sql and under the two key strings it derives from edges_sql and points_sql.
+# Upstream's documented answer for -1 -> 10 (docqueries withPoints q1) is 6.4; the route is the
+# only one of that cost, and agg_cost of the closing row is tie-independent anyway.
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 6) FROM _pgr_shortestpath_exec(
+  (SELECT NULL AS edges, NULL AS combinations, [-1]::BIGINT[] AS starts, [10]::BIGINT[] AS ends,
+          (SELECT list(p) FROM (SELECT pid, edge_id, fraction, side FROM pois) p) AS points,
+          (SELECT list(e) FROM (SELECT DISTINCT edges.* FROM edges JOIN pois ON (id = edge_id)) e)
+            AS edges_of_points,
+          (SELECT list(e) FROM (SELECT * FROM edges
+                                WHERE NOT EXISTS (SELECT 1 FROM pois WHERE id = edge_id)) e)
+            AS edges_no_points),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  combinations_sql := '', directed := true, only_cost := false, normal := true,
+  n_goals := 0, global := true, which := 1, driving_side := 'r', details := true,
+  null_input := false, result_kind := 'path')
+WHERE edge = -1;
+----
+-1	10	6.4
+
+# A missing input names the exact key the driver asked for. These two pin upstream's derived-query
+# template character for character (note the doubled spaces after WITH and after the first comma):
+# WithPointsDerivedKeys must reproduce it, or every withPoints query fails exactly like this.
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT NULL AS edges, NULL AS combinations, [-1]::BIGINT[] AS starts, [10]::BIGINT[] AS ends,
+          (SELECT list(p) FROM (SELECT pid, edge_id, fraction, side FROM pois) p) AS points),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  combinations_sql := '', directed := true, only_cost := false, normal := true,
+  n_goals := 0, global := true, which := 1, driving_side := 'r', details := true,
+  null_input := false, result_kind := 'path');
+----
+Internal error: no 'edges' input registered for query: WITH  edges AS (SELECT id, source, target, cost, reverse_cost FROM edges),  points AS (SELECT pid, edge_id, fraction, side FROM pois) SELECT DISTINCT edges.* FROM edges JOIN points ON (id = edge_id)
+
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT NULL AS edges, NULL AS combinations, [-1]::BIGINT[] AS starts, [10]::BIGINT[] AS ends,
+          (SELECT list(p) FROM (SELECT pid, edge_id, fraction, side FROM pois) p) AS points,
+          (SELECT list(e) FROM (SELECT DISTINCT edges.* FROM edges JOIN pois ON (id = edge_id)) e)
+            AS edges_of_points),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  combinations_sql := '', directed := true, only_cost := false, normal := true,
+  n_goals := 0, global := true, which := 1, driving_side := 'r', details := true,
+  null_input := false, result_kind := 'path');
+----
+Internal error: no 'edges' input registered for query: WITH  edges AS (SELECT id, source, target, cost, reverse_cost FROM edges),  points AS (SELECT pid, edge_id, fraction, side FROM pois) SELECT edges.* FROM edges WHERE NOT EXISTS (SELECT edge_id FROM points WHERE id = edge_id)
+
+# The points input is looked up first, under its own kind.
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT NULL AS edges, NULL AS combinations, [-1]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  combinations_sql := '', directed := true, only_cost := false, normal := true,
+  n_goals := 0, global := true, which := 1, driving_side := 'r', details := true,
+  null_input := false, result_kind := 'path');
+----
+Internal error: no 'points' input registered for query: SELECT pid, edge_id, fraction, side FROM pois
+
+# A points query that matches no rows is registered empty with its bound row shape, like an empty
+# edge query: every edge then lands in edges_no_points and the answer is plain Dijkstra's, 6 for
+# 5 -> 10 (5 -> 6 -> 7 -> 11 -> 16 -> 15 -> 10; edge 2 only runs 10 -> 6).
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+  (SELECT NULL AS edges, NULL AS combinations, [5]::BIGINT[] AS starts, [10]::BIGINT[] AS ends,
+          (SELECT list(p) FROM (SELECT pid, edge_id, fraction, side FROM pois WHERE false) p)
+            AS points,
+          (SELECT list(e) FROM (SELECT DISTINCT edges.* FROM edges
+                                JOIN (SELECT * FROM pois WHERE false) q ON (id = edge_id)) e)
+            AS edges_of_points,
+          (SELECT list(e) FROM (SELECT * FROM edges) e) AS edges_no_points),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois WHERE false',
+  combinations_sql := '', directed := true, only_cost := false, normal := true,
+  n_goals := 0, global := true, which := 1, driving_side := 'r', details := true,
+  null_input := false, result_kind := 'path')
+WHERE edge = -1;
+----
+5	10	6
+
+# The new columns are shape-checked at bind time like 'edges', for the same reason (see
+# dijkstra_inputs.test): a wrong-typed cell must be a user-input error, never an internal one.
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT NULL AS edges, NULL AS combinations, []::BIGINT[] AS starts, []::BIGINT[] AS ends,
+          'x'::VARCHAR AS points),
+  edges_sql := '', points_sql := 'SELECT 1', combinations_sql := '', directed := true,
+  only_cost := false, normal := true, n_goals := 0, global := true, which := 1,
+  driving_side := 'r', details := true, null_input := false, result_kind := 'path');
+----
+Invalid Input Error: _pgr_shortestpath_exec: column 'points' must be LIST(STRUCT), got VARCHAR

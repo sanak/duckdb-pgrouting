@@ -23,6 +23,7 @@
 #include "c_types/path_rt.h"
 #include "routing/exec_common.hpp"
 #include "routing/input_registry.hpp"
+#include "routing/withpoints_keys.hpp"
 
 namespace duckdb {
 
@@ -46,8 +47,14 @@ struct ShortestPathExecBindData : public TableFunctionData {
 	idx_t combinations_column = DConstants::INVALID_INDEX;
 	idx_t starts_column = DConstants::INVALID_INDEX;
 	idx_t ends_column = DConstants::INVALID_INDEX;
+	idx_t points_column = DConstants::INVALID_INDEX;
+	idx_t edges_of_points_column = DConstants::INVALID_INDEX;
+	idx_t edges_no_points_column = DConstants::INVALID_INDEX;
 	RowSchema edges_schema;
 	RowSchema combinations_schema;
+	RowSchema points_schema;
+	RowSchema edges_of_points_schema;
+	RowSchema edges_no_points_schema;
 };
 
 struct ShortestPathExecState : public LocalTableFunctionState {
@@ -259,6 +266,7 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	auto &request = data->request;
 	request.edges_sql = NamedStringOr(input, "edges_sql", "");
 	request.combinations_sql = NamedStringOr(input, "combinations_sql", "");
+	request.points_sql = NamedStringOr(input, "points_sql", "");
 	request.directed = NamedOr<bool>(input, "directed", true);
 	request.only_cost = NamedOr<bool>(input, "only_cost", false);
 	request.normal = NamedOr<bool>(input, "normal", true);
@@ -279,15 +287,24 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	data->combinations_column = FindInputColumn(input, "combinations");
 	data->starts_column = FindInputColumn(input, "starts");
 	data->ends_column = FindInputColumn(input, "ends");
+	data->points_column = FindInputColumn(input, "points");
+	data->edges_of_points_column = FindInputColumn(input, "edges_of_points");
+	data->edges_no_points_column = FindInputColumn(input, "edges_no_points");
 	if (data->edges_column == DConstants::INVALID_INDEX) {
 		throw InvalidInputException("_pgr_shortestpath_exec: the input table has no 'edges' column");
 	}
 	CheckRowListColumn(input, data->edges_column, "edges");
 	CheckRowListColumn(input, data->combinations_column, "combinations");
+	CheckRowListColumn(input, data->points_column, "points");
+	CheckRowListColumn(input, data->edges_of_points_column, "edges_of_points");
+	CheckRowListColumn(input, data->edges_no_points_column, "edges_no_points");
 	CheckIdListColumn(input, data->starts_column, "starts");
 	CheckIdListColumn(input, data->ends_column, "ends");
 	CaptureRowSchema(input, data->edges_column, data->edges_schema);
 	CaptureRowSchema(input, data->combinations_column, data->combinations_schema);
+	CaptureRowSchema(input, data->points_column, data->points_schema);
+	CaptureRowSchema(input, data->edges_of_points_column, data->edges_of_points_schema);
+	CaptureRowSchema(input, data->edges_no_points_column, data->edges_no_points_schema);
 
 	return_types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT,
 	                LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::DOUBLE, LogicalType::DOUBLE};
@@ -298,6 +315,24 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 unique_ptr<LocalTableFunctionState> ShortestPathExecInitLocal(ExecutionContext &, TableFunctionInitInput &,
                                                               GlobalTableFunctionState *) {
 	return make_uniq<ShortestPathExecState>();
+}
+
+// Registers one LIST(STRUCT) column of the input row under (sql, kind). An input query that
+// matches no rows makes `list(<row>)` evaluate to NULL; pgRouting still resolves the SQL string in
+// the registry first and then reads zero rows, so the bound row shape is registered with no rows.
+// A column that is absent, or has no bound row shape (`known` false), is an input this call does
+// not use; the driver never asks for it, so it stays unregistered.
+void RegisterRowList(ClientContext &context, duckdb_routing::InputRegistry &registry, DataChunk &input,
+                     idx_t column, const RowSchema &schema, const string &sql, const char *kind) {
+	if (column == DConstants::INVALID_INDEX) {
+		return;
+	}
+	duckdb_routing::MaterializedInput rows;
+	if (Unpack(context, input.data[column], 0, rows)) {
+		registry.Register(sql, kind, std::move(rows));
+	} else if (schema.known) {
+		registry.Register(sql, kind, EmptyInput(schema));
+	}
 }
 
 void RunOnce(ClientContext &context, const ShortestPathExecBindData &bind, ShortestPathExecState &state,
@@ -312,29 +347,20 @@ void RunOnce(ClientContext &context, const ShortestPathExecBindData &bind, Short
 	auto request = bind.request;
 	// The materialized inputs reference this chunk, so nothing here may outlive the driver call.
 	state.registry = duckdb_routing::InputRegistry();
-	// An input query that matches no rows makes `list(<row>)` evaluate to NULL, so there is no
-	// list to unpack even though the query itself was fine. pgRouting treats an empty edge set (or
-	// an empty combinations set) as an ordinary empty result rather than an error, but it only
-	// gets there by looking the SQL string up in the registry first. Registering the bound row
-	// shape with no rows is what reproduces that; leaving it unregistered would instead surface
-	// the lookup miss, which means "this extension failed to provide an input it promised".
-	// A column with no bound row shape (`known` false) is an input this overload does not use at
-	// all, and the driver never asks for it, so it stays unregistered.
-	duckdb_routing::MaterializedInput edges;
-	if (Unpack(context, input.data[bind.edges_column], 0, edges)) {
-		state.registry.Register(request.edges_sql, duckdb_routing::KIND_EDGES, std::move(edges));
-	} else if (bind.edges_schema.known) {
-		state.registry.Register(request.edges_sql, duckdb_routing::KIND_EDGES, EmptyInput(bind.edges_schema));
-	}
-	if (bind.combinations_column != DConstants::INVALID_INDEX) {
-		duckdb_routing::MaterializedInput combinations;
-		if (Unpack(context, input.data[bind.combinations_column], 0, combinations)) {
-			state.registry.Register(request.combinations_sql, duckdb_routing::KIND_COMBINATIONS,
-			                        std::move(combinations));
-		} else if (bind.combinations_schema.known) {
-			state.registry.Register(request.combinations_sql, duckdb_routing::KIND_COMBINATIONS,
-			                        EmptyInput(bind.combinations_schema));
-		}
+	RegisterRowList(context, state.registry, input, bind.edges_column, bind.edges_schema, request.edges_sql,
+	                duckdb_routing::KIND_EDGES);
+	RegisterRowList(context, state.registry, input, bind.combinations_column, bind.combinations_schema,
+	                request.combinations_sql, duckdb_routing::KIND_COMBINATIONS);
+	// With points given, the driver fetches the points query and two edge queries it derives from
+	// edges_sql and points_sql, and never edges_sql itself (the caller passes 'edges' as NULL).
+	if (!request.points_sql.empty()) {
+		const auto keys = duckdb_routing::WithPointsDerivedKeys(request.edges_sql, request.points_sql);
+		RegisterRowList(context, state.registry, input, bind.points_column, bind.points_schema,
+		                request.points_sql, duckdb_routing::KIND_POINTS);
+		RegisterRowList(context, state.registry, input, bind.edges_of_points_column,
+		                bind.edges_of_points_schema, keys.of_points, duckdb_routing::KIND_EDGES);
+		RegisterRowList(context, state.registry, input, bind.edges_no_points_column,
+		                bind.edges_no_points_schema, keys.no_points, duckdb_routing::KIND_EDGES);
 	}
 	request.starts = ReadIdList(input, bind.starts_column, "starts", request.has_starts);
 	request.ends = ReadIdList(input, bind.ends_column, "ends", request.has_ends);
@@ -413,6 +439,7 @@ void RegisterShortestPathExec(ExtensionLoader &loader) {
 	exec.in_out_function = ShortestPathExecFunction;
 	exec.named_parameters["edges_sql"] = LogicalType::VARCHAR;
 	exec.named_parameters["combinations_sql"] = LogicalType::VARCHAR;
+	exec.named_parameters["points_sql"] = LogicalType::VARCHAR;
 	exec.named_parameters["directed"] = LogicalType::BOOLEAN;
 	exec.named_parameters["only_cost"] = LogicalType::BOOLEAN;
 	exec.named_parameters["normal"] = LogicalType::BOOLEAN;

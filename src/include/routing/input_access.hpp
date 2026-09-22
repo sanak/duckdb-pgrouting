@@ -26,6 +26,8 @@ enum class ColumnClass : uint8_t { INTEGER, NUMERIC, TEXT, CHAR1, INTEGER_ARRAY,
 // future family that registers a new kind of input adds a new constant here.
 constexpr const char *KIND_EDGES = "edges";
 constexpr const char *KIND_COMBINATIONS = "combinations";
+// The points query of the withPoints family (pid, edge_id, fraction, side).
+constexpr const char *KIND_POINTS = "points";
 
 // Looks up the input registered for this exact (sql, kind) pair.
 // Throws std::string when the key is unknown: that means the driver asked for an input the

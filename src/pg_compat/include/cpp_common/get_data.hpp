@@ -13,6 +13,7 @@
 #include "cpp_common/edge_t.hpp"
 #include "cpp_common/get_check_data.hpp"
 #include "cpp_common/info_t.hpp"
+#include "cpp_common/point_on_edge_t.hpp"
 #include "routing/pg_types.hpp"
 
 namespace pgrouting {
@@ -38,6 +39,9 @@ template <> inline std::string InputKind<Edge_t>() {
 }
 template <> inline std::string InputKind<II_t_rt>() {
 	return duckdb_routing::KIND_COMBINATIONS;
+}
+template <> inline std::string InputKind<Point_on_edge_t>() {
+	return duckdb_routing::KIND_POINTS;
 }
 
 } // namespace detail

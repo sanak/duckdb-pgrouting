@@ -33,6 +33,10 @@ the following checklist, in order. Every step either passes or tells you exactly
    `include/cpp_common/path.hpp` now initializes `m_tot_cost` in its only_cost `Path` constructor,
    switch `dijkstraNearCost` back to `only_cost = true` with plain `ResultColumns::COST` (see the
    `ResultColumns::COST_OF_PATH` comment in `src/functions/function_spec.hpp`).
+   Diff `src/exec/withpoints_keys.cpp` against the anonymous-namespace `get_new_queries` in
+   `third_party/pgrouting/src/dijkstra/shortestPath_driver.cpp` and copy any change verbatim:
+   those strings are the keys the driver looks the withPoints inputs up by. A drift shows up as
+   every withPoints query failing with "no 'edges' input registered for query".
 6. Run the full suite: `make test_debug`, then push and let CI cover the remaining eight native
    platforms and the three Wasm variants.
 7. Update `AGENTS.md` if the bump changed build commands, layout or conventions.
