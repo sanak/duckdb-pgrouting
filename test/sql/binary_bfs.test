@@ -1,5 +1,5 @@
 # name: test/sql/binary_bfs.test
-# description: binaryBreadthFirstSearch: variants, agreement with dijkstra, the edge-cost condition, STRICT
+# description: pgr_binaryBreadthFirstSearch: variants, agreement with pgr_dijkstra, the edge-cost condition, STRICT
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -19,34 +19,34 @@ statement ok
 CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
 
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'binaryBreadthFirstSearch' AND tags['ext'] = 'pgrouting';
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'pgr_binaryBreadthFirstSearch' AND tags['ext'] = 'pgrouting';
 ----
 10
 
-# Upstream's q1 (docqueries binaryBreadthFirstSearch): 6 -> 10 costs 5.
+# Upstream's q1 (docqueries pgr_binaryBreadthFirstSearch): 6 -> 10 costs 5.
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM binaryBreadthFirstSearch(e(), 6, 10) WHERE edge = -1;
+SELECT start_vid, end_vid, agg_cost FROM pgr_binaryBreadthFirstSearch(e(), 6, 10) WHERE edge = -1;
 ----
 6	10	5
 
-# Every sample cost is 1 (a negative one only means "no edge"), so this is dijkstra's optimum.
+# Every sample cost is 1 (a negative one only means "no edge"), so this is pgr_dijkstra's optimum.
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, agg_cost FROM binaryBreadthFirstSearch(e(), [6, 1], [10, 17], false) WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 1], [10, 17], false) WHERE edge = -1)
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_binaryBreadthFirstSearch(e(), [6, 1], [10, 17], false) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 1], [10, 17], false) WHERE edge = -1)
   UNION ALL
-  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 1], [10, 17], false) WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM binaryBreadthFirstSearch(e(), [6, 1], [10, 17], false) WHERE edge = -1));
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 1], [10, 17], false) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_binaryBreadthFirstSearch(e(), [6, 1], [10, 17], false) WHERE edge = -1));
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, agg_cost FROM binaryBreadthFirstSearch(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1)
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_binaryBreadthFirstSearch(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1)
   UNION ALL
-  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM binaryBreadthFirstSearch(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1));
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_binaryBreadthFirstSearch(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1));
 ----
 0
 
@@ -58,31 +58,31 @@ statement ok
 INSERT INTO zo VALUES (1,1,2,0),(2,2,3,0),(3,1,3,1);
 
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM binaryBreadthFirstSearch('SELECT id, source, target, cost FROM zo', 1, 3) WHERE edge = -1;
+SELECT start_vid, end_vid, agg_cost FROM pgr_binaryBreadthFirstSearch('SELECT id, source, target, cost FROM zo', 1, 3) WHERE edge = -1;
 ----
 1	3	0
 
 # Upstream's condition, verbatim: at most two distinct non-negative costs, and if two, one is 0.
 # Two distinct costs, neither 0 (upstream's own edge-case test sets one sample cost to 5):
 statement error
-SELECT * FROM binaryBreadthFirstSearch('SELECT id, source, target, CASE WHEN id = 1 THEN 5 ELSE cost END AS cost, reverse_cost FROM edges', 6, 10);
+SELECT * FROM pgr_binaryBreadthFirstSearch('SELECT id, source, target, CASE WHEN id = 1 THEN 5 ELSE cost END AS cost, reverse_cost FROM edges', 6, 10);
 ----
 Invalid Input Error: Graph Condition Failed: Graph should have at most two distinct non-negative edge costs! If there are exactly two distinct edge costs, one of them must equal zero!
 
 # Three distinct costs, undirected (the undirected graph is checked the same way):
 statement error
-SELECT * FROM binaryBreadthFirstSearch('SELECT id, source, target, CASE WHEN id = 1 THEN 0 WHEN id = 4 THEN 2 ELSE cost END AS cost, reverse_cost FROM edges', 6, 10, false);
+SELECT * FROM pgr_binaryBreadthFirstSearch('SELECT id, source, target, CASE WHEN id = 1 THEN 0 WHEN id = 4 THEN 2 ELSE cost END AS cost, reverse_cost FROM edges', 6, 10, false);
 ----
 Graph Condition Failed
 
 statement error
-SELECT * FROM binaryBreadthFirstSearch('SELECT id, source, target FROM edges', 6, 10);
+SELECT * FROM pgr_binaryBreadthFirstSearch('SELECT id, source, target FROM edges', 6, 10);
 ----
 Invalid Input Error: Column 'cost' not Found
 HINT: SELECT id, source, target FROM edges
 
 # STRICT.
 query I
-SELECT count(*) FROM binaryBreadthFirstSearch(e(), 6, [10, 17], directed := NULL);
+SELECT count(*) FROM pgr_binaryBreadthFirstSearch(e(), 6, [10, 17], directed := NULL);
 ----
 0

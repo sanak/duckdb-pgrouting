@@ -1,5 +1,5 @@
 # name: test/sql/bd_dijkstra.test
-# description: bdDijkstra, bdDijkstraCost, bdDijkstraCostMatrix: variants, agreement, errors, STRICT
+# description: pgr_bdDijkstra, pgr_bdDijkstraCost, pgr_bdDijkstraCostMatrix: variants, agreement, errors, STRICT
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -21,96 +21,96 @@ CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
 # One defaulted parameter (directed): 2 variants per signature.
 query II
 SELECT function_name, count(*) FROM duckdb_functions()
-WHERE function_name IN ('bdDijkstra', 'bdDijkstraCost', 'bdDijkstraCostMatrix') AND tags['ext'] = 'pgrouting'
+WHERE function_name IN ('pgr_bdDijkstra', 'pgr_bdDijkstraCost', 'pgr_bdDijkstraCostMatrix') AND tags['ext'] = 'pgrouting'
 GROUP BY ALL ORDER BY 1;
 ----
-bdDijkstra	10
-bdDijkstraCost	10
-bdDijkstraCostMatrix	2
+pgr_bdDijkstra	10
+pgr_bdDijkstraCost	10
+pgr_bdDijkstraCostMatrix	2
 
-# Upstream's q2 (docqueries bdDijkstra): 6 -> 10 costs 5.
+# Upstream's q2 (docqueries pgr_bdDijkstra): 6 -> 10 costs 5.
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM bdDijkstra(e(), 6, 10) WHERE edge = -1;
+SELECT start_vid, end_vid, agg_cost FROM pgr_bdDijkstra(e(), 6, 10) WHERE edge = -1;
 ----
 6	10	5
 
-# Every shape reaches the same optimum as dijkstra, directed and undirected, both ways round.
+# Every shape reaches the same optimum as pgr_dijkstra, directed and undirected, both ways round.
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, agg_cost FROM bdDijkstra(e(), [6, 1], [10, 17]) WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 1], [10, 17]) WHERE edge = -1)
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_bdDijkstra(e(), [6, 1], [10, 17]) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 1], [10, 17]) WHERE edge = -1)
   UNION ALL
-  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 1], [10, 17]) WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM bdDijkstra(e(), [6, 1], [10, 17]) WHERE edge = -1));
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 1], [10, 17]) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_bdDijkstra(e(), [6, 1], [10, 17]) WHERE edge = -1));
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, agg_cost FROM bdDijkstra(e(), [6, 1], 17, false) WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 1], 17, false) WHERE edge = -1)
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_bdDijkstra(e(), [6, 1], 17, false) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 1], 17, false) WHERE edge = -1)
   UNION ALL
-  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 1], 17, false) WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM bdDijkstra(e(), [6, 1], 17, false) WHERE edge = -1));
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 1], 17, false) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_bdDijkstra(e(), [6, 1], 17, false) WHERE edge = -1));
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, agg_cost FROM bdDijkstra(e(), 6, [10, 17], directed := false) WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), 6, [10, 17], directed := false) WHERE edge = -1)
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_bdDijkstra(e(), 6, [10, 17], directed := false) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), 6, [10, 17], directed := false) WHERE edge = -1)
   UNION ALL
-  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), 6, [10, 17], directed := false) WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM bdDijkstra(e(), 6, [10, 17], directed := false) WHERE edge = -1));
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), 6, [10, 17], directed := false) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_bdDijkstra(e(), 6, [10, 17], directed := false) WHERE edge = -1));
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, agg_cost FROM bdDijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1)
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_bdDijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1)
   UNION ALL
-  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM bdDijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1));
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_bdDijkstra(e(), 'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS c(source, target)') WHERE edge = -1));
 ----
 0
 
 query TT
-SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM bdDijkstraCost(e(), 6, 10));
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_bdDijkstraCost(e(), 6, 10));
 ----
 start_vid	BIGINT
 end_vid	BIGINT
 agg_cost	DOUBLE
 
-# Cost agrees with dijkstraCost for every shape.
+# Cost agrees with pgr_dijkstraCost for every shape.
 query I
 SELECT count(*) FROM (
-  (SELECT * FROM bdDijkstraCost(e(), [7, 10, 15], [7, 10, 15]) EXCEPT SELECT * FROM dijkstraCost(e(), [7, 10, 15], [7, 10, 15]))
+  (SELECT * FROM pgr_bdDijkstraCost(e(), [7, 10, 15], [7, 10, 15]) EXCEPT SELECT * FROM pgr_dijkstraCost(e(), [7, 10, 15], [7, 10, 15]))
   UNION ALL
-  (SELECT * FROM dijkstraCost(e(), [7, 10, 15], [7, 10, 15]) EXCEPT SELECT * FROM bdDijkstraCost(e(), [7, 10, 15], [7, 10, 15])));
+  (SELECT * FROM pgr_dijkstraCost(e(), [7, 10, 15], [7, 10, 15]) EXCEPT SELECT * FROM pgr_bdDijkstraCost(e(), [7, 10, 15], [7, 10, 15])));
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  (SELECT * FROM bdDijkstraCost(e(), [6, 1], 17, false) EXCEPT SELECT * FROM dijkstraCost(e(), [6, 1], 17, false))
+  (SELECT * FROM pgr_bdDijkstraCost(e(), [6, 1], 17, false) EXCEPT SELECT * FROM pgr_dijkstraCost(e(), [6, 1], 17, false))
   UNION ALL
-  (SELECT * FROM dijkstraCost(e(), [6, 1], 17, false) EXCEPT SELECT * FROM bdDijkstraCost(e(), [6, 1], 17, false)));
+  (SELECT * FROM pgr_dijkstraCost(e(), [6, 1], 17, false) EXCEPT SELECT * FROM pgr_bdDijkstraCost(e(), [6, 1], 17, false)));
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  (SELECT * FROM bdDijkstraCost(e(), 'SELECT 6 AS source, 10 AS target') EXCEPT SELECT * FROM dijkstraCost(e(), 'SELECT 6 AS source, 10 AS target'))
+  (SELECT * FROM pgr_bdDijkstraCost(e(), 'SELECT 6 AS source, 10 AS target') EXCEPT SELECT * FROM pgr_dijkstraCost(e(), 'SELECT 6 AS source, 10 AS target'))
   UNION ALL
-  (SELECT * FROM dijkstraCost(e(), 'SELECT 6 AS source, 10 AS target') EXCEPT SELECT * FROM bdDijkstraCost(e(), 'SELECT 6 AS source, 10 AS target')));
+  (SELECT * FROM pgr_dijkstraCost(e(), 'SELECT 6 AS source, 10 AS target') EXCEPT SELECT * FROM pgr_bdDijkstraCost(e(), 'SELECT 6 AS source, 10 AS target')));
 ----
 0
 
 # CostMatrix passes the array as both starts and ends: upstream's q2 (docqueries
-# bdDijkstraCostMatrix) has 12 rows for 4 vertices, undirected, and no vertex paired with itself.
+# pgr_bdDijkstraCostMatrix) has 12 rows for 4 vertices, undirected, and no vertex paired with itself.
 query IIR
-SELECT * FROM bdDijkstraCostMatrix(e(), [5, 6, 10, 15], false) ORDER BY 1, 2;
+SELECT * FROM pgr_bdDijkstraCostMatrix(e(), [5, 6, 10, 15], false) ORDER BY 1, 2;
 ----
 5	6	1
 5	10	2
@@ -125,27 +125,27 @@ SELECT * FROM bdDijkstraCostMatrix(e(), [5, 6, 10, 15], false) ORDER BY 1, 2;
 15	6	2
 15	10	1
 
-# ... which is exactly bdDijkstraCost over the same array twice, and dijkstraCostMatrix's answer.
+# ... which is exactly pgr_bdDijkstraCost over the same array twice, and pgr_dijkstraCostMatrix's answer.
 query I
 SELECT count(*) FROM (
-  (SELECT * FROM bdDijkstraCostMatrix(e(), [5, 6, 10, 15]) EXCEPT SELECT * FROM bdDijkstraCost(e(), [5, 6, 10, 15], [5, 6, 10, 15]))
+  (SELECT * FROM pgr_bdDijkstraCostMatrix(e(), [5, 6, 10, 15]) EXCEPT SELECT * FROM pgr_bdDijkstraCost(e(), [5, 6, 10, 15], [5, 6, 10, 15]))
   UNION ALL
-  (SELECT * FROM bdDijkstraCost(e(), [5, 6, 10, 15], [5, 6, 10, 15]) EXCEPT SELECT * FROM bdDijkstraCostMatrix(e(), [5, 6, 10, 15]))
+  (SELECT * FROM pgr_bdDijkstraCost(e(), [5, 6, 10, 15], [5, 6, 10, 15]) EXCEPT SELECT * FROM pgr_bdDijkstraCostMatrix(e(), [5, 6, 10, 15]))
   UNION ALL
-  (SELECT * FROM bdDijkstraCostMatrix(e(), [5, 6, 10, 15]) EXCEPT SELECT * FROM dijkstraCostMatrix(e(), [5, 6, 10, 15]))
+  (SELECT * FROM pgr_bdDijkstraCostMatrix(e(), [5, 6, 10, 15]) EXCEPT SELECT * FROM pgr_dijkstraCostMatrix(e(), [5, 6, 10, 15]))
   UNION ALL
-  (SELECT * FROM dijkstraCostMatrix(e(), [5, 6, 10, 15]) EXCEPT SELECT * FROM bdDijkstraCostMatrix(e(), [5, 6, 10, 15])));
+  (SELECT * FROM pgr_dijkstraCostMatrix(e(), [5, 6, 10, 15]) EXCEPT SELECT * FROM pgr_bdDijkstraCostMatrix(e(), [5, 6, 10, 15])));
 ----
 0
 
 # The shared error mapping, through this driver.
 statement error
-SELECT * FROM bdDijkstra('SELECT id, source, target FROM edges', 6, 10);
+SELECT * FROM pgr_bdDijkstra('SELECT id, source, target FROM edges', 6, 10);
 ----
 Invalid Input Error: Column 'cost' not Found
 HINT: SELECT id, source, target FROM edges
 
-# "No edges found" is a notice, as for dijkstra.
+# "No edges found" is a notice, as for pgr_dijkstra.
 statement ok
 SET logging_storage = 'memory';
 
@@ -156,7 +156,7 @@ statement ok
 SET enable_logging = true;
 
 query I
-SELECT count(*) FROM bdDijkstra('SELECT id, source, target, cost, reverse_cost FROM edges WHERE false', 6, 10);
+SELECT count(*) FROM pgr_bdDijkstra('SELECT id, source, target, cost, reverse_cost FROM edges WHERE false', 6, 10);
 ----
 0
 
@@ -170,16 +170,16 @@ INFO	No edges found
 
 # STRICT: a NULL in any argument, positional or named, gives an empty result with the columns.
 query I
-SELECT count(*) FROM bdDijkstra(e(), NULL::BIGINT, 10);
+SELECT count(*) FROM pgr_bdDijkstra(e(), NULL::BIGINT, 10);
 ----
 0
 
 query I
-SELECT count(*) FROM bdDijkstraCostMatrix(e(), [5, 6], directed := NULL);
+SELECT count(*) FROM pgr_bdDijkstraCostMatrix(e(), [5, 6], directed := NULL);
 ----
 0
 
 query I
-SELECT count(*) FROM (DESCRIBE SELECT * FROM bdDijkstra(e(), NULL::BIGINT, 10));
+SELECT count(*) FROM (DESCRIBE SELECT * FROM pgr_bdDijkstra(e(), NULL::BIGINT, 10));
 ----
 8

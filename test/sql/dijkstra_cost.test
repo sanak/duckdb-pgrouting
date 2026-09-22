@@ -1,5 +1,5 @@
 # name: test/sql/dijkstra_cost.test
-# description: dijkstraCost and dijkstraCostMatrix: shape, STRICT, agreement with dijkstra
+# description: pgr_dijkstraCost and pgr_dijkstraCostMatrix: shape, STRICT, agreement with pgr_dijkstra
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -20,14 +20,14 @@ CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
 
 # The Cost shape is three columns, as upstream's OUT parameters declare.
 query TT
-SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM dijkstraCost(e(), 6, 10));
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_dijkstraCost(e(), 6, 10));
 ----
 start_vid	BIGINT
 end_vid	BIGINT
 agg_cost	DOUBLE
 
 query TT
-SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM dijkstraCostMatrix(e(), [5, 6, 10]));
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_dijkstraCostMatrix(e(), [5, 6, 10]));
 ----
 start_vid	BIGINT
 end_vid	BIGINT
@@ -35,62 +35,62 @@ agg_cost	DOUBLE
 
 # The empty STRICT result keeps the three columns.
 query I
-SELECT count(*) FROM (DESCRIBE SELECT * FROM dijkstraCost(NULL, 6, 10));
+SELECT count(*) FROM (DESCRIBE SELECT * FROM pgr_dijkstraCost(NULL, 6, 10));
 ----
 3
 
 query I
-SELECT count(*) FROM dijkstraCost(e(), 6, 10, directed := NULL);
+SELECT count(*) FROM pgr_dijkstraCost(e(), 6, 10, directed := NULL);
 ----
 0
 
-# One-to-one: the cost is the agg_cost of dijkstra's closing row.
+# One-to-one: the cost is the agg_cost of pgr_dijkstra's closing row.
 query IIR
-SELECT * FROM dijkstraCost(e(), 6, 10);
+SELECT * FROM pgr_dijkstraCost(e(), 6, 10);
 ----
 6	10	5
 
-# Every other signature agrees with dijkstra's closing rows (edge = -1), both ways round.
-# Many-to-one runs with normal = true here and normal = false in dijkstra; the totals must agree.
+# Every other signature agrees with pgr_dijkstra's closing rows (edge = -1), both ways round.
+# Many-to-one runs with normal = true here and normal = false in pgr_dijkstra; the totals must agree.
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 7], [10, 11]) WHERE edge = -1
-   EXCEPT SELECT * FROM dijkstraCost(e(), [6, 7], [10, 11]))
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 7], [10, 11]) WHERE edge = -1
+   EXCEPT SELECT * FROM pgr_dijkstraCost(e(), [6, 7], [10, 11]))
   UNION ALL
-  (SELECT * FROM dijkstraCost(e(), [6, 7], [10, 11])
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 7], [10, 11]) WHERE edge = -1));
+  (SELECT * FROM pgr_dijkstraCost(e(), [6, 7], [10, 11])
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 7], [10, 11]) WHERE edge = -1));
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 7], 10) WHERE edge = -1
-   EXCEPT SELECT * FROM dijkstraCost(e(), [6, 7], 10))
+  (SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 7], 10) WHERE edge = -1
+   EXCEPT SELECT * FROM pgr_dijkstraCost(e(), [6, 7], 10))
   UNION ALL
-  (SELECT * FROM dijkstraCost(e(), [6, 7], 10)
-   EXCEPT SELECT start_vid, end_vid, agg_cost FROM dijkstra(e(), [6, 7], 10) WHERE edge = -1));
+  (SELECT * FROM pgr_dijkstraCost(e(), [6, 7], 10)
+   EXCEPT SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstra(e(), [6, 7], 10) WHERE edge = -1));
 ----
 0
 
 # The combinations form with a positional directed binds without ambiguity (VARCHAR, VARCHAR,
 # BOOLEAN) and returns the undirected cost.
 query IIR
-SELECT * FROM dijkstraCost(e(), 'SELECT 6 AS source, 10 AS target', false);
+SELECT * FROM pgr_dijkstraCost(e(), 'SELECT 6 AS source, 10 AS target', false);
 ----
 6	10	1
 
-# CostMatrix is dijkstraCost over every ordered pair of distinct ids.
+# CostMatrix is pgr_dijkstraCost over every ordered pair of distinct ids.
 query I
 SELECT count(*) FROM (
-  (SELECT * FROM dijkstraCostMatrix(e(), [5, 6, 10])
-   EXCEPT SELECT * FROM dijkstraCost(e(), [5, 6, 10], [5, 6, 10]))
+  (SELECT * FROM pgr_dijkstraCostMatrix(e(), [5, 6, 10])
+   EXCEPT SELECT * FROM pgr_dijkstraCost(e(), [5, 6, 10], [5, 6, 10]))
   UNION ALL
-  (SELECT * FROM dijkstraCost(e(), [5, 6, 10], [5, 6, 10])
-   EXCEPT SELECT * FROM dijkstraCostMatrix(e(), [5, 6, 10])));
+  (SELECT * FROM pgr_dijkstraCost(e(), [5, 6, 10], [5, 6, 10])
+   EXCEPT SELECT * FROM pgr_dijkstraCostMatrix(e(), [5, 6, 10])));
 ----
 0
 
 query I
-SELECT count(*) FROM dijkstraCostMatrix(e(), [5, 6, 10]);
+SELECT count(*) FROM pgr_dijkstraCostMatrix(e(), [5, 6, 10]);
 ----
 6

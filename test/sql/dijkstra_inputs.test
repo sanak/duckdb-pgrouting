@@ -1,5 +1,5 @@
 # name: test/sql/dijkstra_inputs.test
-# description: dijkstra input contract: NULLs, SQL validation, column types, visibility
+# description: pgr_dijkstra input contract: NULLs, SQL validation, column types, visibility
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -14,19 +14,19 @@ INSERT INTO edges VALUES (1, 1, 2, 1, 1), (2, 2, 3, 1, 1);
 
 # pgRouting functions are STRICT: any NULL argument yields an empty result, not an error.
 query I
-SELECT count(*) FROM dijkstra(NULL, 1, 3);
+SELECT count(*) FROM pgr_dijkstra(NULL, 1, 3);
 ----
 0
 
 query I
-SELECT count(*) FROM dijkstra('SELECT id, source, target, cost FROM edges', NULL, 3);
+SELECT count(*) FROM pgr_dijkstra('SELECT id, source, target, cost FROM edges', NULL, 3);
 ----
 0
 
 # The columns are still there when the result is empty.
 query T
 SELECT list(column_name ORDER BY column_name)
-FROM (DESCRIBE SELECT * FROM dijkstra(NULL, 1, 3));
+FROM (DESCRIBE SELECT * FROM pgr_dijkstra(NULL, 1, 3));
 ----
 [agg_cost, cost, edge, end_vid, node, path_seq, seq, start_vid]
 
@@ -35,13 +35,13 @@ FROM (DESCRIBE SELECT * FROM dijkstra(NULL, 1, 3));
 # as it does for a positional NULL. Both forms are pinned here because DuckDB keeps a named
 # argument out of the positional inputs, which makes them two separate code paths on this side.
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', 1, 3, directed := NULL);
 ----
 0
 
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', 1, 3, NULL);
 ----
 0
@@ -50,19 +50,19 @@ SELECT count(*) FROM dijkstra(
 # reverse_cost makes the edges one-way, so 3 -> 1 exists in the undirected graph only, and the
 # flag's value is therefore observable in the row count.
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost FROM edges', 3, 1, directed := false);
 ----
 3
 
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost FROM edges', 3, 1, false);
 ----
 3
 
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost FROM edges', 3, 1, true);
 ----
 0
@@ -71,18 +71,18 @@ SELECT count(*) FROM dijkstra(
 # exception class as InvalidInputException, not ParserException: a bare-text block would pass for
 # either, and the whole point of this check is that the caller sees one consistent class.
 statement error
-SELECT * FROM dijkstra('DELETE FROM edges', 1, 3);
+SELECT * FROM pgr_dijkstra('DELETE FROM edges', 1, 3);
 ----
 Invalid Input Error: Expected a single SELECT statement
 
 statement error
-SELECT * FROM dijkstra('SELECT 1; SELECT 2', 1, 3);
+SELECT * FROM pgr_dijkstra('SELECT 1; SELECT 2', 1, 3);
 ----
 Invalid Input Error: Expected a single SELECT statement
 
 # Every integer class pgRouting accepts for ANY-INTEGER works.
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id::INTEGER AS id, source::SMALLINT AS source, target::UINTEGER AS target,
           cost::FLOAT AS cost, reverse_cost FROM edges', 1, 3);
 ----
@@ -90,14 +90,14 @@ SELECT count(*) FROM dijkstra(
 
 # Column lookup is case-insensitive: the struct keeps the user's spelling.
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id AS ID, source AS Source, target AS TARGET, cost AS Cost FROM edges', 1, 3);
 ----
 3
 
 # UBIGINT does not round-trip through int64, so it is not ANY-INTEGER.
 statement error
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source::UBIGINT AS source, target, cost FROM edges', 1, 3);
 ----
 Invalid Input Error: Unexpected Column 'source' type. Expected ANY-INTEGER
@@ -107,7 +107,7 @@ statement ok
 CREATE TEMP TABLE tmp_edges AS SELECT * FROM edges;
 
 query I
-SELECT count(*) FROM dijkstra('SELECT id, source, target, cost FROM tmp_edges', 1, 3);
+SELECT count(*) FROM pgr_dijkstra('SELECT id, source, target, cost FROM tmp_edges', 1, 3);
 ----
 3
 
@@ -119,7 +119,7 @@ statement ok
 INSERT INTO edges VALUES (3, 3, 4, 1, 1);
 
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', 1, 4);
 ----
 4
@@ -129,7 +129,7 @@ ROLLBACK;
 
 # A prepared statement re-binds per EXECUTE, so bind_replace always sees concrete values.
 statement ok
-PREPARE q AS SELECT count(*) FROM dijkstra(
+PREPARE q AS SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', $1, 3);
 
 query I
@@ -184,7 +184,7 @@ Invalid Input Error: _pgr_shortestpath_exec: column 'edges' must be LIST(STRUCT)
 # physical type, only its payload is unset), so without this check it would silently use whatever
 # bytes happen to be there as a vertex id instead of raising.
 statement error
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', [1, NULL]::BIGINT[], 3);
 ----
 Invalid Input Error: _pgr_shortestpath_exec: column 'starts' contains a NULL id

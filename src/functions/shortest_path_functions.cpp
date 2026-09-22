@@ -438,7 +438,7 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 }
 
 //===--------------------------------------------------------------------===//
-// Catalog tags: the single source of the upstream <-> public name mapping.
+// Catalog tags: which functions correspond to an upstream pgRouting function.
 //===--------------------------------------------------------------------===//
 void TagFunctions(ExtensionLoader &loader) {
 	auto &db = loader.GetDatabaseInstance();
@@ -446,14 +446,14 @@ void TagFunctions(ExtensionLoader &loader) {
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
 	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
 	for (auto &spec : duckdb_pgrouting::SHORTEST_PATH_SPECS) {
-		const auto public_name = duckdb_pgrouting::PublicName(spec.upstream_name);
-		auto entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier(public_name));
+		auto entry =
+		    schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier(spec.upstream_name));
 		if (!entry) {
-			throw InternalException("pgrouting: function %s was not registered", public_name);
+			throw InternalException("pgrouting: function %s was not registered", spec.upstream_name);
 		}
 		auto &function_entry = entry->Cast<FunctionEntry>();
-		// The tooling reads this back from duckdb_functions() instead of keeping a second copy of
-		// the upstream <-> public name mapping in a script.
+		// The tooling selects the upstream-equivalent functions by this tag, read back from
+		// duckdb_functions(), instead of keeping its own list of them in a script.
 		function_entry.tags.insert("ext", "pgrouting");
 		function_entry.tags.insert("pgrouting_name", spec.upstream_name);
 	}
@@ -465,10 +465,10 @@ void RegisterShortestPathFunctions(ExtensionLoader &loader) {
 	unordered_map<string, TableFunctionSet> sets;
 	for (idx_t i = 0; i < duckdb_pgrouting::SHORTEST_PATH_SPECS.size(); i++) {
 		auto &spec = duckdb_pgrouting::SHORTEST_PATH_SPECS[i];
-		const auto public_name = duckdb_pgrouting::PublicName(spec.upstream_name);
-		auto entry = sets.find(public_name);
+		const string name = spec.upstream_name;
+		auto entry = sets.find(name);
 		if (entry == sets.end()) {
-			entry = sets.emplace(public_name, TableFunctionSet(Identifier(public_name))).first;
+			entry = sets.emplace(name, TableFunctionSet(Identifier(name))).first;
 		}
 		vector<LogicalType> types;
 		for (auto kind : spec.args) {

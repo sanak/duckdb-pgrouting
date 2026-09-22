@@ -12,8 +12,8 @@ SELECT DuckDB_pgRouting_Version();
 4.0.2
 
 query T
-SELECT list_contains(list(function_name), 'dijkstra')
-FROM duckdb_functions() WHERE function_name = 'dijkstra';
+SELECT list_contains(list(function_name), 'pgr_dijkstra')
+FROM duckdb_functions() WHERE function_name = 'pgr_dijkstra';
 ----
 true
 
@@ -23,32 +23,46 @@ FROM duckdb_functions()
 WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL
 GROUP BY ALL ORDER BY 1, 2;
 ----
-bdDijkstra	pgr_bdDijkstra
-bdDijkstraCost	pgr_bdDijkstraCost
-bdDijkstraCostMatrix	pgr_bdDijkstraCostMatrix
-bellmanFord	pgr_bellmanFord
-binaryBreadthFirstSearch	pgr_binaryBreadthFirstSearch
-dagShortestPath	pgr_dagShortestPath
-dijkstra	pgr_dijkstra
-dijkstraCost	pgr_dijkstraCost
-dijkstraCostMatrix	pgr_dijkstraCostMatrix
-dijkstraNear	pgr_dijkstraNear
-dijkstraNearCost	pgr_dijkstraNearCost
-edwardMoore	pgr_edwardMoore
-withPoints	pgr_withPoints
-withPointsCost	pgr_withPointsCost
-withPointsCostMatrix	pgr_withPointsCostMatrix
+pgr_bdDijkstra	pgr_bdDijkstra
+pgr_bdDijkstraCost	pgr_bdDijkstraCost
+pgr_bdDijkstraCostMatrix	pgr_bdDijkstraCostMatrix
+pgr_bellmanFord	pgr_bellmanFord
+pgr_binaryBreadthFirstSearch	pgr_binaryBreadthFirstSearch
+pgr_dagShortestPath	pgr_dagShortestPath
+pgr_dijkstra	pgr_dijkstra
+pgr_dijkstraCost	pgr_dijkstraCost
+pgr_dijkstraCostMatrix	pgr_dijkstraCostMatrix
+pgr_dijkstraNear	pgr_dijkstraNear
+pgr_dijkstraNearCost	pgr_dijkstraNearCost
+pgr_edwardMoore	pgr_edwardMoore
+pgr_withPoints	pgr_withPoints
+pgr_withPointsCost	pgr_withPointsCost
+pgr_withPointsCostMatrix	pgr_withPointsCostMatrix
 
 # The GROUP BY ALL query above collapses every overload's tags to one row and so cannot catch a
 # dropped variant. PostgreSQL accepts any leading run of an overload's DEFAULT parameters
 # positionally as well as by name, and DuckDB never matches a named parameter positionally, so a
 # signature with k defaulted parameters is registered as k + 1 variants, each taking the first
 # 0..k of them positionally and all of them by name. pgr_dijkstra has one defaulted parameter
-# (`directed`) and five signatures, so this catalog must carry exactly ten "dijkstra" entries. The
+# (`directed`) and five signatures, so this catalog must carry exactly ten "pgr_dijkstra" entries. The
 # pgrouting tag scopes the count to this extension's own registrations, so another extension that
-# also published a function named `dijkstra` cannot fail this spuriously.
+# also published a function named `pgr_dijkstra` cannot fail this spuriously.
 query I
 SELECT count(*) FROM duckdb_functions()
-WHERE function_name = 'dijkstra' AND tags['ext'] = 'pgrouting';
+WHERE function_name = 'pgr_dijkstra' AND tags['ext'] = 'pgrouting';
 ----
 10
+
+# The public name is the upstream name, casing included, for every upstream-equivalent function.
+query I
+SELECT count(*) FROM duckdb_functions()
+WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL
+  AND function_name <> tags['pgrouting_name'];
+----
+0
+
+# The unprefixed names are gone rather than kept as aliases.
+statement error
+SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 1, 2);
+----
+does not exist

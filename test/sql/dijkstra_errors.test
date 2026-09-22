@@ -1,5 +1,5 @@
 # name: test/sql/dijkstra_errors.test
-# description: dijkstra error and message mapping
+# description: pgr_dijkstra error and message mapping
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -25,20 +25,20 @@ SET logging_storage = 'memory';
 # pins the exception class DuckDB renders it as; the HINT line pins the "\nHINT: " joiner that
 # carries the offending query, as pgRouting's err/log pair does.
 statement error
-SELECT * FROM dijkstra('SELECT id, source, target FROM edges', 1, 3);
+SELECT * FROM pgr_dijkstra('SELECT id, source, target FROM edges', 1, 3);
 ----
 Invalid Input Error: Column 'cost' not Found
 HINT: SELECT id, source, target FROM edges
 
 # A required column has the wrong class.
 statement error
-SELECT * FROM dijkstra('SELECT id, source, target, ''x'' AS cost FROM edges', 1, 3);
+SELECT * FROM pgr_dijkstra('SELECT id, source, target, ''x'' AS cost FROM edges', 1, 3);
 ----
 Invalid Input Error: Unexpected Column 'cost' type. Expected ANY-NUMERICAL
 
 # A required column is NULL in some row.
 statement error
-SELECT * FROM dijkstra('SELECT id, source, NULL::BIGINT AS target, cost FROM edges', 1, 3);
+SELECT * FROM pgr_dijkstra('SELECT id, source, NULL::BIGINT AS target, cost FROM edges', 1, 3);
 ----
 Invalid Input Error: Unexpected Null value in column target
 
@@ -54,7 +54,7 @@ statement ok
 SET enable_logging = true;
 
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', 1, 99);
 ----
 0
@@ -83,7 +83,7 @@ statement ok
 SET enable_logging = true;
 
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM no_edges', 1, 3);
 ----
 0
@@ -104,7 +104,7 @@ statement ok
 SET enable_logging = true;
 
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges WHERE cost > 1000', 1, 3);
 ----
 0
@@ -126,7 +126,7 @@ statement ok
 SET enable_logging = true;
 
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   'SELECT 1 AS source, 2 AS target WHERE false');
 ----
@@ -144,7 +144,7 @@ INFO	No (source, target) pairs found
 # rather than any row: same error wording as the populated case at the top of this file, with this
 # query as the HINT.
 statement error
-SELECT * FROM dijkstra('SELECT id, source, target FROM no_edges', 1, 3);
+SELECT * FROM pgr_dijkstra('SELECT id, source, target FROM no_edges', 1, 3);
 ----
 Invalid Input Error: Column 'cost' not Found
 HINT: SELECT id, source, target FROM no_edges

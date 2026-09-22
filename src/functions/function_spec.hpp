@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
-// Every public overload declared as data. Upstream names are kept verbatim so a spec row can be
-// compared with pgRouting's own SQL signature files character by character; the public name is
-// derived by stripping the pgr_ prefix.
+// Every public overload declared as data. The registered name is the upstream name, verbatim and
+// with upstream's casing, so a spec row can be compared with pgRouting's own SQL signature files
+// character by character.
 
 #include <cstdint>
 #include <string>
@@ -88,13 +88,6 @@ struct FunctionSpec {
 	duckdb::vector<OptionalParam> optionals; // upstream's declaration order
 	DriverFlags flags;
 };
-
-// "pgr_dijkstra" -> "dijkstra". The prefix is the single naming rule of this extension.
-inline duckdb::string PublicName(const char *upstream_name) {
-	duckdb::string name(upstream_name);
-	const duckdb::string prefix = "pgr_";
-	return name.rfind(prefix, 0) == 0 ? name.substr(prefix.size()) : name;
-}
 
 // Defined in shortest_path_specs.cpp.
 extern const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS;

@@ -1,5 +1,5 @@
 # name: test/sql/dijkstra_interrupt.test
-# description: dijkstra honours DuckDB's query deadline
+# description: pgr_dijkstra honours DuckDB's query deadline
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -8,13 +8,13 @@ require pgrouting
 
 # A directed chain of 4000 edges (1->2->...->4001): a search from a low-numbered start vertex to
 # vertex 4000 has to walk most of the chain, while a search from a start vertex near 4000 finishes
-# almost immediately. dijkstra(sql, starts, ends) with both `starts` and `ends` given as lists
+# almost immediately. pgr_dijkstra(sql, starts, ends) with both `starts` and `ends` given as lists
 # takes the many-to-many driver path, which calls CHECK_FOR_INTERRUPTS() once per start vertex
 # (third_party/pgrouting/include/dijkstra/dijkstra.hpp, via the combinations map built by
 # get_combinations() in third_party/pgrouting/src/cpp_common/combinations.cpp) - one opportunity
 # to observe the deadline per start vertex, in ascending start-vertex order.
 #
-# A single scalar END_VID (dijkstra(sql, starts, end_vid), the other many-to-one signature) is not
+# A single scalar END_VID (pgr_dijkstra(sql, starts, end_vid), the other many-to-one signature) is not
 # usable for this test: pgRouting implements that overload by reversing the graph and swapping
 # starts/ends, which collapses all requested start vertices into a single combinations-map entry
 # (one departure, many destinations), so it calls CHECK_FOR_INTERRUPTS() exactly once for the
@@ -54,7 +54,7 @@ statement ok
 SET max_execution_time = 100;
 
 statement error
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM big_edges',
   range(1, 4001)::BIGINT[], [4000]::BIGINT[]);
 ----

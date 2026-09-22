@@ -126,7 +126,7 @@ def load_not_ported(path):
 # comma-space separated, e.g. `[col0, col1]`) rather than a JSON array, so a query that selects
 # `parameters` or `parameter_types` directly makes duckdbcli.DuckDB.query() fail with "not JSON"
 # (it runs `json.loads` on the CLI's raw output). Measured directly: `SELECT parameters,
-# parameter_types FROM duckdb_functions() WHERE function_name='dijkstra'` raises
+# parameter_types FROM duckdb_functions() WHERE function_name='pgr_dijkstra'` raises
 # `duckdbcli.DuckDBError: not JSON`. Joining each list into one string with a separator that
 # never appears in a type name or a parameter name keeps the columns scalar VARCHAR, which
 # `.mode json` renders as an ordinary JSON string; splitting it back apart here recovers the list.

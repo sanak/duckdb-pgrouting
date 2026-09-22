@@ -12,17 +12,16 @@ import duckdbcli  # noqa: E402
 import export_sampledata  # noqa: E402
 import gen_docqueries_tests as gen  # noqa: E402
 
-# translate() only tests upstream.lower() in implemented -- a membership test on this dict's
-# keys -- and derives the public spelling by stripping the "pgr_" prefix, so the value below is
-# never read. This is not a second copy of the pgrouting_name mapping the repository rule forbids;
-# it exists only to make that membership test true in these tests.
-IMPLEMENTED = {"pgr_dijkstra": "dijkstra"}
+# The lowercase upstream names translate() and select_stems() test membership against. The
+# generator reads them from the pgrouting_name catalog tag; this is a test fixture, not a second
+# copy of that list.
+IMPLEMENTED = {"pgr_dijkstra"}
 
 
 class TestTranslate(unittest.TestCase):
-    def test_strips_the_prefix_and_keeps_the_documentation_casing(self):
+    def test_an_implemented_call_passes_through_verbatim(self):
         sql, missing = gen.translate("SELECT * FROM pgr_Dijkstra('x', 6, 10);", IMPLEMENTED)
-        self.assertEqual("SELECT * FROM Dijkstra('x', 6, 10);", sql)
+        self.assertEqual("SELECT * FROM pgr_Dijkstra('x', 6, 10);", sql)
         self.assertEqual([], missing)
 
     def test_reports_an_unimplemented_function_and_leaves_it_alone(self):
@@ -35,9 +34,10 @@ class TestTranslate(unittest.TestCase):
         self.assertEqual("SELECT source, target FROM combinations;", sql)
         self.assertEqual([], missing)
 
-    def test_does_not_rewrite_a_name_inside_a_longer_identifier(self):
-        sql, _ = gen.translate("SELECT my_pgr_dijkstra_helper(1);", IMPLEMENTED)
+    def test_a_longer_identifier_is_not_a_call(self):
+        sql, missing = gen.translate("SELECT my_pgr_dijkstra_helper(1);", IMPLEMENTED)
         self.assertEqual("SELECT my_pgr_dijkstra_helper(1);", sql)
+        self.assertEqual([], missing)
 
 
 class TestSltTypes(unittest.TestCase):
@@ -340,7 +340,7 @@ class TestSelectStems(unittest.TestCase):
 
     def test_selects_the_page_of_an_implemented_function_case_insensitively(self):
         root = self._tree(["dijkstra/dijkstraCost.pg", "dijkstra/dijkstraCost.result"])
-        selected = gen.select_stems(root, {"pgr_dijkstracost": "dijkstraCost"}, None)
+        selected = gen.select_stems(root, {"pgr_dijkstracost"}, None)
         self.assertEqual([root / "dijkstra/dijkstraCost.pg"], selected)
 
     def test_skips_a_page_whose_stem_names_no_implemented_function(self):

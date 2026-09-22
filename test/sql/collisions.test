@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # The risk this guards is a DuckDB submodule bump adding a built-in whose name this extension
-# already publishes: DuckDB would resolve the name by load order and a caller's dijkstra(...)
+# already publishes: DuckDB would resolve the name by load order and a caller's pgr_dijkstra(...)
 # could silently reach a different implementation.
 #
 # Only what a plain build already carries is compared - DuckDB's built-ins plus the statically

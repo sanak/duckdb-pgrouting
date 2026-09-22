@@ -4,17 +4,18 @@ Guidance for coding agents (and humans) working on this repository.
 
 ## Overview
 
-`duckdb-pgrouting` is a DuckDB extension (`LOAD pgrouting`) that exposes pgRouting's graph algorithms
-with pgRouting's SQL API minus the `pgr_` prefix (`pgr_dijkstra` → `dijkstra`). pgRouting's C++
-code (`third_party/pgrouting`, a submodule pinned to a release tag) is compiled **unmodified** and
-statically linked; only its PostgreSQL-specific layers are replaced. License: GPL-2.0-or-later.
+`duckdb-pgrouting` is a DuckDB extension (`LOAD pgrouting`) that exposes pgRouting's graph
+algorithms with pgRouting's own SQL API, function names included (`pgr_dijkstra`,
+`pgr_bdDijkstra`). pgRouting's C++ code (`third_party/pgrouting`, a submodule pinned to a release
+tag) is compiled **unmodified** and statically linked; only its PostgreSQL-specific layers are
+replaced. License: GPL-2.0-or-later.
 
-Current state: the extension registers `dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`,
-`dijkstraNear`, `dijkstraNearCost`, `withPoints`, `withPointsCost`, `withPointsCostMatrix`,
-`bdDijkstra`, `bdDijkstraCost`, `bdDijkstraCostMatrix`, `bellmanFord`, `edwardMoore`,
-`dagShortestPath` and `binaryBreadthFirstSearch` — pgRouting's seventy-two corresponding
+Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`,
+`pgr_dijkstraNear`, `pgr_dijkstraNearCost`, `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`,
+`pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`, `pgr_bellmanFord`, `pgr_edwardMoore`,
+`pgr_dagShortestPath` and `pgr_binaryBreadthFirstSearch` — pgRouting's seventy-two corresponding
 signatures, each registered once per number of its defaulted parameters passed positionally — and
-`DuckDB_pgRouting_Version()`. The dijkstra and withPoints families call pgRouting's unified
+`DuckDB_pgRouting_Version()`. The `pgr_dijkstra` and `pgr_withPoints` families call pgRouting's unified
 `do_shortestPath` driver; with points given, DuckDB also materializes the two edge queries that
 driver derives from the edge and points SQL. The other five families call their own per-family
 `pgr_do_*` drivers through one adapter on the pg_compat side.
@@ -92,8 +93,8 @@ and none of them ever writes under `third_party/pgrouting`.
 - `scripts/export_sampledata.py` — rebuilds `test/data/pgrouting_sample/*.csv` from upstream's
   `tools/testers/sampledata.pg` and `docqueries/src/sampledata.result`. `--check` fails when the
   committed fixtures no longer match what those upstream files say.
-- `scripts/gen_docqueries_tests.py` — translates upstream's documentation queries into
-  `test/sql/pgrouting/<category>/<name>.test`, executing every translated query so it can tell an
+- `scripts/gen_docqueries_tests.py` — turns upstream's documentation queries into
+  `test/sql/pgrouting/<category>/<name>.test`, executing every query so it can tell an
   equal-cost tie from a defect. `--check` regenerates and fails on any difference.
 - `scripts/check_signatures.py` — compares upstream's `sql/sigs/pgrouting--<ver>.sig` against
   `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
@@ -169,9 +170,10 @@ equal-cost tie has flipped, or something regressed, and all three want a human.
    `LICENSE`, and `.gitignore` / `.gitmodules` (git metadata, not source). In a sqllogictest the
    header goes *after* the `# name:` / `# description:` / `# group:` block, which is parsed
    positionally.
-7. The upstream↔public function name mapping (`pgr_dijkstra` ↔ `dijkstra`, and so on) lives only
-   in the `pgrouting_name` function tag, read back from `duckdb_functions()`; never duplicate it
-   in a script.
+7. The `pgrouting_name` function tag marks every function that corresponds to an upstream
+   pgRouting function and holds that function's upstream name, which is also its public name.
+   The tooling reads the set of implemented functions back from `duckdb_functions()` through
+   that tag and nowhere else; never keep a second list of them in a script.
 8. The Python tooling under `scripts/` uses the standard library only. No `pip install` step exists
    in CI or in the developer prerequisites, and its tests use `unittest`, not `pytest`. A
    dependency that would need one is a reason to change the approach, not to add the dependency.

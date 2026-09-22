@@ -22,10 +22,10 @@ CREATE TABLE pois (pid BIGINT, edge_id BIGINT, side VARCHAR, fraction DOUBLE);
 statement ok
 INSERT INTO pois VALUES (1,1,'l',0.4),(2,15,'r',0.4),(3,12,'l',0.6),(4,6,'r',0.3),(5,5,'l',0.8),(6,4,'b',0.7);
 
-# The three inputs are hand-built here, the way the public withPoints overloads will build them:
+# The three inputs are hand-built here, the way the public pgr_withPoints overloads will build them:
 # the points rows, and the rows of upstream's two derived queries. The exec function registers
 # them under points_sql and under the two key strings it derives from edges_sql and points_sql.
-# Upstream's documented answer for -1 -> 10 (docqueries withPoints q1) is 6.4; the route is the
+# Upstream's documented answer for -1 -> 10 (docqueries pgr_withPoints q1) is 6.4; the route is the
 # only one of that cost, and agg_cost of the closing row is tie-independent anyway.
 query IIR
 SELECT start_vid, end_vid, round(agg_cost, 6) FROM _pgr_shortestpath_exec(
@@ -47,7 +47,7 @@ WHERE edge = -1;
 
 # A missing input names the exact key the driver asked for. These two pin upstream's derived-query
 # template character for character (note the doubled spaces after WITH and after the first comma):
-# WithPointsDerivedKeys must reproduce it, or every withPoints query fails exactly like this.
+# WithPointsDerivedKeys must reproduce it, or every pgr_withPoints query fails exactly like this.
 statement error
 SELECT * FROM _pgr_shortestpath_exec(
   (SELECT NULL AS edges, NULL AS combinations, [-1]::BIGINT[] AS starts, [10]::BIGINT[] AS ends,

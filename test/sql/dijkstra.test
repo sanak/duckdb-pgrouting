@@ -1,5 +1,5 @@
 # name: test/sql/dijkstra.test
-# description: dijkstra, the five pgr_dijkstra signatures
+# description: pgr_dijkstra, its five signatures
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -16,7 +16,7 @@ INSERT INTO edges VALUES
   (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
 
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10);
 ----
 1	1	6	10	6	4	1	0
@@ -38,19 +38,19 @@ FROM range(1, 6001) t(i);
 
 query IIIR
 SELECT count(*), max(seq), max(path_seq), max(agg_cost)
-FROM dijkstra('SELECT id, source, target, cost, reverse_cost FROM chain', 1, 6001);
+FROM pgr_dijkstra('SELECT id, source, target, cost, reverse_cost FROM chain', 1, 6001);
 ----
 6001	6001	6001	6000
 
 query I
-SELECT count(*) FROM dijkstra('SELECT id, source, target, cost, reverse_cost FROM chain', 1, 6001)
+SELECT count(*) FROM pgr_dijkstra('SELECT id, source, target, cost, reverse_cost FROM chain', 1, 6001)
 WHERE seq <> path_seq;
 ----
 0
 
 # one to many (upstream q3)
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', 6, ARRAY[10, 17]);
 ----
 1	1	6	10	6	4	1	0
@@ -134,7 +134,7 @@ SELECT * FROM dijkstra(
 # back so they read as if built from 6 or 1 towards 17. The rows below diverge from upstream at
 # node 12 onward in both paths; see the tie-break summary above for why.
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', ARRAY[6, 1], 17);
 ----
 1	1	1	17	1	6	1	0
@@ -156,7 +156,7 @@ SELECT * FROM dijkstra(
 # that is a real regression, not a tie moving.
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM dijkstra(
+FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', ARRAY[6, 1], 17)
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
 ----
@@ -168,7 +168,7 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 # search rooted at 6. The 1-to-17 path (rows 6-11) never reaches node 12 (its route goes through
 # node 16 instead) and matches upstream exactly.
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[6, 1], ARRAY[10, 17], directed => false);
 ----
@@ -194,7 +194,7 @@ SELECT * FROM dijkstra(
 # Tie-insensitive companion for q5, same rationale as q4's.
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM dijkstra(
+FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[6, 1], ARRAY[10, 17], directed => false)
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
@@ -206,7 +206,7 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 
 # combinations (upstream q8)
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS combinations (source, target)');
 ----
@@ -226,7 +226,7 @@ SELECT * FROM dijkstra(
 
 # positional directed, as PostgreSQL allows (upstream q2)
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', 6, 10, true);
 ----
 1	1	6	10	6	4	1	0
@@ -240,7 +240,7 @@ SELECT * FROM dijkstra(
 # (6,5), (6,15), (6,14); (6,14) has no path (14 is only reachable through 13, in a separate
 # component) and so contributes no rows, matching upstream.
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   'SELECT * FROM (VALUES (5,6), (5,10), (6,5), (6,15), (6,14)) AS combinations (source, target)',
   false);
@@ -258,7 +258,7 @@ SELECT * FROM dijkstra(
 
 # one to many, positional directed (upstream q94)
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', 6, ARRAY[10, 7], false);
 ----
 1	1	6	7	6	4	1	0
@@ -268,7 +268,7 @@ SELECT * FROM dijkstra(
 
 # many to one, positional directed (upstream q95)
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', ARRAY[6, 12], 7, false);
 ----
 1	1	6	7	6	4	1	0
@@ -282,7 +282,7 @@ SELECT * FROM dijkstra(
 # when computed alone in q95. Every other row here, including the rest of this same query, matches
 # upstream exactly.
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', ARRAY[6, 12], ARRAY[10, 7], false);
 ----
 1	1	6	7	6	4	1	0
@@ -299,7 +299,7 @@ SELECT * FROM dijkstra(
 # Tie-insensitive companion for q96.
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM dijkstra(
+FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', ARRAY[6, 12], ARRAY[10, 7], false)
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
 ----
@@ -314,7 +314,7 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 # resolves (see the equivalence check after q7). The (10, 7) and (15, 7) pairs diverge from
 # upstream - see the tie-break summary above; the other four pairs match upstream exactly.
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15]);
 ----
@@ -346,7 +346,7 @@ SELECT * FROM dijkstra(
 # on its own for the (10, 7) and (15, 7) pairs, but still can for every pair here.
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM dijkstra(
+FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15])
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
@@ -360,7 +360,7 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 
 # many to many (upstream q7): the same six pairs as q6, from a clean, deduplicated start array.
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[7, 10, 15], ARRAY[7, 10, 15]);
 ----
@@ -390,7 +390,7 @@ SELECT * FROM dijkstra(
 # Tie-insensitive companion for q7, same rationale as q6's.
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM dijkstra(
+FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[7, 10, 15], ARRAY[7, 10, 15])
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
@@ -411,20 +411,20 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 query II
 SELECT
   (SELECT count(*) FROM (
-    SELECT * FROM dijkstra(
+    SELECT * FROM pgr_dijkstra(
       'SELECT id, source, target, cost, reverse_cost FROM edges',
       ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15])
     EXCEPT ALL
-    SELECT * FROM dijkstra(
+    SELECT * FROM pgr_dijkstra(
       'SELECT id, source, target, cost, reverse_cost FROM edges',
       ARRAY[7, 10, 15], ARRAY[7, 10, 15])
   )) AS q6_except_q7,
   (SELECT count(*) FROM (
-    SELECT * FROM dijkstra(
+    SELECT * FROM pgr_dijkstra(
       'SELECT id, source, target, cost, reverse_cost FROM edges',
       ARRAY[7, 10, 15], ARRAY[7, 10, 15])
     EXCEPT ALL
-    SELECT * FROM dijkstra(
+    SELECT * FROM pgr_dijkstra(
       'SELECT id, source, target, cost, reverse_cost FROM edges',
       ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15])
   )) AS q7_except_q6;
@@ -438,7 +438,7 @@ SELECT
 # sub-paths below was independently cross-checked against the already-verified one-to-one
 # signature called once per (source, target) pair, so none of them can be hiding an undetected tie.
 query IIIIIIRR
-SELECT * FROM dijkstra(
+SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   'SELECT id, source, target, cost, reverse_cost FROM edges');
 ----

@@ -8,7 +8,7 @@
 # Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
 #
 # Source: third_party/pgrouting/docqueries/dijkstra/dijkstraNearCost.pg and the committed transcript beside it. The queries and their expected rows are
-# upstream's; the only edits are the dropped pgr_ prefix and psql's aligned output rewritten as
+# upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
 # sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
 # line with its reason, so what this file does not cover is visible here rather than implied.
 
@@ -39,7 +39,7 @@ CREATE TABLE restrictions AS
 
 # q1
 query IIR
-SELECT * FROM dijkstraNearCost(
+SELECT * FROM pgr_dijkstraNearCost(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   6, ARRAY[10, 11, 1]);
 ----
@@ -47,7 +47,7 @@ SELECT * FROM dijkstraNearCost(
 
 # q2
 query IIR
-SELECT * FROM dijkstraNearCost(
+SELECT * FROM pgr_dijkstraNearCost(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[10, 11, 1], 6,
   true,
@@ -58,7 +58,7 @@ SELECT * FROM dijkstraNearCost(
 
 # q3
 query IIR
-SELECT * FROM dijkstraNearCost(
+SELECT * FROM pgr_dijkstraNearCost(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[15, 16], ARRAY[10, 11, 1],
   directed => false);
@@ -88,7 +88,7 @@ FROM (SELECT unnest(ARRAY[10, 11, 1]) AS target) b ORDER BY source, target;
 
 # q41
 query IIR
-SELECT * FROM dijkstraNearCost(
+SELECT * FROM pgr_dijkstraNearCost(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   'SELECT unnest(ARRAY[10, 11, 1]) as source, target
    FROM (SELECT unnest(ARRAY[15, 16]) AS target) a

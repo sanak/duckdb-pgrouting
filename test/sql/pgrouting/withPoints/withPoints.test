@@ -8,7 +8,7 @@
 # Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
 #
 # Source: third_party/pgrouting/docqueries/withPoints/withPoints.pg and the committed transcript beside it. The queries and their expected rows are
-# upstream's; the only edits are the dropped pgr_ prefix and psql's aligned output rewritten as
+# upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
 # sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
 # line with its reason, so what this file does not cover is visible here rather than implied.
 
@@ -39,7 +39,7 @@ CREATE TABLE restrictions AS
 
 # q1
 query IIIIIIRR
-SELECT * FROM withPoints(
+SELECT * FROM pgr_withPoints(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
   'SELECT pid, edge_id, fraction, side FROM pointsOfInterest',
   -1, 10,  details => true);
@@ -56,7 +56,7 @@ SELECT * FROM withPoints(
 
 # q2
 query IIIIIIRR
-SELECT * FROM withPoints(
+SELECT * FROM pgr_withPoints(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
   'SELECT pid, edge_id, fraction, side FROM pointsOfInterest',
   -1, ARRAY[-3, 7],  directed => false);
@@ -72,7 +72,7 @@ SELECT * FROM withPoints(
 
 # q3
 query IIIIIIRR
-SELECT * FROM withPoints(
+SELECT * FROM pgr_withPoints(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
   'SELECT pid, edge_id, fraction, side FROM pointsOfInterest',
   ARRAY[-1, 6], -3);
@@ -89,7 +89,7 @@ SELECT * FROM withPoints(
 
 # q4
 query IIIIIIRR
-SELECT * FROM withPoints(
+SELECT * FROM pgr_withPoints(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
   'SELECT pid, edge_id, fraction, side FROM pointsOfInterest',
   ARRAY[-1, 6], ARRAY[-3, 1], 'L');
@@ -115,7 +115,7 @@ SELECT * FROM withPoints(
 
 # q5
 query IIIIIIRR
-SELECT * FROM withPoints(
+SELECT * FROM pgr_withPoints(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
   'SELECT pid, edge_id, fraction, side FROM pointsOfInterest',
   'SELECT * FROM (VALUES (-1, 10), (6, -3)) AS combinations(source, target)',
@@ -138,7 +138,7 @@ SELECT * FROM withPoints(
 
 # q6
 query IIIIIIRR
-SELECT * FROM withPoints(
+SELECT * FROM pgr_withPoints(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
   'SELECT pid, edge_id, fraction, side from pointsOfInterest',
   ARRAY[5, -1], ARRAY[-2, -3, -6, 10, 11],
@@ -218,7 +218,7 @@ SELECT (start_vid || ' -> ' || end_vid ||' at ' || path_seq || 'th step:')::TEXT
        ELSE 'Vertex'
   END as is_a,
   abs(node) as id
-FROM withPoints(
+FROM pgr_withPoints(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
   'SELECT pid, edge_id, fraction, side FROM pointsOfInterest',
   ARRAY[5, -1], ARRAY[-2, -3, -6, 10, 11], 'r', details => true)
@@ -251,7 +251,7 @@ SELECT (start_vid || ' => ' || end_vid ||' at ' || path_seq || 'th step')::TEXT 
         ELSE 'Vertex'
     END as is_a,
     abs(node) as id
-FROM withPoints(
+FROM pgr_withPoints(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
   'SELECT pid, edge_id, fraction, side FROM pointsOfInterest',
   ARRAY[5, -1], ARRAY[-2, -3, -6, 10, 11], 'l', details => true)

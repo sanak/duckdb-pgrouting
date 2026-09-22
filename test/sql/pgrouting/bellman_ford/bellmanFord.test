@@ -8,7 +8,7 @@
 # Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
 #
 # Source: third_party/pgrouting/docqueries/bellman_ford/bellmanFord.pg and the committed transcript beside it. The queries and their expected rows are
-# upstream's; the only edits are the dropped pgr_ prefix and psql's aligned output rewritten as
+# upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
 # sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
 # line with its reason, so what this file does not cover is visible here rather than implied.
 
@@ -39,7 +39,7 @@ CREATE TABLE restrictions AS
 
 # q2
 query IIIIIIRR
-SELECT * FROM bellmanFord(
+SELECT * FROM pgr_bellmanFord(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   6, 10, true);
 ----
@@ -52,7 +52,7 @@ SELECT * FROM bellmanFord(
 
 # q3
 query IIIIIIRR
-SELECT * FROM bellmanFord(
+SELECT * FROM pgr_bellmanFord(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   6, ARRAY[10, 17]);
 ----
@@ -70,7 +70,7 @@ SELECT * FROM bellmanFord(
 
 # q4
 query IIIIIIRR
-SELECT * FROM bellmanFord(
+SELECT * FROM pgr_bellmanFord(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[6, 1], 17);
 ----
@@ -90,7 +90,7 @@ SELECT * FROM bellmanFord(
 # guarantees is asserted: endpoints, row count and total agg_cost
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM (SELECT * FROM bellmanFord(
+FROM (SELECT * FROM pgr_bellmanFord(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[6, 1], ARRAY[10, 17],
   directed => false))
@@ -113,7 +113,7 @@ SELECT source, target FROM combinations;
 
 # q52
 query IIIIIIRR
-SELECT * FROM bellmanFord(
+SELECT * FROM pgr_bellmanFord(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   'SELECT source, target FROM combinations',
   false);
@@ -133,7 +133,7 @@ SELECT * FROM bellmanFord(
 # guarantees is asserted: endpoints, row count and total agg_cost
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM (SELECT * FROM bellmanFord(
+FROM (SELECT * FROM pgr_bellmanFord(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[7, 10, 15, 10, 10, 15], ARRAY[10, 7, 10, 15]))
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
@@ -149,7 +149,7 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 # guarantees is asserted: endpoints, row count and total agg_cost
 query IIIR
 SELECT start_vid, end_vid, count(*), max(agg_cost)
-FROM (SELECT * FROM bellmanFord(
+FROM (SELECT * FROM pgr_bellmanFord(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   ARRAY[7, 10, 15], ARRAY[7, 10, 15]))
 GROUP BY start_vid, end_vid ORDER BY 1, 2;
@@ -163,7 +163,7 @@ GROUP BY start_vid, end_vid ORDER BY 1, 2;
 
 # q8
 query IIIIIIRR
-SELECT * FROM bellmanFord(
+SELECT * FROM pgr_bellmanFord(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   'SELECT * FROM (VALUES (6, 10), (6, 7), (12, 10)) AS combinations (source, target)');
 ----

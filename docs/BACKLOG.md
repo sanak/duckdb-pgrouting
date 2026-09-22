@@ -22,10 +22,10 @@ decision rather than an oversight.
 - **`duckdbcli.query()` starts two subprocesses per query** — one for `DESCRIBE`, one for the query
   itself — and each one reruns the whole SQL preamble, which now loads five CSV fixtures. Across
   the 134 blocks that reach `db.query()` out of the 142 total across the fifteen selected pages
-  (`dijkstra`, `dijkstraCost`, `dijkstraCostMatrix`, `dijkstraNear`, `dijkstraNearCost`,
-  `withPoints`, `withPointsCost`, `withPointsCostMatrix`, `bdDijkstra`, `bdDijkstraCost`,
-  `bdDijkstraCostMatrix`, `bellmanFord`, `edwardMoore`, `dagShortestPath`,
-  `binaryBreadthFirstSearch`; 8 blocks are skipped), that is 268 process starts; each call now has
+  (`pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`, `pgr_dijkstraNear`, `pgr_dijkstraNearCost`,
+  `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_bdDijkstra`, `pgr_bdDijkstraCost`,
+  `pgr_bdDijkstraCostMatrix`, `pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`,
+  `pgr_binaryBreadthFirstSearch`; 8 blocks are skipped), that is 268 process starts; each call now has
   a 120-second timeout. Acceptable for a tool that only runs at regeneration time, not in any
   inner loop a developer waits on repeatedly. Measured with all fifteen MVP functions implemented:
   9.53 s for the whole argument-free run.
@@ -33,22 +33,22 @@ decision rather than an oversight.
   the MVP, not meaningless in DuckDB; `pgr_withPointsVia`, `pgr_withPointsDD` and
   `pgr_withPointsKSP` are treated as merely unimplemented instead. Revisit when the MVP is
   complete.
-- **`dijkstraNearCost` runs pgRouting's driver in path mode (`only_cost = false`) and keeps each
+- **`pgr_dijkstraNearCost` runs pgRouting's driver in path mode (`only_cost = false`) and keeps each
   path's closing row (`edge = -1`)**, because the pinned release's only_cost `Path` constructor in
   `include/cpp_common/path.hpp` leaves `m_tot_cost` uninitialized, which `post_process` then sorts
-  and truncates by. Fixed upstream on `develop` by commit `b27576bd58`. Cost: `dijkstraNearCost`
+  and truncates by. Fixed upstream on `develop` by commit `b27576bd58`. Cost: `pgr_dijkstraNearCost`
   materializes full paths instead of just their costs. Revert (switch the NearCost overloads back
   to `only_cost = true` and `ResultColumns::COST`) once the pinned release initializes
   `m_tot_cost`; see the `ResultColumns::COST_OF_PATH` comment in `src/functions/function_spec.hpp`.
 - **A defaulted parameter given both positionally and by name silently prefers the positional
-  value.** For example `dijkstraNearCost(edges_sql, 6, [10, 11, 1], true, 2, cap := 1)` returns the
+  value.** For example `pgr_dijkstraNearCost(edges_sql, 6, [10, 11, 1], true, 2, cap := 1)` returns the
   same rows as `cap := 2` (the positional value), not `cap := 1` (the named one); PostgreSQL
   rejects such a call outright. DuckDB resolves named and positional arguments independently and
   this extension does not add its own check for the overlap.
-- **`bdDijkstra*` and `binaryBreadthFirstSearch` cannot be cancelled once the algorithm is
+- **`pgr_bdDijkstra*` and `pgr_binaryBreadthFirstSearch` cannot be cancelled once the algorithm is
   running.** Upstream's `include/bdDijkstra/bdDijkstra.hpp`, `include/cpp_common/bidirectional.hpp`
   and `include/breadthFirstSearch/binaryBreadthFirstSearch.hpp` never call
-  `CHECK_FOR_INTERRUPTS`, unlike `bellmanFord`, `edwardMoore` and `dagShortestPath`, whose headers
+  `CHECK_FOR_INTERRUPTS`, unlike `pgr_bellmanFord`, `pgr_edwardMoore` and `pgr_dagShortestPath`, whose headers
   do poll it inside their main loop. PostgreSQL runs the same unmodified algorithm bodies and is
   equally uncancellable there, so this is not a regression introduced by the shared interrupt
   path.
@@ -64,7 +64,7 @@ decision rather than an oversight.
 
 ## Test tooling gaps
 
-- **Three of the eight tie-downgraded `dijkstra` blocks have no exact-row counterpart anywhere in
+- **Three of the eight tie-downgraded `pgr_dijkstra` blocks have no exact-row counterpart anywhere in
   the repository.** `q93`, `q133` and `q136` are pinned only by the `differing_rows` count recorded
   for them in `test/pgrouting_ties.json`; `test/sql/dijkstra.test` keeps an exact-row block for
   every other tie-downgraded shape (q4, q5, q6, q7 and q96) but never mentions q93, q133 or q136.
@@ -79,7 +79,7 @@ decision rather than an oversight.
   than relying on q96's coverage of the same tie, should add a hand-written block for it to
   `test/sql/dijkstra.test` the way q4/q5/q6/q7/q96 already have one.
   The old-style families' own tie-downgraded blocks (18 in `test/pgrouting_ties.json` across
-  bdDijkstra, bellmanFord, edwardMoore, dagShortestPath and binaryBreadthFirstSearch) are pinned
+  pgr_bdDijkstra, pgr_bellmanFord, pgr_edwardMoore, pgr_dagShortestPath and pgr_binaryBreadthFirstSearch) are pinned
   the same way: by `start_vid`/`end_vid`, row count and `agg_cost` only, never the specific
   node/edge route on the tie. The hand-written layer-3 tests for those families
   (`test/sql/bd_dijkstra.test`, `test/sql/bellman_ford.test`, `test/sql/dag_shortest_path.test` and
@@ -93,18 +93,18 @@ Each of these would be a change no test could observe, so none of them is made:
   by `ClassOf`, so the `CHAR1` arm of `Accepts` in `src/pg_compat/src/get_check_data.cpp` cannot
   fire.
 - `getText` in `src/pg_compat/src/get_check_data.cpp` returns a `std::malloc`'d buffer with no
-  owner. Unreachable on the dijkstra path, which fetches no TEXT column.
+  owner. Unreachable on the pgr_dijkstra path, which fetches no TEXT column.
 - `seq[i] = NumericCast<int32_t>(k + 1)` in `src/exec/shortest_path_exec.cpp` throws past 2^31
   result rows. Upstream uses `int` for `seq` too, so matching it is the deliberate choice.
 - `TagFunctions` in `src/functions/shortest_path_functions.cpp` resolves the same catalog entry
   once per spec, so two specs disagreeing on `pgrouting_name` for one public name would resolve
   silently to the first.
 - The "No elements found" text in `get_pgarray` (`src/pg_compat/src/get_check_data.cpp`) has no
-  test, because no registered dijkstra overload reaches it: an empty id list, for example
-  `dijkstra(sql, []::BIGINT[], 3)`, returns zero rows rather than raising.
+  test, because no registered pgr_dijkstra overload reaches it: an empty id list, for example
+  `pgr_dijkstra(sql, []::BIGINT[], 3)`, returns zero rows rather than raising.
 - **A list-typed result column would never compare equal between upstream and this build.** Upstream
   renders one as `{4,7}` in its psql transcript, while a DuckDB list stringifies as `[4, 7]`. No
-  `dijkstra` documentation query returns a list-typed column today, so nothing exercises this, but
+  `pgr_dijkstra` documentation query returns a list-typed column today, so nothing exercises this, but
   the first category that does will meet it and the comparison in `gen_docqueries_tests.py` will
   need to normalize both sides first.
 - **`to_list_literal`'s empty-but-present array case is unexercised.** `export_sampledata.py`'s
@@ -126,7 +126,7 @@ Each of these would be a change no test could observe, so none of them is made:
   (`(SELECT array_agg(id) FROM vertices WHERE id IN (...))`) as the vertex array, which DuckDB
   rejects in the argument of a table function that is not in-out (`Table function cannot contain
   subqueries`), so it is skipped in `test/pgrouting_skip.json`; q2 calls `pgr_TSP`, which this
-  extension does not implement. Coverage for `dijkstraCostMatrix` instead comes from the
+  extension does not implement. Coverage for `pgr_dijkstraCostMatrix` instead comes from the
   hand-written `test/sql/dijkstra_cost.test`. The workaround for the scalar-subquery shape, used
   there and available to any caller: `SET VARIABLE ids = (SELECT list(id) FROM vertices WHERE ...);`
   then pass `getvariable('ids')` as the vertex-array argument. The category itself still has
@@ -138,7 +138,7 @@ Each of these would be a change no test could observe, so none of them is made:
   `check_signatures.py`'s unimplemented-function list.
 - **`bdDijkstra/bdDijkstraCostMatrix.pg` produces no generated test file either**, for the same
   reason: its only runnable block, q2, passes a scalar subquery as the vertex array and is skipped
-  in `test/pgrouting_skip.json`; q3 calls `pgr_TSP`. Coverage for `bdDijkstraCostMatrix` comes from
+  in `test/pgrouting_skip.json`; q3 calls `pgr_TSP`. Coverage for `pgr_bdDijkstraCostMatrix` comes from
   the hand-written `test/sql/bd_dijkstra.test`, which also pins upstream's q2 rows.
 
 ## Open decision
@@ -151,6 +151,6 @@ Each of these would be a change no test could observe, so none of them is made:
   between runs. Adding `ORDER BY _pgr_row` would buy reproducibility at the price of a sort over
   the whole edge set on every query, and DuckDB struct ordering does not cover every child type, so
   it would need verification of its own. It may belong behind a setting rather than as a default.
-  Not decided. The `withPoints` derived inputs (edges of points, edges without points) share the
+  Not decided. The `pgr_withPoints` derived inputs (edges of points, edges without points) share the
   property: they are built by a join and an anti-join whose output order DuckDB does not
   guarantee either.

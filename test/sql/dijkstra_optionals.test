@@ -18,7 +18,7 @@ INSERT INTO edges VALUES
 # A spec row with k defaulted parameters registers k + 1 variants. pgr_dijkstra has one
 # (directed) and five signatures, so ten.
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dijkstra';
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'pgr_dijkstra';
 ----
 10
 
@@ -26,44 +26,44 @@ SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dijkstra';
 # positionally.
 query I
 SELECT count(*) FROM duckdb_functions()
-WHERE function_name = 'dijkstra' AND NOT list_contains(parameters, 'directed');
+WHERE function_name = 'pgr_dijkstra' AND NOT list_contains(parameters, 'directed');
 ----
 0
 
 # Positional and named directed agree, both ways round.
 query I
 SELECT count(*) FROM (
-  (SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, false)
+  (SELECT * FROM pgr_dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, false)
    EXCEPT
-   SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, directed := false))
+   SELECT * FROM pgr_dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, directed := false))
   UNION ALL
-  (SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, directed := false)
+  (SELECT * FROM pgr_dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, directed := false)
    EXCEPT
-   SELECT * FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, false)));
+   SELECT * FROM pgr_dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, false)));
 ----
 0
 
 # Without reverse_cost every edge is one-way; edge 6 runs 1 -> 3, so 3 -> 1 exists only in the
 # undirected graph: node 3 via edge 6, then node 1 closing the path. The flag is observable.
 query I
-SELECT count(*) FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, false);
+SELECT count(*) FROM pgr_dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, false);
 ----
 2
 
 query I
-SELECT count(*) FROM dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, true);
+SELECT count(*) FROM pgr_dijkstra('SELECT id, source, target, cost FROM edges', 3, 1, true);
 ----
 0
 
 # Two signatures with (directed, cap) register 3 variants each, two with (directed, cap, global)
 # register 4 each.
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dijkstraNear';
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'pgr_dijkstraNear';
 ----
 14
 
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dijkstraNearCost';
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'pgr_dijkstraNearCost';
 ----
 14
 
@@ -71,40 +71,40 @@ SELECT count(*) FROM duckdb_functions() WHERE function_name = 'dijkstraNearCost'
 # the two (positional directed, named cap) and returns 5 rows.
 query I
 SELECT count(*) FROM (
-  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], 6, true, 2)
+  SELECT * FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], 6, true, 2)
   EXCEPT
-  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], 6, true, cap := 2));
+  SELECT * FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], 6, true, cap := 2));
 ----
 0
 
 query I
-SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], 6, true, 2);
+SELECT count(*) FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [10, 11, 1], 6, true, 2);
 ----
 5
 
 # global passed positionally (p = 3) and by name agree.
 query I
 SELECT count(*) FROM (
-  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [15, 16], [10, 11, 1], false, 1, false)
+  SELECT * FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [15, 16], [10, 11, 1], false, 1, false)
   EXCEPT
-  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [15, 16], [10, 11, 1],
+  SELECT * FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [15, 16], [10, 11, 1],
                              directed := false, global := false));
 ----
 0
 
 # STRICT applies to every defaulted parameter, positional or named.
 query I
-SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10, 11, 1], cap := NULL);
+SELECT count(*) FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10, 11, 1], cap := NULL);
 ----
 0
 
 query I
-SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10, 11, 1], true, NULL);
+SELECT count(*) FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', 6, [10, 11, 1], true, NULL);
 ----
 0
 
 query I
-SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [15, 16], [10, 11, 1], global := NULL);
+SELECT count(*) FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges', [15, 16], [10, 11, 1], global := NULL);
 ----
 0
 
@@ -112,10 +112,10 @@ SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost
 # ambiguity against the (edges_sql, combinations_sql) overload and agrees with the named form.
 query I
 SELECT count(*) FROM (
-  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
+  SELECT * FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
                              'SELECT unnest([10, 11, 1]) AS source, 6 AS target', false)
   EXCEPT
-  SELECT * FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
+  SELECT * FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
                              'SELECT unnest([10, 11, 1]) AS source, 6 AS target', directed := false));
 ----
 0
@@ -123,7 +123,7 @@ SELECT count(*) FROM (
 # Row count of the positional-directed combinations call above, measured against the release
 # build.
 query I
-SELECT count(*) FROM dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
+SELECT count(*) FROM pgr_dijkstraNear('SELECT id, source, target, cost, reverse_cost FROM edges',
                              'SELECT unnest([10, 11, 1]) AS source, 6 AS target', false);
 ----
 2

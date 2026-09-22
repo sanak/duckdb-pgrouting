@@ -17,7 +17,7 @@ INSERT INTO edges VALUES (1, 1, 2, 1, 1), (2, 2, 3, 1, 1);
 # into a LIST(BIGINT) instead of LIST(STRUCT) and failing with an internal-looking error. The alias
 # is now `_pgr_row`, so a column named `t` is just an ordinary (here, unused) column.
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost, id AS t FROM edges', 1, 3);
 ----
 3
@@ -25,7 +25,7 @@ SELECT count(*) FROM dijkstra(
 # ListOfRows materializes `combinations_sql` through the same code path, so the same collision -
 # and the same fix - applies there too.
 query I
-SELECT count(*) FROM dijkstra(
+SELECT count(*) FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges',
   'SELECT 1 AS source, 2 AS target, 99 AS t');
 ----

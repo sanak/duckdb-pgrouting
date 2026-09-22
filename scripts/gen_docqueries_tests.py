@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Generate sqllogictests from pgRouting's documentation queries.
 
-For every ``/* -- qN */`` block of an upstream ``.pg`` file this tool rewrites the upstream
-function names to this extension's public names, runs the rewritten query against the built
-duckdb binary, and compares the answer with upstream's committed ``.result`` transcript. A block
-that agrees is emitted with upstream's own expected rows; a block that disagrees stops the
-generator. A block that differs only by an equal-cost route is downgraded to a tie-insensitive
-assertion and recorded in test/pgrouting_ties.json.
+For every ``/* -- qN */`` block of an upstream ``.pg`` file this tool runs the query, verbatim,
+against the built duckdb binary -- the extension's public names are upstream's own ``pgr_``
+names -- and compares the answer with upstream's committed ``.result`` transcript. A block that
+agrees is emitted with upstream's own expected rows; a block that disagrees stops the generator.
+A block that differs only by an equal-cost route is downgraded to a tie-insensitive assertion and
+recorded in test/pgrouting_ties.json.
 
 Only each implemented function's own documentation page is processed (see select_stems);
 --category narrows that further for debugging.
 
-The upstream-to-public name mapping is never written down here: it is read back from the
+Which upstream functions are implemented is never written down here: it is read back from the
 ``pgrouting_name`` function tag in ``duckdb_functions()``.
 """
 
@@ -75,28 +75,30 @@ class Skipped:
 Item = Union[Emitted, Skipped]
 
 
-def implemented_names(db: duckdbcli.DuckDB) -> Dict[str, str]:
-    """Lowercase upstream name to public name, straight from the catalog tag."""
+def implemented_names(db: duckdbcli.DuckDB) -> Set[str]:
+    """Lowercase upstream names of the implemented functions, straight from the catalog tag.
+
+    Lowercase because the documentation's casing varies (pgr_dijkstraCost, pgr_dijkstracost) and
+    both PostgreSQL and DuckDB resolve a function name case-insensitively.
+    """
     result = db.query(
-        "SELECT DISTINCT lower(tags['pgrouting_name']) AS upstream, function_name AS public "
+        "SELECT DISTINCT lower(tags['pgrouting_name']) AS upstream "
         "FROM duckdb_functions() "
         "WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL"
     )
-    return {row[0]: row[1] for row in result.rows}
+    return {row[0] for row in result.rows}
 
 
-def translate(sql: str, implemented: Dict[str, str]) -> Tuple[str, List[str]]:
-    """Rewrite upstream calls to public ones, keeping the documentation's casing."""
-    missing: List[str] = []
+def translate(sql: str, implemented: Set[str]) -> Tuple[str, List[str]]:
+    """The query as this build runs it, and the upstream functions it calls that are missing.
 
-    def replace(match: "re.Match[str]") -> str:
-        upstream = match.group(1)
-        if upstream.lower() in implemented:
-            return upstream[len("pgr_"):] + "("
-        missing.append(upstream)
-        return match.group(0)
-
-    return CALL_RE.sub(replace, sql), missing
+    The public names are upstream's own, so an implemented call passes through verbatim, casing
+    included: the rewrite is the identity. What remains of this step is the membership test that
+    lets process() skip a block calling a function this build does not provide.
+    """
+    missing = [match.group(1) for match in CALL_RE.finditer(sql)
+               if match.group(1).lower() not in implemented]
+    return sql, missing
 
 
 def slt_types(duck_types: Sequence[str]) -> str:
@@ -276,7 +278,7 @@ HEADER = """# name: {out}
 # Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
 #
 # Source: {pg} and the committed transcript beside it. The queries and their expected rows are
-# upstream's; the only edits are the dropped pgr_ prefix and psql's aligned output rewritten as
+# upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
 # sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
 # line with its reason, so what this file does not cover is visible here rather than implied.
 
@@ -350,7 +352,7 @@ def expected_cells(table: pgparse.AlignedTable, directive: str) -> List[List[str
     return out
 
 
-def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Dict[str, str],
+def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Set[str],
             skips: Dict[str, Dict[str, str]], ties: Dict[str, Dict[str, dict]]) -> List[Item]:
     root = pathlib.Path(DOCQUERIES) / category
     pg_text = (root / (stem + ".pg")).read_text()
@@ -417,7 +419,7 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Dict[st
     return items
 
 
-def select_stems(root: pathlib.Path, implemented: Dict[str, str],
+def select_stems(root: pathlib.Path, implemented: Set[str],
                  only: Optional[Sequence[str]]) -> List[pathlib.Path]:
     """The .pg files a run processes: each implemented function's own documentation page.
 

@@ -1,5 +1,5 @@
 # name: test/sql/withpoints_cost.test
-# description: withPointsCost and withPointsCostMatrix: shape, agreement with withPoints, STRICT
+# description: pgr_withPointsCost and pgr_withPointsCostMatrix: shape, agreement with pgr_withPoints, STRICT
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -29,119 +29,119 @@ CREATE MACRO p() AS 'SELECT pid, edge_id, fraction, side FROM pois';
 
 # One defaulted parameter (directed): 2 variants per signature.
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'withPointsCost' AND tags['ext'] = 'pgrouting';
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'pgr_withPointsCost' AND tags['ext'] = 'pgrouting';
 ----
 20
 
 query I
-SELECT count(*) FROM duckdb_functions() WHERE function_name = 'withPointsCostMatrix' AND tags['ext'] = 'pgrouting';
+SELECT count(*) FROM duckdb_functions() WHERE function_name = 'pgr_withPointsCostMatrix' AND tags['ext'] = 'pgrouting';
 ----
 4
 
 query TT
-SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM withPointsCost(e(), p(), -1, 10));
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_withPointsCost(e(), p(), -1, 10));
 ----
 start_vid	BIGINT
 end_vid	BIGINT
 agg_cost	DOUBLE
 
-# Upstream's q1 (docqueries withPointsCost).
+# Upstream's q1 (docqueries pgr_withPointsCost).
 query IIR
-SELECT start_vid, end_vid, round(agg_cost, 6) FROM withPointsCost(e(), p(), -1, 10);
+SELECT start_vid, end_vid, round(agg_cost, 6) FROM pgr_withPointsCost(e(), p(), -1, 10);
 ----
 -1	10	6.4
 
-# Every shape agrees with withPoints' closing rows, both ways round, for a derived and an explicit
+# Every shape agrees with pgr_withPoints' closing rows, both ways round, for a derived and an explicit
 # driving side. Many-to-one runs with normal = false in both.
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPoints(e(), p(), [5, -1], [-2, -3, -6, 10, 11]) WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCost(e(), p(), [5, -1], [-2, -3, -6, 10, 11]))
+  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPoints(e(), p(), [5, -1], [-2, -3, -6, 10, 11]) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCost(e(), p(), [5, -1], [-2, -3, -6, 10, 11]))
   UNION ALL
-  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCost(e(), p(), [5, -1], [-2, -3, -6, 10, 11])
-   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPoints(e(), p(), [5, -1], [-2, -3, -6, 10, 11]) WHERE edge = -1));
+  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCost(e(), p(), [5, -1], [-2, -3, -6, 10, 11])
+   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPoints(e(), p(), [5, -1], [-2, -3, -6, 10, 11]) WHERE edge = -1));
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPoints(e(), p(), [5, -1], [-2, -3, -6, 10, 11], 'l') WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCost(e(), p(), [5, -1], [-2, -3, -6, 10, 11], 'l'))
+  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPoints(e(), p(), [5, -1], [-2, -3, -6, 10, 11], 'l') WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCost(e(), p(), [5, -1], [-2, -3, -6, 10, 11], 'l'))
   UNION ALL
-  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCost(e(), p(), [5, -1], [-2, -3, -6, 10, 11], 'l')
-   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPoints(e(), p(), [5, -1], [-2, -3, -6, 10, 11], 'l') WHERE edge = -1));
+  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCost(e(), p(), [5, -1], [-2, -3, -6, 10, 11], 'l')
+   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPoints(e(), p(), [5, -1], [-2, -3, -6, 10, 11], 'l') WHERE edge = -1));
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPoints(e(), p(), [-1, 6], -3) WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCost(e(), p(), [-1, 6], -3))
+  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPoints(e(), p(), [-1, 6], -3) WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCost(e(), p(), [-1, 6], -3))
   UNION ALL
-  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCost(e(), p(), [-1, 6], -3)
-   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPoints(e(), p(), [-1, 6], -3) WHERE edge = -1));
+  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCost(e(), p(), [-1, 6], -3)
+   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPoints(e(), p(), [-1, 6], -3) WHERE edge = -1));
 ----
 0
 
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPoints(e(), p(), 'SELECT * FROM (VALUES (-1, 10), (6, -3)) AS c(source, target)', 'r') WHERE edge = -1
-   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCost(e(), p(), 'SELECT * FROM (VALUES (-1, 10), (6, -3)) AS c(source, target)', 'r'))
+  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPoints(e(), p(), 'SELECT * FROM (VALUES (-1, 10), (6, -3)) AS c(source, target)', 'r') WHERE edge = -1
+   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCost(e(), p(), 'SELECT * FROM (VALUES (-1, 10), (6, -3)) AS c(source, target)', 'r'))
   UNION ALL
-  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCost(e(), p(), 'SELECT * FROM (VALUES (-1, 10), (6, -3)) AS c(source, target)', 'r')
-   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPoints(e(), p(), 'SELECT * FROM (VALUES (-1, 10), (6, -3)) AS c(source, target)', 'r') WHERE edge = -1));
+  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCost(e(), p(), 'SELECT * FROM (VALUES (-1, 10), (6, -3)) AS c(source, target)', 'r')
+   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPoints(e(), p(), 'SELECT * FROM (VALUES (-1, 10), (6, -3)) AS c(source, target)', 'r') WHERE edge = -1));
 ----
 0
 
 # CostMatrix is Cost over every ordered pair of distinct ids; upstream's q1 has 12 rows.
 query I
 SELECT count(*) FROM (
-  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCostMatrix(e(), 'SELECT pid, edge_id, fraction FROM pois', [-1, 10, 11, -6], directed := false)
-   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCost(e(), 'SELECT pid, edge_id, fraction FROM pois', [-1, 10, 11, -6], [-1, 10, 11, -6], directed := false))
+  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCostMatrix(e(), 'SELECT pid, edge_id, fraction FROM pois', [-1, 10, 11, -6], directed := false)
+   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCost(e(), 'SELECT pid, edge_id, fraction FROM pois', [-1, 10, 11, -6], [-1, 10, 11, -6], directed := false))
   UNION ALL
-  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCost(e(), 'SELECT pid, edge_id, fraction FROM pois', [-1, 10, 11, -6], [-1, 10, 11, -6], directed := false)
-   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM withPointsCostMatrix(e(), 'SELECT pid, edge_id, fraction FROM pois', [-1, 10, 11, -6], directed := false)));
+  (SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCost(e(), 'SELECT pid, edge_id, fraction FROM pois', [-1, 10, 11, -6], [-1, 10, 11, -6], directed := false)
+   EXCEPT SELECT start_vid, end_vid, round(agg_cost, 9) FROM pgr_withPointsCostMatrix(e(), 'SELECT pid, edge_id, fraction FROM pois', [-1, 10, 11, -6], directed := false)));
 ----
 0
 
 query I
-SELECT count(*) FROM withPointsCostMatrix(e(), 'SELECT pid, edge_id, fraction FROM pois', [-1, 10, 11, -6], directed := false);
+SELECT count(*) FROM pgr_withPointsCostMatrix(e(), 'SELECT pid, edge_id, fraction FROM pois', [-1, 10, 11, -6], directed := false);
 ----
 12
 
 # Overload resolution, as in withpoints.test: VARCHAR binds the CHAR variant, BOOLEAN the
 # positional directed.
 statement error
-SELECT * FROM withPointsCost(e(), p(), -1, 10, 'x');
+SELECT * FROM pgr_withPointsCost(e(), p(), -1, 10, 'x');
 ----
 Invalid value of 'driving side'
 
 statement error
-SELECT * FROM withPointsCost(e(), p(), 'SELECT -1 AS source, 10 AS target', 'x');
+SELECT * FROM pgr_withPointsCost(e(), p(), 'SELECT -1 AS source, 10 AS target', 'x');
 ----
 Invalid value of 'driving side'
 
 statement error
-SELECT * FROM withPointsCostMatrix(e(), p(), [-1, 10], 'x');
+SELECT * FROM pgr_withPointsCostMatrix(e(), p(), [-1, 10], 'x');
 ----
 Invalid value of 'driving side'
 
 statement ok
-SELECT * FROM withPointsCost(e(), p(), -1, 10, false);
+SELECT * FROM pgr_withPointsCost(e(), p(), -1, 10, false);
 
 statement ok
-SELECT * FROM withPointsCost(e(), p(), 'SELECT -1 AS source, 10 AS target', false);
+SELECT * FROM pgr_withPointsCost(e(), p(), 'SELECT -1 AS source, 10 AS target', false);
 
 statement ok
-SELECT * FROM withPointsCostMatrix(e(), p(), [-1, 10], false);
+SELECT * FROM pgr_withPointsCostMatrix(e(), p(), [-1, 10], false);
 
 # STRICT.
 query I
-SELECT count(*) FROM withPointsCost(e(), p(), -1, 10, NULL::VARCHAR);
+SELECT count(*) FROM pgr_withPointsCost(e(), p(), -1, 10, NULL::VARCHAR);
 ----
 0
 
 query I
-SELECT count(*) FROM withPointsCostMatrix(e(), p(), [-1, 10], directed := NULL);
+SELECT count(*) FROM pgr_withPointsCostMatrix(e(), p(), [-1, 10], directed := NULL);
 ----
 0

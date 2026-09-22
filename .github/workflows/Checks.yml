@@ -63,7 +63,7 @@ jobs:
           key: checks-linux-amd64
 
       # Every step below runs against build/release. That shell has the extension statically
-      # linked (duckdb_functions() lists dijkstra with no LOAD), so the generators exercise the
+      # linked (duckdb_functions() lists pgr_dijkstra with no LOAD), so the generators exercise the
       # build this commit produces rather than a separately installed one, and the same build tree
       # carries test/unittest for the layer 5 sqllogictest.
       - name: Build (release)
