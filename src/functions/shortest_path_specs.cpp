@@ -126,6 +126,40 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
      {DIRECTED, DETAILS}, WithPointsFlags(false, true, SIDE_OF_DIRECTED, ResultColumns::PATH)},
     {"pgr_withPoints", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::COMBINATIONS_SQL},
      {DIRECTED, DETAILS}, WithPointsFlags(false, true, SIDE_OF_DIRECTED, ResultColumns::PATH)},
+
+    // pgr_withPointsCost: only_cost, a constant details = true, no details parameter; normal =
+    // false on many-to-one (withPointsCost.sql), as pgr_withPoints and unlike pgr_dijkstraCost.
+    {"pgr_withPointsCost",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VID, ArgKind::END_VID, ArgKind::DRIVING_SIDE},
+     {DIRECTED}, WithPointsFlags(true, true, CHAR_SIDE, ResultColumns::COST)},
+    {"pgr_withPointsCost",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VID, ArgKind::END_VIDS, ArgKind::DRIVING_SIDE},
+     {DIRECTED}, WithPointsFlags(true, true, CHAR_SIDE, ResultColumns::COST)},
+    {"pgr_withPointsCost",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VID, ArgKind::DRIVING_SIDE},
+     {DIRECTED}, WithPointsFlags(true, false, CHAR_SIDE, ResultColumns::COST)},
+    {"pgr_withPointsCost",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS, ArgKind::DRIVING_SIDE},
+     {DIRECTED}, WithPointsFlags(true, true, CHAR_SIDE, ResultColumns::COST)},
+    {"pgr_withPointsCost",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::COMBINATIONS_SQL, ArgKind::DRIVING_SIDE},
+     {DIRECTED}, WithPointsFlags(true, true, CHAR_SIDE, ResultColumns::COST)},
+    {"pgr_withPointsCost", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VID, ArgKind::END_VID},
+     {DIRECTED}, WithPointsFlags(true, true, SIDE_OF_DIRECTED, ResultColumns::COST)},
+    {"pgr_withPointsCost", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VID, ArgKind::END_VIDS},
+     {DIRECTED}, WithPointsFlags(true, true, SIDE_OF_DIRECTED, ResultColumns::COST)},
+    {"pgr_withPointsCost", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VID},
+     {DIRECTED}, WithPointsFlags(true, false, SIDE_OF_DIRECTED, ResultColumns::COST)},
+    {"pgr_withPointsCost", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS},
+     {DIRECTED}, WithPointsFlags(true, true, SIDE_OF_DIRECTED, ResultColumns::COST)},
+    {"pgr_withPointsCost", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::COMBINATIONS_SQL},
+     {DIRECTED}, WithPointsFlags(true, true, SIDE_OF_DIRECTED, ResultColumns::COST)},
+    // pgr_withPointsCostMatrix: starts without ends, as pgr_dijkstraCostMatrix.
+    {"pgr_withPointsCostMatrix",
+     {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS, ArgKind::DRIVING_SIDE},
+     {DIRECTED}, WithPointsFlags(true, true, CHAR_SIDE, ResultColumns::COST)},
+    {"pgr_withPointsCostMatrix", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS},
+     {DIRECTED}, WithPointsFlags(true, true, SIDE_OF_DIRECTED, ResultColumns::COST)},
 };
 
 } // namespace duckdb_routing

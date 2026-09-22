@@ -29,6 +29,8 @@ dijkstraCostMatrix	pgr_dijkstraCostMatrix
 dijkstraNear	pgr_dijkstraNear
 dijkstraNearCost	pgr_dijkstraNearCost
 withPoints	pgr_withPoints
+withPointsCost	pgr_withPointsCost
+withPointsCostMatrix	pgr_withPointsCostMatrix
 
 # The GROUP BY ALL query above collapses every overload's tags to one row and so cannot catch a
 # dropped variant. PostgreSQL accepts any leading run of an overload's DEFAULT parameters
