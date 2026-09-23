@@ -1,0 +1,32 @@
+# name: test/sql/dijkstra_long_input.test
+# description: An input query longer than one DuckDB vector reaches pgRouting whole
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+# Every input query is materialized as one LIST(STRUCT) cell. With more rows than a DuckDB vector
+# holds (2048), the list's child vectors are longer than any vector the executor normally hands
+# out, which is the case a change to how those children are read would get wrong first. The cost
+# column is DECIMAL on purpose: DECIMAL is converted to DOUBLE for the whole child column at once,
+# so that conversion is exercised at the same length.
+statement ok
+CREATE TABLE long_chain AS
+SELECT i AS id, i AS source, i + 1 AS target, 1.0::DECIMAL(4,1) AS cost
+FROM range(1, 5001) t(i);
+
+# 1 -> 5001 walks all 5000 edges: 5001 rows including the closing row, total cost 5000.
+query III
+SELECT count(*), max(seq), max(agg_cost)::BIGINT
+FROM pgr_dijkstra('SELECT id, source, target, cost FROM long_chain', 1, 5001);
+----
+5001	5001	5000
+
+# The last edge of the chain is reached, so no row was lost at a vector boundary.
+query II
+SELECT node, edge
+FROM pgr_dijkstra('SELECT id, source, target, cost FROM long_chain', 1, 5001)
+WHERE seq = 5000;
+----
+5000	5000
