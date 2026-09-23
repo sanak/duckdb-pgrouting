@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Temporary. Compiles everything once against the DuckDB release this branch is pinned to and lists
+# every failing translation unit, not just the first: ninja stops at the first failed edge unless it
+# is run with -k 0. Removed as soon as the branch carries the regular workflows.
+name: Gate
+on:
+  push:
+    branches: [v1.5-variegata]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Gate (linux_amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GEN: ninja
+      VCPKG_COMMIT: 84bab45d415d22042bd0b9081aea57f362da3f35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install Ninja
+        run: command -v ninja || { sudo apt-get update && sudo apt-get install -y ninja-build; }
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$RUNNER_TEMP/vcpkg"
+          git -C "$RUNNER_TEMP/vcpkg" checkout "$VCPKG_COMMIT"
+          "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+          echo "VCPKG_ROOT=$RUNNER_TEMP/vcpkg" >> "$GITHUB_ENV"
+          echo "VCPKG_TOOLCHAIN_PATH=$RUNNER_TEMP/vcpkg/scripts/buildsystems/vcpkg.cmake" >> "$GITHUB_ENV"
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: gate-linux-amd64
+
+      # make configures and starts the build; if it fails, the second pass carries on past every
+      # failure so the log holds the complete list.
+      - name: Build (keep going)
+        run: |
+          make release > build.log 2>&1 || true
+          if [ -f build/release/build.ninja ]; then
+            cmake --build build/release -- -k 0 >> build.log 2>&1 || true
+          fi
+          tail -n 40 build.log
+
+      - name: Summarize
+        run: |
+          grep -E ': (fatal )?error:' build.log | sort -u > errors.txt || true
+          {
+            echo "errors: $(wc -l < errors.txt)"
+            echo
+            echo '```'
+            cut -d: -f1 errors.txt | sort | uniq -c
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-log
+          path: |
+            build.log
+            errors.txt
+
+      - name: Fail when anything failed to compile
+        run: |
+          test ! -s errors.txt
+          test -x build/release/duckdb
