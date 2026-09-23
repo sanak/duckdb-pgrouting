@@ -57,5 +57,19 @@ class TimeoutTest(unittest.TestCase):
         self.assertEqual(duckdbcli.TIMEOUT_SECONDS, run.call_args.kwargs["timeout"])
 
 
+class FlagsTest(unittest.TestCase):
+    def test_flags_go_before_batch_mode(self):
+        completed = mock.Mock(returncode=0, stdout="[]", stderr="")
+        with mock.patch("duckdbcli.subprocess.run", return_value=completed) as run:
+            duckdbcli.DuckDB("duckdb", flags=["-unsigned"])._run("SELECT 1")
+        self.assertEqual(["duckdb", "-unsigned", "-batch", ":memory:"], run.call_args.args[0])
+
+    def test_no_flags_by_default(self):
+        completed = mock.Mock(returncode=0, stdout="[]", stderr="")
+        with mock.patch("duckdbcli.subprocess.run", return_value=completed) as run:
+            duckdbcli.DuckDB("duckdb")._run("SELECT 1")
+        self.assertEqual(["duckdb", "-batch", ":memory:"], run.call_args.args[0])
+
+
 if __name__ == "__main__":
     unittest.main()
