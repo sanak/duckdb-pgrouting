@@ -33,9 +33,11 @@ a person.
    `v1.5-variegata` (Main Extension Distribution Pipeline, Wasm Tests, Checks), and the same
    change is green on `main`. Checks includes both generators in `--check` mode, so fixtures and
    the generated docquery tests are current.
-2. **W2 against the branch build.** Run the W2 workflow in `artifact` mode with the
-   `v1.5-variegata` distribution run's id:
-   `gh workflow run W2.yml -f mode=artifact -f run_id=<run id>`. It must pass.
+2. **W2 against the branch build.** Run the W2 workflow from the stable line in `artifact` mode
+   with the `v1.5-variegata` distribution run's id:
+   `gh workflow run W2.yml --ref v1.5-variegata -f mode=artifact -f run_id=<run id>`. It must
+   pass. W2 checks `pgr_version()` against the pgRouting version of its own checkout, so it runs
+   from the line that built the binaries (without `--ref` it runs from `main`).
 3. **Tag the stable-line head** with an annotated tag and push it:
    ```bash
    git switch v1.5-variegata && git pull --ff-only
@@ -47,8 +49,8 @@ a person.
    must equal the tag, `pgr_version()` the bundled pgRouting version) and creates the draft.
 4. **Review the draft**: nine assets plus `SHA256SUMS`, the title names the DuckDB version, and
    the notes list one `INSTALL` line per native platform. Then run W2 against the draft:
-   `gh workflow run W2.yml -f mode=release -f tag=vX.Y.Z`. It must pass and report the tag as the
-   extension version.
+   `gh workflow run W2.yml --ref v1.5-variegata -f mode=release -f tag=vX.Y.Z`. It must pass and
+   report the tag as the extension version.
 5. **Publish** the draft on GitHub. Then, on one platform:
    ```sql
    -- duckdb -unsigned
