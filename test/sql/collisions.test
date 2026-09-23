@@ -10,9 +10,10 @@
 #
 # Only what a plain build already carries is compared - DuckDB's built-ins plus the statically
 # linked core_functions and parquet, 814 distinct names at the time of writing. Optional
-# out-of-tree extensions (spatial, json, icu, fts) are deliberately not compared: this repository
-# tracks DuckDB main, whose commit-hash version has no published extension artifacts, so they
-# could only be covered by building each one from source in every platform build. None of
+# out-of-tree extensions (spatial, json, icu, fts) are deliberately not compared: this repository's
+# next line builds against an unreleased DuckDB branch, whose commit-hash version has no published
+# extension artifacts, and this file must stay identical on both release lines, so they could
+# only be covered by building each one from source in every platform build. None of
 # pgRouting's names plausibly collides with a geometry, JSON, collation or full-text function, so
 # that is a large cost for a small gain. This omission is a decision, not an oversight.
 

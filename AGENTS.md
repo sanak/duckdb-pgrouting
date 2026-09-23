@@ -24,7 +24,8 @@ Every public function carries a catalog description and an example (`duckdb_func
 
 ## Layout
 
-- `duckdb/` — DuckDB submodule (tracks `main`).
+- `duckdb/` — DuckDB submodule: a `v2.0-cyanoptera` commit on `main`, the latest v1.5 release tag
+  on the `v1.5-variegata` stable branch.
 - `extension-ci-tools/` — DuckDB's extension build/CI tooling (submodule).
 - `third_party/pgrouting/` — pgRouting submodule, pinned to a release tag.
 - `cmake/pgrouting_sources.cmake` — explicit list of compiled upstream files; also reads the
