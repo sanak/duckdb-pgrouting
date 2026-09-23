@@ -5,6 +5,10 @@ name: Main Extension Distribution Pipeline
 on:
   push:
     branches: [main, v1.5-variegata]
+    # A pushed release tag builds its own run, so the binaries report the tag as their version
+    # (a build reports a tag only when its checkout contains it) and the release job below can
+    # publish them.
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -43,3 +47,63 @@ jobs:
       ci_tools_version: main
       extension_name: pgrouting
       vcpkg_commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+
+  # Turns a tag's build into a draft GitHub Release. It needs the stable job, which is disabled on
+  # main, so a tag on main skips this job too: releases are cut on the stable line only. The
+  # Release stays a draft on purpose. A human reviews and publishes it, and only a Release
+  # published by a person (not by this job's GITHUB_TOKEN) starts other workflows on publication.
+  release:
+    name: Draft GitHub Release
+    needs: duckdb-stable-build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # pgr_version() is checked against the pgRouting version the submodule records.
+      - name: Check out the pgRouting submodule
+        run: git submodule update --init third_party/pgrouting
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: pgrouting-*-extension-*
+          path: ${{ runner.temp }}/artifacts
+
+      # The released CLI of the version the artifacts were built for: the published binaries are
+      # verified in the same DuckDB a user will load them into.
+      - name: Download the matching DuckDB CLI
+        run: |
+          DUCKDB_VERSION=$(python3 scripts/release_assets.py duckdb-version --artifacts "$RUNNER_TEMP/artifacts")
+          gh release download "$DUCKDB_VERSION" -R duckdb/duckdb -p duckdb_cli-linux-amd64.zip -D "$RUNNER_TEMP/cli"
+          unzip -q "$RUNNER_TEMP/cli/duckdb_cli-linux-amd64.zip" -d "$RUNNER_TEMP/cli"
+          echo "DUCKDB_VERSION=$DUCKDB_VERSION" >> "$GITHUB_ENV"
+
+      - name: Verify the build and prepare the assets
+        run: |
+          python3 scripts/release_assets.py build \
+            --artifacts "$RUNNER_TEMP/artifacts" --out "$RUNNER_TEMP/release" \
+            --notes "$RUNNER_TEMP/notes.md" --tag "$TAG" --commit "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" --cli "$RUNNER_TEMP/cli/duckdb" \
+            --pgrouting-cmakelists third_party/pgrouting/CMakeLists.txt
+
+      # Re-running this job replaces its own earlier draft; a published Release is never touched.
+      - name: Create the draft Release
+        run: |
+          if state=$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null); then
+            if [ "$state" != "true" ]; then
+              echo "::error::Release $TAG is already published; not replacing it"
+              exit 1
+            fi
+            gh release delete "$TAG" --yes
+          fi
+          prerelease=()
+          case "$TAG" in *-*) prerelease=(--prerelease) ;; esac
+          gh release create "$TAG" --draft --verify-tag "${prerelease[@]}" \
+            --title "pgrouting $TAG for DuckDB $DUCKDB_VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP"/release/*
