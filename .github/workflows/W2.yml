@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# W2: loads a Wasm build of the extension into the pinned DuckDB-Wasm in headless Chromium and runs
+# a smoke query on the sample graph. A release-time check run by hand (docs/RELEASE.md), not a
+# per-push one. artifact tests a distribution run's build, release a tag's Release (drafts
+# included), site the deployed documentation site, community DuckDB's community repository.
+name: W2
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Where the extension comes from
+        type: choice
+        options: [artifact, release, site, community]
+        default: artifact
+      run_id:
+        description: "artifact: a Main Extension Distribution Pipeline run id on the stable line"
+        type: string
+        default: ''
+      tag:
+        description: "release: the tag whose Release (draft or published) to test"
+        type: string
+        default: ''
+      site_url:
+        description: "site: the site's base URL"
+        type: string
+        default: https://sanak.github.io/duckdb-pgrouting
+
+permissions:
+  actions: read     # gh run download
+  contents: write   # gh release download of a draft: drafts are not visible to read-only tokens
+
+jobs:
+  w2:
+    name: W2 (${{ inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: test/w2
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # pgr_version() is asserted against the pgRouting version the submodule records.
+      - name: Check out the pgRouting submodule
+        working-directory: .
+        run: git submodule update --init third_party/pgrouting
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - run: npm ci
+      - run: npm run unit
+      - run: npx playwright install --with-deps chromium
+
+      - name: Download the Wasm builds (artifact)
+        if: inputs.mode == 'artifact'
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          test -n "$RUN_ID" || { echo "::error::artifact mode needs run_id"; exit 1; }
+          gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -p 'pgrouting-*-extension-wasm_*' -D "$RUNNER_TEMP/download"
+
+      - name: Download the Wasm builds (release)
+        if: inputs.mode == 'release'
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          test -n "$TAG" || { echo "::error::release mode needs tag"; exit 1; }
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p 'pgrouting.*.wasm_*.duckdb_extension.wasm' -D "$RUNNER_TEMP/download"
+
+      - name: Lay the Wasm builds out
+        if: inputs.mode == 'artifact' || inputs.mode == 'release'
+        run: |
+          node prepare-extension.mjs "$RUNNER_TEMP/download" "$RUNNER_TEMP/ext"
+          echo "W2_EXTENSION_DIR=$RUNNER_TEMP/ext" >> "$GITHUB_ENV"
+
+      - name: Run W2
+        env:
+          W2_MODE: ${{ inputs.mode }}
+          W2_SITE_URL: ${{ inputs.site_url }}
+          W2_EXPECT_EXTENSION_VERSION: ${{ inputs.mode == 'release' && inputs.tag || '' }}
+        run: npm test
