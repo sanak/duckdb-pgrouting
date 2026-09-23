@@ -50,4 +50,9 @@ the following checklist, in order. Every step either passes or tells you exactly
    same keys.
 6. Run the full suite: `make test_debug`, then push and let CI cover the remaining eight native
    platforms and the three Wasm variants.
-7. Update `AGENTS.md` if the bump changed build commands, layout or conventions.
+7. The bump lands on `main` first. Cherry-pick it onto the `v1.5-variegata` stable line and push;
+   its three workflows must be green too, including the Checks step that keeps its tests
+   identical to `main`'s. A compile error there only, not on `main`, means the new upstream code
+   uses something the v1.5 adaptations do not cover.
+8. Update `AGENTS.md` if the bump changed build commands, layout or conventions.
+9. Users get the new pgRouting version only with a new release (`docs/RELEASE.md`).

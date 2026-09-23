@@ -47,8 +47,12 @@ Every public function carries a catalog description and an example (`duckdb_func
 - `test/data/pgrouting_sample/` — CSV fixtures rebuilt from upstream's committed sample data.
 - `test/pgrouting_skip.json`, `test/pgrouting_ties.json`, `test/pgrouting_not_ported.json` — the
   three control files the test tooling reads; see *Test tooling* for who owns each.
-- `scripts/` — the Python test tooling and its `unittest` suite under `scripts/tests/`.
+- `scripts/` — the Python test and release tooling and its `unittest` suite under
+  `scripts/tests/`.
 - `scripts/git-hooks/` — optional local commit guards (`make install-hooks`).
+- `test/w2/` — W2, the browser smoke test of the Wasm build: a Node project of its own (pinned
+  `@duckdb/duckdb-wasm`, Playwright, esbuild) with a standard-library static server.
+- `docs/RELEASE.md` — how a release is cut; `docs/UPSTREAM_SYNC.md` — how pgRouting is bumped.
 
 ## Build and test
 
@@ -81,11 +85,38 @@ sqllogictest `query` directives accept only the column-type characters `T` (text
 and `R` (floating point). There is no `B` for boolean, so a boolean column is declared `T` and
 asserted against `true` / `false`.
 
+## Release lines and releases
+
+Until DuckDB 2.0.0 ships there are two lines. `v1.5-variegata` (stable) is built against the
+current DuckDB v1.5 release and is what users install; `main` (next) is built against DuckDB's
+`v2.0-cyanoptera` branch. Every change lands on `main` first and is cherry-picked onto the
+branch; the branch differs only in its submodule pins, its v1.5 source adaptations, the two
+`if: false` lines of `MainDistributionPipeline.yml` and the one deleted test
+`test/sql/dijkstra_interrupt.test`. No `#if` compatibility macros go on `main`.
+
+Releases are tags on the stable line only. A pushed `v*` tag runs the distribution pipeline, and
+its `Draft GitHub Release` job turns that run's nine artifacts into a draft Release:
+`scripts/release_assets.py` names them
+`pgrouting.<duckdb version>.<platform>.duckdb_extension.gz` / `…<variant>.duckdb_extension.wasm`,
+refuses a build whose reported version is not the tag, and writes `SHA256SUMS` and the notes. A
+person publishes the draft. W2 (`test/w2/`, run through `W2.yml`) checks the Wasm build in a real
+browser before and after tagging. The whole procedure is `docs/RELEASE.md`.
+
+W2 locally (downloads Playwright's Chromium once):
+
+```bash
+cd test/w2 && npm ci && npx playwright install chromium
+gh run download <run id> -p 'pgrouting-*-extension-wasm_*' -D /tmp/w2-download
+node prepare-extension.mjs /tmp/w2-download /tmp/w2-ext
+W2_MODE=artifact W2_EXTENSION_DIR=/tmp/w2-ext npm test
+```
+
 ## Test tooling
 
-`scripts/` holds three Python tools over two shared modules, plus their `unittest` suite. They read
-upstream's committed fixtures and drive the built `duckdb` binary; none of them needs PostgreSQL,
-and none of them ever writes under `third_party/pgrouting`.
+`scripts/` holds three Python test tools and one release tool over two shared modules, plus
+their `unittest` suite. The test tools read upstream's committed fixtures and drive the built
+`duckdb` binary; none of them needs PostgreSQL, and none of them ever writes under
+`third_party/pgrouting`.
 
 - `scripts/pgparse.py` — upstream's two fixture formats only: the `/* -- <name> */` blocks of a
   `.pg` file, and the psql aligned-output tables, notices and errors of a `.result` file.
@@ -103,6 +134,8 @@ and none of them ever writes under `third_party/pgrouting`.
   `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
   signature is intentionally registered as several DuckDB variants, one per number of its
   defaulted parameters passed positionally.
+- `scripts/release_assets.py` — turns one distribution run's artifacts into GitHub Release assets
+  (see *Release lines and releases*); run by the release job, not by hand.
 
 The generators execute queries against the release binary, so build it first:
 
@@ -120,12 +153,14 @@ Three JSON control files live under `test/`:
 | `test/pgrouting_ties.json` | the generator | blocks downgraded to tie-insensitive assertions, each with the observed difference — never hand-edited; regenerate instead |
 | `test/pgrouting_not_ported.json` | human | upstream functions deliberately not ported, each with a reason |
 
-CI has three workflows. `MainDistributionPipeline.yml` builds every DuckDB platform through
-DuckDB's reusable extension workflow. `WasmTests.yml` builds DuckDB's `unittest` for all three Wasm
-variants and runs the sqllogictests under Node. `Checks.yml` builds release on linux_amd64 and runs
-the two generators in `--check` mode, the tooling's unit tests, the signature comparison and
-`test/sql/collisions.test`; a `--check` failure means the committed artifact is stale, an
-equal-cost tie has flipped, or something regressed, and all three want a human.
+CI has four workflows. `MainDistributionPipeline.yml` builds every DuckDB platform through
+DuckDB's reusable extension workflow, and for a pushed `v*` tag drafts the GitHub Release.
+`W2.yml` runs only by hand (`workflow_dispatch`), at release time. `WasmTests.yml` builds DuckDB's
+`unittest` for all three Wasm variants and runs the sqllogictests under Node. `Checks.yml` builds
+release on linux_amd64 and runs the two generators in `--check` mode, the tooling's unit tests,
+the signature comparison and `test/sql/collisions.test`; a `--check` failure means the committed
+artifact is stale, an equal-cost tie has flipped, or something regressed, and all three want a
+human.
 
 ## Architecture rules
 
@@ -172,7 +207,9 @@ equal-cost tie has flipped, or something regressed, and all three want a human.
    trailing period.
 5. The default branch is `main`.
 6. Every new source file carries an SPDX header (`# SPDX-License-Identifier: GPL-2.0-or-later`
-   for the `#`-comment class). Deliberate exemptions: `vcpkg.json` (JSON has no comment syntax),
+   for the `#`-comment class, `// SPDX-…` in JavaScript, `<!-- SPDX-… -->` in HTML). Deliberate
+   exemptions: `vcpkg.json` and `test/w2/package.json` / `package-lock.json` (JSON has no comment
+   syntax; `package.json` states the licence in its `license` field),
    the CSV test fixtures under `test/data/` (CSV has no comment syntax either, and a `#` line
    would be read as data), the Markdown documentation (`README.md`, `AGENTS.md`, `CLAUDE.md`) and
    `LICENSE`, and `.gitignore` / `.gitmodules` (git metadata, not source). In a sqllogictest the
@@ -185,6 +222,9 @@ equal-cost tie has flipped, or something regressed, and all three want a human.
 8. The Python tooling under `scripts/` uses the standard library only. No `pip install` step exists
    in CI or in the developer prerequisites, and its tests use `unittest`, not `pytest`. A
    dependency that would need one is a reason to change the approach, not to add the dependency.
+   `test/w2/` is outside this rule: it is a browser test and needs a pinned DuckDB-Wasm, Playwright
+   and a bundler. Its own server and helpers still use Node's standard library only, and every
+   package it has is pinned to an exact version.
 
 `make install-hooks` installs commit-msg/pre-commit hooks that reject messages, paths or added
 lines matching the extended regular expressions listed in the untracked file
