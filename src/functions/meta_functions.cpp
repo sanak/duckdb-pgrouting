@@ -7,7 +7,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/identifier.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -25,7 +24,7 @@ void PgRoutingVersionFunction(DataChunk &args, ExpressionState &, Vector &result
 	D_ASSERT(args.ColumnCount() == 0);
 	auto value = Value(PROJECT_VERSION);
 	// Reference sets the vector type itself.
-	result.Reference(value, count_t(args.size()));
+	result.Reference(value);
 }
 
 } // namespace
@@ -43,8 +42,8 @@ void RegisterMetaFunctions(ExtensionLoader &loader) {
 	auto &db = loader.GetDatabaseInstance();
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
-	auto entry = schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier("pgr_version"));
+	auto &schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
+	auto entry = schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY, "pgr_version");
 	if (!entry) {
 		throw InternalException("pgrouting: pgr_version was not registered");
 	}
