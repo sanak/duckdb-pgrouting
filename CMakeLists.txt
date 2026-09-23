@@ -43,6 +43,10 @@ build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 set_source_files_properties(${PGROUTING_SOURCES} PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/w,-w>")
 
 foreach(target ${EXTENSION_NAME} ${LOADABLE_EXTENSION_NAME})
+  # A target property, not the CMAKE_CXX_STANDARD cache entry above: DuckDB's own CMakeLists.txt is
+  # the top-level project and sets that entry first, so a DuckDB release that defaults to C++11
+  # would win, and pgRouting's Boost.Geometry and Boost.Math headers need C++14 at least.
+  set_target_properties(${target} PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
   target_link_libraries(${target} Boost::headers)
   # Same definitions upstream's build uses. PRIVATE, not PUBLIC: PROJECT_VERSION is a very generic
   # macro name and PUBLIC would leak it to every target that links the extension.
