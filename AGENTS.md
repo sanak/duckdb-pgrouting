@@ -30,6 +30,8 @@ Every public function carries a catalog description and an example (`duckdb_func
 - `third_party/pgrouting/` — pgRouting submodule, pinned to a release tag.
 - `cmake/pgrouting_sources.cmake` — explicit list of compiled upstream files; also reads the
   pgRouting version from upstream's `CMakeLists.txt`.
+- `cmake/extension_version.cmake` — the version a tagged build reports, passed to DuckDB from
+  `extension_config.cmake` because DuckDB v1.5's own derivation never matches a tag.
 - `src/pgrouting_extension.cpp` — extension entry point (`LoadInternal`).
 - `src/pg_compat/` — PostgreSQL stub headers and the replaced upstream definitions. Compiled
   only into pg_compat and pgRouting translation units: the stub `postgres.h` defines `ERROR` as
