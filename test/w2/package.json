@@ -1,0 +1,19 @@
+{
+  "name": "duckdb-pgrouting-w2",
+  "private": true,
+  "license": "GPL-2.0-or-later",
+  "description": "Browser smoke test: the pgrouting Wasm build in DuckDB-Wasm",
+  "type": "module",
+  "scripts": {
+    "unit": "node --test \"unit/*.test.mjs\"",
+    "build": "esbuild harness.js --bundle --format=esm --outfile=build/harness.js",
+    "test": "npm run build && playwright test"
+  },
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "1.33.1-dev64.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "esbuild": "0.28.2"
+  }
+}
