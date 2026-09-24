@@ -49,8 +49,9 @@ a person.
    must equal the tag, `pgr_version()` the bundled pgRouting version) and creates the draft.
 4. **Review the draft**: nine assets plus `SHA256SUMS`, the title names the DuckDB version, and
    the notes list one `INSTALL` line per native platform. Then run W2 against the draft:
-   `gh workflow run W2.yml --ref v1.5-variegata -f mode=release -f tag=vX.Y.Z`. It must pass and
-   report the tag as the extension version.
+   `gh workflow run W2.yml --ref v1.5-variegata -f mode=release -f tag=vX.Y.Z`. It must pass; it
+   also checks that the Wasm build's embedded metadata names the tag as the extension version
+   (DuckDB-Wasm itself reports an empty version for an extension loaded by URL).
 5. **Publish** the draft on GitHub. Then, on one platform:
    ```sql
    -- duckdb -unsigned
