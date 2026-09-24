@@ -1,0 +1,29 @@
+{
+  "name": "duckdb-pgrouting-site",
+  "private": true,
+  "license": "MIT",
+  "description": "Browser Playground for the pgrouting DuckDB extension",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "biome ci . && tsc --noEmit",
+    "unit": "node --test \"unit/*.test.ts\"",
+    "collect": "node scripts/collect.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "1.33.1-dev64.0",
+    "maplibre-gl": "6.11.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/geojson": "7946.0.16",
+    "@types/node": "24.13.6",
+    "typescript": "7.0.2",
+    "vite": "8.3.1"
+  }
+}

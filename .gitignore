@@ -7,3 +7,7 @@ test/w2/node_modules/
 test/w2/build/
 test/w2/test-results/
 test/w2/playwright-report/
+site/node_modules/
+site/dist/
+site/public/data/
+site/public/wasm/
