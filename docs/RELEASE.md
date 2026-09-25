@@ -24,8 +24,7 @@ a person.
   the commit hash. Pushing the tag starts its own distribution run for exactly that reason, and
   the release job refuses a build that does not report the tag.
 - **Drafts.** The release job creates the Release as a draft. A Release published by a workflow's
-  own token would not start other workflows (such as a site deploy) on publication; one published
-  by a person does.
+  own token would not start other workflows on publication; one published by a person does.
 
 ## Cutting a release
 
@@ -60,8 +59,12 @@ a person.
    SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'pgrouting';  -- vX.Y.Z
    SELECT pgr_version();
    ```
-   When the documentation site serves the Wasm builds, confirm its deploy picked the new Release
-   up and run W2 in `site` mode.
+   Then redeploy the Playground, which copies the Wasm builds of published Releases only, and
+   check it with W2:
+   ```bash
+   gh workflow run Pages.yml --ref main          # wait for it to finish
+   gh workflow run W2.yml --ref v1.5-variegata -f mode=site
+   ```
 
 If the release job fails after the draft was created, re-run the job: it replaces its own draft.
 It never touches a published Release; a mistake in a published Release is fixed by a new tag.

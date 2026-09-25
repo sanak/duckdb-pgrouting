@@ -54,6 +54,10 @@ Every public function carries a catalog description and an example (`duckdb_func
 - `scripts/git-hooks/` — optional local commit guards (`make install-hooks`).
 - `test/w2/` — W2, the browser smoke test of the Wasm build: a Node project of its own (pinned
   `@duckdb/duckdb-wasm`, Playwright, esbuild) with a standard-library static server.
+- `site/` — the Playground published on GitHub Pages: an MIT-licensed Vanilla TypeScript + Vite
+  project (Node 24, Biome, `node --test`) that runs the extension in DuckDB-Wasm on the sample
+  graph and draws results with MapLibre. `npm run collect` copies the sample CSVs and every
+  published Release's Wasm builds into `site/public/` before a dev server or build.
 - `docs/RELEASE.md` — how a release is cut; `docs/UPSTREAM_SYNC.md` — how pgRouting is bumped.
 
 ## Build and test
@@ -155,14 +159,15 @@ Three JSON control files live under `test/`:
 | `test/pgrouting_ties.json` | the generator | blocks downgraded to tie-insensitive assertions, each with the observed difference — never hand-edited; regenerate instead |
 | `test/pgrouting_not_ported.json` | human | upstream functions deliberately not ported, each with a reason |
 
-CI has four workflows. `MainDistributionPipeline.yml` builds every DuckDB platform through
+CI has five workflows. `MainDistributionPipeline.yml` builds every DuckDB platform through
 DuckDB's reusable extension workflow, and for a pushed `v*` tag drafts the GitHub Release.
 `W2.yml` runs only by hand (`workflow_dispatch`), at release time. `WasmTests.yml` builds DuckDB's
 `unittest` for all three Wasm variants and runs the sqllogictests under Node. `Checks.yml` builds
 release on linux_amd64 and runs the two generators in `--check` mode, the tooling's unit tests,
 the signature comparison and `test/sql/collisions.test`; a `--check` failure means the committed
 artifact is stale, an equal-cost tie has flipped, or something regressed, and all three want a
-human.
+human. `Pages.yml` checks, tests and builds the Playground (`site/`) on pull requests, and
+deploys it to GitHub Pages from `main` — on pushes and by hand after a Release is published.
 
 ## Architecture rules
 
@@ -214,9 +219,12 @@ human.
    syntax; `package.json` states the licence in its `license` field),
    the CSV test fixtures under `test/data/` (CSV has no comment syntax either, and a `#` line
    would be read as data), the Markdown documentation (`README.md`, `AGENTS.md`, `CLAUDE.md`) and
-   `LICENSE`, and `.gitignore` / `.gitmodules` (git metadata, not source). In a sqllogictest the
-   header goes *after* the `# name:` / `# description:` / `# group:` block, which is parsed
-   positionally.
+   `LICENSE`, and `.gitignore` / `.gitmodules` (git metadata, not source).
+   Under `site/` the identifier is `MIT` instead (`site/LICENSE`), in the same comment forms plus
+   `/* … */` in CSS; `site/package.json`, `site/package-lock.json`, `site/tsconfig.json`,
+   `site/.nvmrc` and `site/NOTICE.md` are exempt like their counterparts above. In a
+   sqllogictest the header goes *after* the `# name:` / `# description:` / `# group:` block,
+   which is parsed positionally.
 7. The `pgrouting_name` function tag marks every function that corresponds to an upstream
    pgRouting function and holds that function's upstream name, which is also its public name.
    The tooling reads the set of implemented functions back from `duckdb_functions()` through
@@ -227,6 +235,8 @@ human.
    `test/w2/` is outside this rule: it is a browser test and needs a pinned DuckDB-Wasm, Playwright
    and a bundler. Its own server and helpers still use Node's standard library only, and every
    package it has is pinned to an exact version.
+   `site/` is outside it too: the Playground is a Vite + TypeScript project whose packages are
+   pinned to exact versions, and its unit tests run with `node --test`.
 
 `make install-hooks` installs commit-msg/pre-commit hooks that reject messages, paths or added
 lines matching the extended regular expressions listed in the untracked file
