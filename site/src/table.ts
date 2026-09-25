@@ -91,12 +91,23 @@ export function createResultGrid(container: HTMLElement): ResultGrid {
         rowFormatterClipboard: false,
       });
       next.on('cellClick', (_event, cell) => pick(edgeOfRow(cell.getRow())));
+      // key is 'C' with Caps Lock and another letter on a non-Latin layout; keyCode stays 67 there.
       element.addEventListener('keydown', (event) => {
-        if ((event.ctrlKey || event.metaKey) && event.key === 'c') {
+        const isC = event.key.toLowerCase() === 'c' || event.keyCode === 67;
+        if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && isC) {
           event.preventDefault();
           next.copyToClipboard();
         }
       });
+      // Range selection opens the edit module on Enter and throws without it; this grid is read-only,
+      // so Enter stops here, in the capture phase, before it reaches the rows.
+      element.addEventListener(
+        'keydown',
+        (event) => {
+          if (event.key === 'Enter') event.stopPropagation();
+        },
+        true,
+      );
       table = next;
     },
 
