@@ -8,10 +8,30 @@ import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url
 import ehModule from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import mvpModule from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import { extensionPath } from './paths.ts';
-import { plainValue, type ResultSet } from './result.ts';
+import { plainValue, type ResultSet, type Shape } from './result.ts';
 
-// apache-arrow's Type.Decimal; the enum is not imported so that arrow stays an indirect dependency.
+// apache-arrow's Type ids; the enum is not imported so that arrow stays an indirect dependency.
 const ARROW_DECIMAL = 7;
+const ARROW_LIST = 12;
+const ARROW_FIXED_SIZE_LIST = 16;
+
+// The parts of an Arrow DataType that shapeOf reads.
+interface ArrowType {
+  typeId: number;
+  scale?: number;
+  children?: { type: ArrowType }[];
+}
+
+// DECIMAL values arrive unscaled, also as list elements; the type carries the scale.
+function shapeOf(type: ArrowType): Shape | undefined {
+  if (type.typeId === ARROW_DECIMAL) return { scale: type.scale ?? 0 };
+  const element = type.children?.[0]?.type;
+  if ((type.typeId === ARROW_LIST || type.typeId === ARROW_FIXED_SIZE_LIST) && element) {
+    const items = shapeOf(element);
+    return items && { items };
+  }
+  return undefined;
+}
 
 const BUNDLES: duckdb.DuckDBBundles = {
   mvp: { mainModule: mvpModule, mainWorker: mvpWorker },
@@ -58,13 +78,10 @@ function sqlString(text: string): string {
 function toResultSet(table: Awaited<ReturnType<duckdb.AsyncDuckDBConnection['query']>>): ResultSet {
   const fields = table.schema.fields;
   const columns = fields.map((f) => f.name);
-  // DECIMAL values arrive unscaled; the field type carries the scale.
-  const scales = fields.map((f) =>
-    f.typeId === ARROW_DECIMAL ? (f.type as unknown as { scale: number }).scale : undefined,
-  );
+  const shapes = fields.map((f) => shapeOf(f.type as unknown as ArrowType));
   const vectors = fields.map((_, i) => table.getChildAt(i));
   const rows = [];
-  for (let r = 0; r < table.numRows; r++) rows.push(vectors.map((v, i) => plainValue(v?.get(r), scales[i])));
+  for (let r = 0; r < table.numRows; r++) rows.push(vectors.map((v, i) => plainValue(v?.get(r), shapes[i])));
   return { columns, rows };
 }
 

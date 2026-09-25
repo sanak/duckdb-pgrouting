@@ -19,14 +19,25 @@ function isArrayLike(value: object): value is { toArray(): ArrayLike<unknown> } 
   return 'toArray' in value && typeof value.toArray === 'function';
 }
 
-// decimalScale is the Arrow field's scale for a DECIMAL column, whose values arrive unscaled.
-export function plainValue(value: unknown, decimalScale?: number): Plain {
+// What plainValue needs to know about an Arrow type: a DECIMAL's scale (its values arrive
+// unscaled), and a list's element type, which may itself be a DECIMAL.
+export interface Shape {
+  scale?: number;
+  items?: Shape;
+}
+
+export function plainValue(value: unknown, shape?: Shape): Plain {
   if (value === null || value === undefined) return null;
-  if (decimalScale !== undefined) return Number(value) / 10 ** decimalScale;
+  if (shape?.scale !== undefined) return Number(value) / 10 ** shape.scale;
   if (typeof value === 'bigint') return Number(value);
   if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') return value;
-  if (Array.isArray(value)) return value.map((v) => plainValue(v));
-  if (typeof value === 'object' && isArrayLike(value)) return Array.from(value.toArray(), (v) => plainValue(v));
+  if (Array.isArray(value)) return value.map((v) => plainValue(v, shape?.items));
+  // An Arrow list arrives as a Vector. Iterate it: its toArray() returns the raw storage, which for
+  // DECIMAL is four 32-bit words per value.
+  if (typeof value === 'object' && Symbol.iterator in value)
+    return Array.from(value as Iterable<unknown>, (v) => plainValue(v, shape?.items));
+  if (typeof value === 'object' && isArrayLike(value))
+    return Array.from(value.toArray(), (v) => plainValue(v, shape?.items));
   return String(value);
 }
 
