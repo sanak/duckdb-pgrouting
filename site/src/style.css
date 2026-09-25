@@ -1,4 +1,160 @@
 /* SPDX-License-Identifier: MIT */
+:root {
+  --fg: #1f2328;
+  --muted: #59636e;
+  --line: #d1d9e0;
+  --bg: #ffffff;
+  --panel: #f6f8fa;
+  --accent: #2e86ab;
+  --error: #b42318;
+  font-family: system-ui, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
 body {
   margin: 0;
+  padding: 0 16px 16px;
+}
+
+header h1 {
+  margin: 12px 0 4px;
+  font-size: 1.4rem;
+}
+
+.versions,
+.notice,
+footer {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 2px 0;
+}
+
+.banner {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--error);
+  color: var(--error);
+  background: #fef3f2;
+}
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "editor map"
+    "result result";
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.editor {
+  grid-area: editor;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.toolbar select {
+  max-width: 100%;
+}
+
+button {
+  padding: 4px 14px;
+}
+
+#run {
+  background: var(--accent);
+  color: #ffffff;
+  border: 1px solid var(--accent);
+}
+
+#run:disabled {
+  opacity: 0.5;
+}
+
+textarea {
+  min-height: 320px;
+  flex: 1;
+  font:
+    13px / 1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  padding: 8px;
+  border: 1px solid var(--line);
+  resize: vertical;
+}
+
+.status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.status.error {
+  color: var(--error);
+}
+
+.map {
+  grid-area: map;
+  min-height: 420px;
+  border: 1px solid var(--line);
+}
+
+.node-label {
+  font:
+    11px / 1 ui-monospace,
+    monospace;
+  color: var(--fg);
+  pointer-events: none;
+}
+
+.node-label.point {
+  color: var(--accent);
+}
+
+.result {
+  grid-area: result;
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  font:
+    12px ui-monospace,
+    monospace;
+}
+
+th,
+td {
+  border: 1px solid var(--line);
+  padding: 3px 8px;
+  text-align: right;
+}
+
+th {
+  background: var(--panel);
+}
+
+footer {
+  margin-top: 16px;
+}
+
+@media (max-width: 800px) {
+  main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "editor"
+      "map"
+      "result";
+  }
 }
