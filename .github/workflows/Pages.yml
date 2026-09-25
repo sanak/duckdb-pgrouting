@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# The Playground under site/: checked and built on pull requests, built and deployed to GitHub Pages
+# from main. The build copies the Wasm builds of every published Release into the site, so after a
+# Release is published this workflow is dispatched by hand (docs/RELEASE.md).
+name: Pages
+on:
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'test/data/pgrouting_sample/**'
+      - 'test/w2/package.json'
+      - '.github/workflows/Pages.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'test/data/pgrouting_sample/**'
+      - 'test/w2/package.json'
+      - '.github/workflows/Pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: site
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm run unit
+
+      # Pull requests may come from forks, and must not fail just because no Release is visible.
+      - run: npm run collect -- ${{ github.event_name == 'pull_request' && '--allow-empty' || '' }}
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/dist
+
+  deploy:
+    name: Deploy
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
