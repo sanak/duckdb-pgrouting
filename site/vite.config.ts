@@ -8,7 +8,8 @@ export default defineConfig({
   worker: { format: 'es' },
   build: {
     // Licences of the bundled npm packages, linked from the page footer.
-    license: { fileName: 'third-party-licenses.md' },
+    // A .txt name so that Pages serves it as text/plain, which every browser displays; the content is Markdown.
+    license: { fileName: 'third-party-licenses.txt' },
     // DuckDB-Wasm and MapLibre are large on their own; the warning says nothing actionable here.
     chunkSizeWarningLimit: 2000,
   },
