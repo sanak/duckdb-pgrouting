@@ -82,17 +82,24 @@ async function main(): Promise<void> {
   }
   versions.textContent = `pgRouting ${session.pgrVersion} · DuckDB ${session.duckdbVersion} · ${session.variant}`;
 
-  const vertices = numbers(await session.query('SELECT id, x, y FROM vertices'));
-  const edges = numbers(await session.query('SELECT id, source, target FROM edges'));
-  const points = numbers(await session.query('SELECT pid, edge_id, fraction FROM pointsofinterest'));
-  const routeMap: RouteMap = await createRouteMap(
-    byId('map'),
-    sampleGeometry(
-      vertices.map(([id = 0, x = 0, y = 0]) => ({ id, x, y })),
-      edges.map(([id = 0, source = 0, target = 0]) => ({ id, source, target })),
-      points.map(([pid = 0, edge_id = 0, fraction = 0]) => ({ pid, edge_id, fraction })),
-    ),
-  );
+  // Without the map (no WebGL, for instance) queries still run; only the highlighting is lost.
+  let routeMap: RouteMap = { highlight() {} };
+  try {
+    const vertices = numbers(await session.query('SELECT id, x, y FROM vertices'));
+    const edges = numbers(await session.query('SELECT id, source, target FROM edges'));
+    const points = numbers(await session.query('SELECT pid, edge_id, fraction FROM pointsofinterest'));
+    routeMap = await createRouteMap(
+      byId('map'),
+      sampleGeometry(
+        vertices.map(([id = 0, x = 0, y = 0]) => ({ id, x, y })),
+        edges.map(([id = 0, source = 0, target = 0]) => ({ id, source, target })),
+        points.map(([pid = 0, edge_id = 0, fraction = 0]) => ({ pid, edge_id, fraction })),
+      ),
+    );
+  } catch (error) {
+    banner.textContent = `The map is unavailable, but queries still run: ${error instanceof Error ? error.message : String(error)}`;
+    banner.hidden = false;
+  }
 
   async function execute(): Promise<void> {
     if (run.disabled) return;
