@@ -127,22 +127,10 @@ textarea {
   overflow-x: auto;
 }
 
-table {
-  border-collapse: collapse;
+.result .tabulator {
   font:
     12px ui-monospace,
     monospace;
-}
-
-th,
-td {
-  border: 1px solid var(--line);
-  padding: 3px 8px;
-  text-align: right;
-}
-
-th {
-  background: var(--panel);
 }
 
 footer {

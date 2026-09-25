@@ -90,3 +90,19 @@ export function highlightOf(result: ResultSet): Highlight {
   }
   return { edges, nodes };
 }
+
+// The rows the result grid shows. Fields are positional (c0, c1, …) because SQL allows duplicate
+// column names and Tabulator reads a dotted field as a nested path; cells hold the shown text, so
+// what is copied is exactly what is on screen.
+export interface GridData {
+  columns: { title: string; field: string }[];
+  rows: Record<string, string>[];
+}
+
+export function gridData(result: ResultSet, shown: Plain[][]): GridData {
+  const columns = result.columns.map((title, i) => ({ title, field: `c${i}` }));
+  const rows = shown.map((row) =>
+    Object.fromEntries(columns.map(({ field }, i) => [field, formatCell(row[i] ?? null)])),
+  );
+  return { columns, rows };
+}
