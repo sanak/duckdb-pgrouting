@@ -11,8 +11,20 @@ test('plainValue turns Arrow values into plain JS', () => {
   assert.deepEqual(plainValue({ toArray: () => BigInt64Array.from([1n, 2n]) }), [1, 2]);
   // An Arrow DECIMAL arrives unscaled; the field's scale restores it (SELECT 1.5 → 15, scale 1).
   const unscaled = { [Symbol.toPrimitive]: () => 15 };
-  assert.equal(plainValue(unscaled, 1), 1.5);
-  assert.equal(plainValue(null, 1), null);
+  assert.equal(plainValue(unscaled, { scale: 1 }), 1.5);
+  assert.equal(plainValue(null, { scale: 1 }), null);
+});
+
+test('plainValue scales DECIMAL elements inside lists (SELECT [1.5, 2.5], [[0.5]])', () => {
+  const unscaled = (n: number) => ({ [Symbol.toPrimitive]: () => n });
+  // Like an Arrow Vector of DECIMAL: iterating yields one value per element, but toArray() returns
+  // the raw 128-bit storage, four 32-bit words per value.
+  const list = (items: unknown[]) => ({
+    toArray: () => Uint32Array.from(items.flatMap((v) => [Number(v), 0, 0, 0])),
+    [Symbol.iterator]: () => items[Symbol.iterator](),
+  });
+  assert.deepEqual(plainValue(list([unscaled(15), unscaled(25)]), { items: { scale: 1 } }), [1.5, 2.5]);
+  assert.deepEqual(plainValue(list([list([unscaled(5)])]), { items: { items: { scale: 1 } } }), [[0.5]]);
 });
 
 test('formatCell renders SQL-like text and never escapes', () => {
