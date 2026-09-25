@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: MIT
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatCell, gridData, highlightOf, type Plain, plainValue, type ResultSet, summarize } from '../src/result.ts';
+import {
+  edgeOf,
+  formatCell,
+  gridData,
+  highlightOf,
+  type Plain,
+  plainValue,
+  type ResultSet,
+  summarize,
+} from '../src/result.ts';
 
 test('plainValue turns Arrow values into plain JS', () => {
   assert.equal(plainValue(12n), 12);
@@ -164,4 +173,21 @@ test('gridData renders only the rows it is given (the capped ones)', () => {
 
 test('gridData of a zero-column result has no columns and no rows', () => {
   assert.deepEqual(gridData({ columns: [], rows: [] }, []), { columns: [], rows: [] });
+});
+
+const route: ResultSet = { columns: ['seq', 'node', 'edge', 'cost'], rows: [] };
+
+test('edgeOf returns the edge id of a path row', () => {
+  assert.equal(edgeOf(route, [1, 5, 7, 1]), 7);
+  assert.equal(edgeOf(route, [1, 5, 0, 1]), 0);
+});
+
+test('edgeOf selects nothing for the final row of a path, NULL, or a result without edges', () => {
+  assert.equal(edgeOf(route, [3, 12, -1, 0]), null);
+  assert.equal(edgeOf(route, [3, 12, null, 0]), null);
+  assert.equal(edgeOf({ columns: ['start_vid', 'end_vid', 'agg_cost'], rows: [] }, [5, 12, 4]), null);
+});
+
+test('edgeOf ignores an edge column that holds text', () => {
+  assert.equal(edgeOf({ columns: ['edge'], rows: [] }, ['7']), null);
 });

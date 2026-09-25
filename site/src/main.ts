@@ -5,6 +5,7 @@ import { sampleGeometry } from './geometry.ts';
 import { createRouteMap, type RouteMap } from './map.ts';
 import { PRESETS } from './presets.ts';
 import { highlightOf, type ResultSet, summarize } from './result.ts';
+import { nextSelection, type PickSource } from './selection.ts';
 import { hashForQuery, queryFromHash } from './share.ts';
 import { createResultGrid } from './table.ts';
 
@@ -67,7 +68,7 @@ async function main(): Promise<void> {
   versions.textContent = `pgRouting ${session.pgrVersion} · DuckDB ${session.duckdbVersion} · ${session.variant}`;
 
   // Without the map (no WebGL, for instance) queries still run; only the highlighting is lost.
-  let routeMap: RouteMap = { highlight() {} };
+  let routeMap: RouteMap = { highlight() {}, select() {}, onEdgeClick() {} };
   try {
     const vertices = numbers(await session.query('SELECT id, x, y FROM vertices'));
     const edges = numbers(await session.query('SELECT id, source, target FROM edges'));
@@ -85,6 +86,16 @@ async function main(): Promise<void> {
     banner.hidden = false;
   }
 
+  // The one edge selected in both the grid and the map (edge ids only; see selection.ts).
+  let selected: number | null = null;
+  function pick(edge: number | null, source: PickSource): void {
+    selected = nextSelection(selected, edge, source);
+    grid.select(selected, { scroll: source === 'map' });
+    routeMap.select(selected);
+  }
+  grid.onRowPick((edge) => pick(edge, 'grid'));
+  routeMap.onEdgeClick((edge) => pick(edge, 'map'));
+
   async function execute(): Promise<void> {
     if (run.disabled) return;
     run.disabled = true;
@@ -94,6 +105,8 @@ async function main(): Promise<void> {
       const result = await session.query(sql.value);
       const { shown, text } = summarize(result, MAX_TABLE_ROWS);
       grid.show(result, shown);
+      selected = null;
+      routeMap.select(null);
       routeMap.highlight(highlightOf(result));
       setStatus(`${text} · ${Math.round(performance.now() - started)} ms`);
     } catch (error) {

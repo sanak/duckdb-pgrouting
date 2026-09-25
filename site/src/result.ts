@@ -106,3 +106,11 @@ export function gridData(result: ResultSet, shown: Plain[][]): GridData {
   );
   return { columns, rows };
 }
+
+// The edge a result row can select: its `edge` value when that is an edge id (≥ 0). The final row of
+// a path (edge -1), NULL, and results without an `edge` column select nothing.
+export function edgeOf(result: ResultSet, row: Plain[]): number | null {
+  const at = result.columns.indexOf('edge');
+  const edge = at === -1 ? null : row[at];
+  return typeof edge === 'number' && edge >= 0 ? edge : null;
+}

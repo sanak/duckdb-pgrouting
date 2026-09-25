@@ -133,6 +133,10 @@ textarea {
     monospace;
 }
 
+.result .tabulator-row.edge-selected .tabulator-cell {
+  background: #fff3c4;
+}
+
 footer {
   margin-top: 16px;
 }

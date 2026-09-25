@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-// The sample graph on a tile-less MapLibre map: a background, the grey network, and two result
-// layers whose filter and colour follow each query's edge and node ids.
+// The sample graph on a tile-less MapLibre map: a background, the grey network, two result layers
+// whose filter and colour follow each query's edge and node ids, an outline under the selected
+// edge, and a wide invisible layer that makes the result's edges easy to click.
 import { LngLatBounds, Map as MapLibreMap, Marker, setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -13,6 +14,13 @@ setWorkerUrl(mapWorkerUrl);
 
 export interface RouteMap {
   highlight(h: Highlight): void;
+  select(edge: number | null): void;
+  // Called on every map click: with the result edge under the pointer, or null when there is none.
+  onEdgeClick(handler: (edge: number | null) => void): void;
+}
+
+function only(edge: number | null): Map<number, number> {
+  return new Map(edge === null ? [] : [[edge, 0]]);
 }
 
 export async function createRouteMap(container: HTMLElement, geometry: SampleGeometry): Promise<RouteMap> {
@@ -33,6 +41,14 @@ export async function createRouteMap(container: HTMLElement, geometry: SampleGeo
       layers: [
         { id: 'background', type: 'background', paint: { 'background-color': '#f7f7f4' } },
         { id: 'edges', type: 'line', source: 'edges', paint: { 'line-color': '#b5b5b5', 'line-width': 3 } },
+        {
+          id: 'selected-edge',
+          type: 'line',
+          source: 'edges',
+          filter: idFilter(empty),
+          layout: { 'line-cap': 'round' },
+          paint: { 'line-color': '#1f2328', 'line-width': 13 },
+        },
         {
           id: 'route-edges',
           type: 'line',
@@ -64,6 +80,13 @@ export async function createRouteMap(container: HTMLElement, geometry: SampleGeo
             'circle-stroke-width': 2,
           },
         },
+        {
+          id: 'edge-hit',
+          type: 'line',
+          source: 'edges',
+          filter: idFilter(empty),
+          paint: { 'line-color': '#000000', 'line-opacity': 0, 'line-width': 16 },
+        },
       ],
     },
     bounds,
@@ -90,6 +113,12 @@ export async function createRouteMap(container: HTMLElement, geometry: SampleGeo
   }
 
   await map.once('load');
+  map.on('mouseenter', 'edge-hit', () => {
+    map.getCanvas().style.cursor = 'pointer';
+  });
+  map.on('mouseleave', 'edge-hit', () => {
+    map.getCanvas().style.cursor = '';
+  });
 
   return {
     highlight(h: Highlight) {
@@ -97,6 +126,16 @@ export async function createRouteMap(container: HTMLElement, geometry: SampleGeo
       map.setPaintProperty('route-edges', 'line-color', pathColour(h.edges));
       map.setFilter('route-nodes', idFilter(h.nodes));
       map.setPaintProperty('route-nodes', 'circle-color', pathColour(h.nodes));
+      map.setFilter('edge-hit', idFilter(h.edges));
+    },
+    select(edge: number | null) {
+      map.setFilter('selected-edge', idFilter(only(edge)));
+    },
+    onEdgeClick(handler: (edge: number | null) => void) {
+      map.on('click', (event) => {
+        const id = map.queryRenderedFeatures(event.point, { layers: ['edge-hit'] })[0]?.properties.id;
+        handler(typeof id === 'number' ? id : null);
+      });
     },
   };
 }
