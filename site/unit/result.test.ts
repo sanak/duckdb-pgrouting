@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatCell, highlightOf, type Plain, plainValue, type ResultSet, summarize } from '../src/result.ts';
+import { formatCell, gridData, highlightOf, type Plain, plainValue, type ResultSet, summarize } from '../src/result.ts';
 
 test('plainValue turns Arrow values into plain JS', () => {
   assert.equal(plainValue(12n), 12);
@@ -141,4 +141,27 @@ test('a result without edge or node columns highlights nothing', () => {
   const h = highlightOf(path(['start_vid', 'end_vid', 'agg_cost'], [[5, 12, 4]]));
   assert.equal(h.edges.size, 0);
   assert.equal(h.nodes.size, 0);
+});
+
+test('gridData keys columns by position and keeps every SQL column name as the title', () => {
+  const { columns } = gridData({ columns: ['a.b', 'a.b', '<b>x</b>'], rows: [] }, []);
+  assert.deepEqual(columns, [
+    { title: 'a.b', field: 'c0' },
+    { title: 'a.b', field: 'c1' },
+    { title: '<b>x</b>', field: 'c2' },
+  ]);
+});
+
+test('gridData cells hold the text the page shows, which is also what is copied', () => {
+  const result = { columns: ['seq', 'edge', 'path', 'note'], rows: [[1, -1, [1, 2], null]] };
+  assert.deepEqual(gridData(result, result.rows).rows, [{ c0: '1', c1: '-1', c2: '[1, 2]', c3: 'NULL' }]);
+});
+
+test('gridData renders only the rows it is given (the capped ones)', () => {
+  const result = { columns: ['i'], rows: [[1], [2], [3]] };
+  assert.deepEqual(gridData(result, result.rows.slice(0, 2)).rows, [{ c0: '1' }, { c0: '2' }]);
+});
+
+test('gridData of a zero-column result has no columns and no rows', () => {
+  assert.deepEqual(gridData({ columns: [], rows: [] }, []), { columns: [], rows: [] });
 });

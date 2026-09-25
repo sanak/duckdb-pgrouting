@@ -4,8 +4,9 @@ import { ExtensionLoadError, type Session, startSession } from './duckdb.ts';
 import { sampleGeometry } from './geometry.ts';
 import { createRouteMap, type RouteMap } from './map.ts';
 import { PRESETS } from './presets.ts';
-import { formatCell, highlightOf, type ResultSet, summarize } from './result.ts';
+import { highlightOf, type ResultSet, summarize } from './result.ts';
 import { hashForQuery, queryFromHash } from './share.ts';
+import { createResultGrid } from './table.ts';
 
 const MAX_TABLE_ROWS = 1000;
 
@@ -22,28 +23,11 @@ const share = byId<HTMLButtonElement>('share');
 const status = byId<HTMLParagraphElement>('status');
 const banner = byId<HTMLDivElement>('banner');
 const versions = byId<HTMLParagraphElement>('versions');
-const table = byId<HTMLTableElement>('result');
+const grid = createResultGrid(byId<HTMLDivElement>('result'));
 
 function setStatus(text: string, isError = false): void {
   status.textContent = text;
   status.classList.toggle('error', isError);
-}
-
-function renderTable(result: ResultSet): string {
-  const { shown, text } = summarize(result, MAX_TABLE_ROWS);
-  const head = document.createElement('tr');
-  for (const c of result.columns) head.append(Object.assign(document.createElement('th'), { textContent: c }));
-  const body = shown.map((row) => {
-    const tr = document.createElement('tr');
-    for (const v of row) tr.append(Object.assign(document.createElement('td'), { textContent: formatCell(v) }));
-    return tr;
-  });
-  const thead = document.createElement('thead');
-  const tbody = document.createElement('tbody');
-  thead.append(head);
-  tbody.append(...body);
-  table.replaceChildren(thead, tbody);
-  return text;
 }
 
 for (const p of PRESETS) preset.append(new Option(p.label, p.id));
@@ -108,7 +92,8 @@ async function main(): Promise<void> {
     const started = performance.now();
     try {
       const result = await session.query(sql.value);
-      const text = renderTable(result);
+      const { shown, text } = summarize(result, MAX_TABLE_ROWS);
+      grid.show(result, shown);
       routeMap.highlight(highlightOf(result));
       setStatus(`${text} · ${Math.round(performance.now() - started)} ms`);
     } catch (error) {

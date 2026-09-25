@@ -17,12 +17,14 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.33.1-dev64.0",
-    "maplibre-gl": "6.11.2"
+    "maplibre-gl": "6.11.2",
+    "tabulator-tables": "6.5.3"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@types/geojson": "7946.0.16",
     "@types/node": "24.13.6",
+    "@types/tabulator-tables": "6.3.6",
     "typescript": "7.0.2",
     "vite": "8.3.1"
   }
