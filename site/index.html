@@ -6,8 +6,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" href="data:," />
     <title>pgrouting Playground</title>
+    <meta name="description" content="Run pgRouting's graph algorithms in your browser with DuckDB-Wasm and the pgrouting extension." />
   </head>
   <body>
+    <header>
+      <h1>pgrouting Playground</h1>
+      <p id="versions" class="versions">Starting DuckDB…</p>
+      <p class="notice">
+        Runs the <a href="https://github.com/sanak/duckdb-pgrouting">pgrouting</a> DuckDB extension in your browser on
+        pgRouting's sample graph. This page loads an unsigned build of the extension from this site. Unofficial: not
+        affiliated with or endorsed by the pgRouting project or OSGeo.
+      </p>
+    </header>
+    <div id="banner" class="banner" role="alert" hidden></div>
+    <main>
+      <section class="editor">
+        <div class="toolbar">
+          <label>Preset <select id="preset"></select></label>
+          <button id="run" type="button" disabled>Run</button>
+          <button id="share" type="button">Share</button>
+        </div>
+        <textarea id="sql" spellcheck="false" aria-label="SQL"></textarea>
+        <p id="status" class="status" role="status"></p>
+      </section>
+      <section id="map" class="map" aria-label="Sample graph"></section>
+      <section class="result">
+        <table id="result"></table>
+      </section>
+    </main>
+    <footer>
+      <a href="https://github.com/sanak/duckdb-pgrouting">Source</a> ·
+      <a href="https://docs.pgrouting.org/latest/en/">pgRouting documentation</a> ·
+      <a href="https://github.com/sanak/duckdb-pgrouting/blob/main/site/LICENSE">Site code: MIT</a> ·
+      <a href="third-party-licenses.md">Third-party licences</a> ·
+      <a href="https://github.com/sanak/duckdb-pgrouting/blob/main/site/NOTICE.md">Data and binaries</a>
+    </footer>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
