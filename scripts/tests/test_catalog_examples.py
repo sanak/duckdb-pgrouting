@@ -29,19 +29,26 @@ class TestCatalogExamples(unittest.TestCase):
 
     def examples(self):
         rows = duckdbcli.DuckDB(str(BINARY)).query(
-            "SELECT DISTINCT function_name, unnest(examples) AS example FROM duckdb_functions() "
+            "SELECT DISTINCT function_name, unnest(examples) AS example, "
+            "coalesce(tags['pgrouting_requires'], '') AS requires "
+            "FROM duckdb_functions() "
             "WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL "
             "ORDER BY 1, 2"
         ).rows
-        return [(row[0], row[1]) for row in rows]
+        return [(row[0], row[1], row[2]) for row in rows]
 
     def test_there_are_examples_to_run(self):
         self.assertGreaterEqual(len(self.examples()), 16)
 
     def test_every_example_runs_and_returns_rows(self):
-        db = duckdbcli.DuckDB(str(BINARY), preamble=gen._raw_preamble())
-        for name, example in self.examples():
+        plain = duckdbcli.DuckDB(str(BINARY), preamble=gen._raw_preamble())
+        # A function tagged pgrouting_requires = spatial documents an example that needs it.
+        spatial = duckdbcli.DuckDB(str(BINARY), preamble=gen.SPATIAL_SQL + gen._raw_preamble())
+        for name, example, requires in self.examples():
             with self.subTest(function=name):
+                if requires == "spatial" and gen.spatial_disabled():
+                    self.skipTest("spatial examples skipped: " + gen.NO_SPATIAL_ENV + "=1")
+                db = spatial if requires == "spatial" else plain
                 self.assertGreater(len(db.query(example).rows), 0, example)
 
 

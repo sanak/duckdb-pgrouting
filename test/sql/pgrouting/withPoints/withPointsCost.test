@@ -148,5 +148,5 @@ SELECT * FROM pgr_withPointsCost(
 5	10	6
 5	11	3
 
-# q9: skipped - not implemented: pgr_findCloseEdges
+# q9: skipped - passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)
 

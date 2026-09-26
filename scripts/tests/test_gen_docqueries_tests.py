@@ -378,5 +378,62 @@ class TestStaleOutputs(unittest.TestCase):
                          gen.stale_outputs(self.EXISTING, rendered, ["dijkstra"]))
 
 
+class TestDuckdbWkt(unittest.TestCase):
+    def test_point_gets_duckdbs_space_before_the_parenthesis(self):
+        self.assertEqual("POINT (0 1.5)", gen.duckdb_wkt("POINT(0 1.5)"))
+
+    def test_every_comma_gets_a_following_space(self):
+        self.assertEqual("LINESTRING (1.8 0.4, 2 0.4)", gen.duckdb_wkt("LINESTRING(1.8 0.4,2 0.4)"))
+        self.assertEqual("POLYGON ((0 0, 1 0, 0 1, 0 0))", gen.duckdb_wkt("POLYGON((0 0,1 0,0 1,0 0))"))
+
+    def test_duckdb_spelling_is_left_alone(self):
+        self.assertEqual("POINT (1 2)", gen.duckdb_wkt("POINT (1 2)"))
+
+    def test_other_text_is_left_alone(self):
+        self.assertEqual("visits(1,2)", gen.duckdb_wkt("visits(1,2)"))
+        self.assertEqual("r", gen.duckdb_wkt("r"))
+
+    def test_coerce_and_expected_cells_respell_wkt_in_text_columns_only(self):
+        import pgparse
+
+        self.assertEqual("POINT (0 1.5)", gen.coerce("POINT(0 1.5)", "T"))
+        table = pgparse.AlignedTable(["geom"], [["POINT(0 1.5)"]], 1)
+        self.assertEqual([["POINT (0 1.5)"]], gen.expected_cells(table, "T"))
+
+
+class TestSpatialRender(unittest.TestCase):
+    def test_a_spatial_page_is_tagged_and_loads_spatial_before_the_sample_data(self):
+        items = [gen.Emitted("o0", "I", "SELECT 1;", [["1"]])]
+        text = gen.render("utilities", "findCloseEdges", items, spatial=True)
+        tags = text.index("tags spatial\n")
+        require = text.index("require pgrouting\n")
+        install = text.index("statement ok\nINSTALL spatial;\n")
+        load = text.index("statement ok\nLOAD spatial;\n")
+        loader = text.index(export_sampledata.LOADER_SQL.strip())
+        self.assertLess(tags, require)
+        self.assertLess(require, install)
+        self.assertLess(install, load)
+        self.assertLess(load, loader)
+
+    def test_a_plain_page_is_unchanged(self):
+        items = [gen.Emitted("q1", "I", "SELECT 1;", [["1"]])]
+        text = gen.render("dijkstra", "dijkstra", items)
+        self.assertNotIn("spatial", text)
+        self.assertIn("\n\nrequire pgrouting\n\n" + export_sampledata.LOADER_SQL.strip(), text)
+
+
+class TestStaleOutputsKeepsUnverifiedSpatialPages(unittest.TestCase):
+    def test_a_kept_page_is_not_stale(self):
+        existing = ["test/sql/pgrouting/utilities/findCloseEdges.test",
+                    "test/sql/pgrouting/dijkstra/dijkstra.test"]
+        rendered = ["test/sql/pgrouting/dijkstra/dijkstra.test"]
+        kept = {"test/sql/pgrouting/utilities/findCloseEdges.test"}
+        self.assertEqual([], gen.stale_outputs(existing, rendered, None, kept))
+
+    def test_without_kept_pages_it_is_stale_as_before(self):
+        existing = ["test/sql/pgrouting/utilities/findCloseEdges.test"]
+        self.assertEqual(existing, gen.stale_outputs(existing, [], None))
+
+
 if __name__ == "__main__":
     unittest.main()

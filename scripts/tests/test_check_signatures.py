@@ -45,12 +45,20 @@ class MapUpstreamTypesTest(unittest.TestCase):
 
     def test_raises_on_an_unmapped_type(self):
         with self.assertRaises(ValueError):
-            cs.map_upstream_types(("geometry",))
+            cs.map_upstream_types(("bytea",))
 
     def test_maps_character_to_varchar(self):
         # The withPoints family declares its driving side as CHAR; DuckDB has no fixed-width
         # character type, so the registered argument is VARCHAR.
         self.assertEqual(("VARCHAR",), cs.map_upstream_types(("character",)))
+
+
+class MapGeometryTypesTest(unittest.TestCase):
+    def test_geometry_and_its_array(self):
+        self.assertEqual(
+            ("VARCHAR", "GEOMETRY[]", "DOUBLE", "INTEGER", "BOOLEAN"),
+            cs.map_upstream_types(("text", "geometry[]", "double precision", "integer", "boolean")))
+        self.assertEqual(("GEOMETRY",), cs.map_upstream_types(("geometry",)))
 
 
 class CoversTest(unittest.TestCase):

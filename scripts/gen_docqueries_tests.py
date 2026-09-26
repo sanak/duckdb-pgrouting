@@ -46,6 +46,29 @@ ROUTE_COLUMNS = ("node", "edge")
 # is left alone.
 CALL_RE = re.compile(r"(?<![A-Za-z0-9_])(pgr_\w+)\s*\(", re.IGNORECASE)
 
+# PostGIS's ST_AsText writes "LINESTRING(1.8 0.4,2 0.4)"; duckdb-spatial writes
+# "LINESTRING (1.8 0.4, 2 0.4)". Only the spacing differs, so an upstream WKT cell is respelled in
+# DuckDB's form before it is compared or emitted; the coordinates are left exactly as upstream
+# printed them.
+_WKT_START_RE = re.compile(r"^([A-Z]+)\(")
+_WKT_TYPES = {
+    "POINT", "LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING", "MULTIPOLYGON",
+    "GEOMETRYCOLLECTION",
+}
+
+# What a generated page whose function needs duckdb-spatial runs first (see prelude()).
+SPATIAL_SQL = "INSTALL spatial;\nLOAD spatial;\n"
+
+# Set to 1 where duckdb-spatial cannot be installed (Checks.yml sets it on the next line, whose
+# unreleased DuckDB has no published spatial binary). The spatial pages are then neither
+# regenerated nor compared; their committed files are kept as they are.
+NO_SPATIAL_ENV = "PGROUTING_NO_SPATIAL"
+
+
+def spatial_disabled() -> bool:
+    return os.environ.get(NO_SPATIAL_ENV, "") == "1"
+
+
 _INTEGER_TYPES = {
     "TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT",
     "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT", "UHUGEINT",
@@ -101,6 +124,28 @@ def translate(sql: str, implemented: Set[str]) -> Tuple[str, List[str]]:
     return sql, missing
 
 
+def duckdb_wkt(cell: str) -> str:
+    """An upstream WKT cell in duckdb-spatial's spelling; any other text unchanged."""
+    match = _WKT_START_RE.match(cell)
+    if match is None or match.group(1) not in _WKT_TYPES:
+        return cell
+    body = cell[len(match.group(1)):]
+    return match.group(1) + " " + re.sub(r",(?! )", ", ", body)
+
+
+def spatial_names(db: duckdbcli.DuckDB) -> Set[str]:
+    """Lowercase upstream names of the functions whose queries need duckdb-spatial loaded.
+
+    Read from the pgrouting_requires catalog tag, like implemented_names() reads pgrouting_name.
+    """
+    result = db.query(
+        "SELECT DISTINCT lower(tags['pgrouting_name']) AS upstream "
+        "FROM duckdb_functions() "
+        "WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_requires'] = 'spatial'"
+    )
+    return {row[0] for row in result.rows}
+
+
 def slt_types(duck_types: Sequence[str]) -> str:
     """The sqllogictest directive characters for a result's DuckDB types."""
     out = []
@@ -124,7 +169,8 @@ def coerce(cell: Optional[str], slt_type: str) -> Any:
     number's extra left padding and a text value's own genuine leading space (see its docstring):
     an "I"/"R" cell, which can never have a genuine leading space, is fully stripped here because
     this layer is the one that knows the column's type; a "T" cell is returned exactly as
-    parse_aligned produced it, so a value like ' visits' round-trips.
+    parse_aligned produced it, so a value like ' visits' round-trips. A WKT geometry is respelled
+    as duckdb-spatial writes it (duckdb_wkt).
     """
     if cell is None:
         return None
@@ -138,7 +184,7 @@ def coerce(cell: Optional[str], slt_type: str) -> Any:
         return True
     if cell.strip() == "f":
         return False
-    return cell
+    return duckdb_wkt(cell)
 
 
 def _actual(value: Any, slt_type: str, float_digits: Optional[int] = None) -> Any:
@@ -282,19 +328,32 @@ HEADER = """# name: {out}
 # sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
 # line with its reason, so what this file does not cover is visible here rather than implied.
 
-require pgrouting
-
 """
 
 
-def render(category: str, stem: str, items: Sequence[Item]) -> str:
+def prelude(spatial: bool) -> str:
+    """The directives between the header comment and the sample-data loader.
+
+    A page whose function needs duckdb-spatial is tagged ``spatial``: runs that cannot install it
+    skip the file through test/configs/skip_spatial.json. It then installs and loads spatial
+    explicitly, because spatial is not autoloadable and ``require spatial`` only finds statically
+    linked extensions.
+    """
+    if not spatial:
+        return "require pgrouting\n\n"
+    return ("tags spatial\n\nrequire pgrouting\n\n"
+            "statement ok\nINSTALL spatial;\n\nstatement ok\nLOAD spatial;\n\n")
+
+
+def render(category: str, stem: str, items: Sequence[Item], spatial: bool = False) -> str:
     out = "{}/{}/{}.test".format(OUT_ROOT, category, stem)
     parts = [
         HEADER.format(
             out=out,
             stem=stem,
             pg="{}/{}/{}.pg".format(DOCQUERIES, category, stem),
-        )
+        ),
+        prelude(spatial),
     ]
     # LOADER_SQL is already written as sqllogictest body text (each statement introduced by its
     # own "statement ok" line), so it goes into the generated file verbatim rather than being
@@ -333,7 +392,8 @@ def expected_cells(table: pgparse.AlignedTable, directive: str) -> List[List[str
     place; a plain "T" cell is written out exactly as parse_aligned produced it (DuckDB's
     sqllogictest runner splits an expected row on tabs without trimming, so a leading space
     written into the generated file here survives), which is what lets a value like ' visits'
-    round-trip into the emitted test.
+    round-trip into the emitted test. A WKT geometry cell is written in duckdb-spatial's spelling
+    (duckdb_wkt); that respelling is the one edit made to a text value.
     """
     out = []
     for row in table.rows:
@@ -345,7 +405,7 @@ def expected_cells(table: pgparse.AlignedTable, directive: str) -> List[List[str
             elif slt_type == "T" and stripped in ("t", "f"):
                 cells.append("true" if stripped == "t" else "false")
             elif slt_type == "T":
-                cells.append(cell)
+                cells.append(duckdb_wkt(cell))
             else:
                 cells.append(stripped)
         out.append(cells)
@@ -441,11 +501,16 @@ def select_stems(root: pathlib.Path, implemented: Set[str],
 
 
 def stale_outputs(existing: Sequence[str], rendered: Sequence[str],
-                  only: Optional[Sequence[str]]) -> List[str]:
-    """Generated files this run did not produce; a scoped run only judges its own categories."""
+                  only: Optional[Sequence[str]], kept: Set[str] = frozenset()) -> List[str]:
+    """Generated files this run did not produce; a scoped run only judges its own categories.
+
+    A path in ``kept`` was deliberately not regenerated (see NO_SPATIAL_ENV) and is never stale.
+    """
     produced = set(rendered)
     stale = []
     for path in existing:
+        if path in kept:
+            continue
         category = pathlib.PurePosixPath(path).parts[-2]
         if only and category not in only:
             continue
@@ -468,21 +533,35 @@ def merge_ties(existing: Dict[str, Dict[str, dict]], fresh: Dict[str, Dict[str, 
 
 def generate(
     db: duckdbcli.DuckDB, only: Optional[Sequence[str]]
-) -> Tuple[Dict[str, str], Dict[str, Dict[str, dict]], Set[str]]:
-    """Render every selected docqueries file, returning ({output path: file body}, ties, processed stems)."""
+) -> Tuple[Dict[str, str], Dict[str, Dict[str, dict]], Set[str], Set[str]]:
+    """Render every selected docqueries file.
+
+    Returns ({output path: file body}, ties, processed stems, kept spatial paths). A kept path is
+    a spatial page this run deliberately left unregenerated and uncompared (NO_SPATIAL_ENV); see
+    stale_outputs().
+    """
     implemented = implemented_names(db)
+    spatial = spatial_names(db)
+    spatial_db = duckdbcli.DuckDB(db.binary, preamble=SPATIAL_SQL + db.preamble, flags=db.flags)
     skips = json.loads(pathlib.Path(SKIP_FILE).read_text())
     rendered: Dict[str, str] = {}
     ties: Dict[str, Dict[str, dict]] = {}
     processed: Set[str] = set()
+    kept: Set[str] = set()
     for pg in select_stems(pathlib.Path(DOCQUERIES), implemented, only):
         category, stem = pg.parent.name, pg.stem
+        path = "{}/{}/{}.test".format(OUT_ROOT, category, stem)
+        needs_spatial = ("pgr_" + stem).lower() in spatial
+        if needs_spatial and spatial_disabled():
+            print("kept without checking (no spatial): {}".format(path))
+            kept.add(path)
+            continue
         processed.add("{}/{}.pg".format(category, stem))
-        items = process(category, stem, db, implemented, skips, ties)
+        items = process(category, stem, spatial_db if needs_spatial else db, implemented, skips, ties)
         if not any(isinstance(item, Emitted) for item in items):
             continue
-        rendered["{}/{}/{}.test".format(OUT_ROOT, category, stem)] = render(category, stem, items)
-    return rendered, ties, processed
+        rendered[path] = render(category, stem, items, spatial=needs_spatial)
+    return rendered, ties, processed, kept
 
 
 def _raw_preamble() -> str:
@@ -508,14 +587,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     db = duckdbcli.DuckDB(args.duckdb, preamble=_raw_preamble())
-    rendered, fresh_ties, processed = generate(db, args.category)
+    rendered, fresh_ties, processed, kept = generate(db, args.category)
     ties_path = pathlib.Path(TIES_FILE)
     existing_ties = json.loads(ties_path.read_text()) if ties_path.exists() else {}
     ties = merge_ties(existing_ties, fresh_ties, processed)
     rendered[TIES_FILE] = json.dumps(ties, indent=2, sort_keys=True) + "\n"
 
     existing = sorted(p.as_posix() for p in pathlib.Path(OUT_ROOT).glob("*/*.test"))
-    stale = stale_outputs(existing, [p for p in rendered if p != TIES_FILE], args.category)
+    stale = stale_outputs(existing, [p for p in rendered if p != TIES_FILE], args.category, kept)
 
     failures = 0
     for path, body in sorted(rendered.items()):

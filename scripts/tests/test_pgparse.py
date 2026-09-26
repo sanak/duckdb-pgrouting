@@ -35,6 +35,26 @@ class TestSplitBlocks(unittest.TestCase):
         self.assertEqual(46, len(pgparse.nonempty(blocks)))
         self.assertIn("q154", [b.name for b in blocks])
 
+    def test_a_dotted_sub_block_marker_is_its_own_block(self):
+        # extractVertices.pg/.result is the only docqueries page that numbers sub-blocks with a
+        # dot ("/* --q1.1 */"); a name segment may be joined by a hyphen or a dot.
+        text = "/* --q1 */\nSELECT 1;\n/* --q1.1 */\nSELECT 2;\n/* --q2 */\nSELECT 3;\n"
+        names = [b.name for b in pgparse.split_blocks(text)]
+        self.assertEqual(["q1", "q1.1", "q2"], names)
+
+    def test_a_dotted_sub_block_marker_is_recognised_in_a_result_transcript_too(self):
+        # parse_result_block() itself never sees a marker: gen_docqueries_tests.process() splits a
+        # .result file's text with the same split_blocks()/MARKER_RE used above, before handing
+        # each block's body to parse_result_block(). This pins down that shared split on
+        # .result-shaped text (a table followed by its row count).
+        text = (
+            "/* --q1 */\n id \n----\n  1 \n(1 row)\n"
+            "/* --q1.1 */\n id \n----\n  2 \n(1 row)\n"
+            "/* --q2 */\n id \n----\n  3 \n(1 row)\n"
+        )
+        names = [b.name for b in pgparse.split_blocks(text)]
+        self.assertEqual(["q1", "q1.1", "q2"], names)
+
 
 class TestExtraFloatDigits(unittest.TestCase):
     def test_reads_the_preamble_setting(self):

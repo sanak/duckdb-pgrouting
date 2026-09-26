@@ -1,5 +1,5 @@
-# name: test/sql/pgrouting/withPoints/withPointsCostMatrix.test
-# description: Generated from pgRouting's withPointsCostMatrix documentation queries
+# name: test/sql/pgrouting/utilities/extractVertices.test
+# description: Generated from pgRouting's extractVertices documentation queries
 # group: [pgrouting]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -7,12 +7,20 @@
 # GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
 # Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
 #
-# Source: third_party/pgrouting/docqueries/withPoints/withPointsCostMatrix.pg and the committed transcript beside it. The queries and their expected rows are
+# Source: third_party/pgrouting/docqueries/utilities/extractVertices.pg and the committed transcript beside it. The queries and their expected rows are
 # upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
 # sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
 # line with its reason, so what this file does not cover is visible here rather than implied.
 
+tags spatial
+
 require pgrouting
+
+statement ok
+INSTALL spatial;
+
+statement ok
+LOAD spatial;
 
 statement ok
 CREATE TABLE edges AS
@@ -39,27 +47,26 @@ CREATE TABLE restrictions AS
   SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
   FROM read_csv_auto('test/data/sampledata/restrictions.csv');
 
-# q1
-query IIR
-SELECT * FROM pgr_withPointsCostMatrix(
-  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
-  'SELECT pid, edge_id, fraction from pointsOfInterest',
-  array[-1, 10, 11, -6], directed := false);
+# q1: skipped - blank cell in a text column
+
+# q2
+query ITTRRT
+SELECT  * FROM pgr_extractVertices(
+  'SELECT id, geom FROM edges',
+  dryrun => true);
 ----
--6	-1	1.3
--6	10	1.7
--6	11	1.3
--1	-6	1.3
--1	10	1.6
--1	11	2.6
-10	-6	1.7
-10	-1	1.6
-10	11	1
-11	-6	1.3
-11	-1	2.6
-11	10	1
 
-# q2: skipped - not implemented: pgr_TSP
+# q3: skipped - no result set
 
-# q3: skipped - passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)
+# q3.1: skipped - no result set
+
+# q3.2: skipped - no result set
+
+# q3.3: skipped - reads vertices_table, which block q3.2 creates with SELECT ... INTO; the generator runs only blocks that return a result set, so that table never exists here
+
+# q3.4: skipped - no result set
+
+# q3.5: skipped - no result set
+
+# q3.6: skipped - reads x1, y1, x2 and y2, which blocks q3.4 and q3.5 fill with UPDATE ... FROM; the sample edges here have no such columns and those blocks are not run
 
