@@ -134,3 +134,28 @@ test('prerequisiteHint names the preset that creates the missing name', () => {
   assert.equal(prerequisiteHint('Catalog Error: Table with name nope does not exist!', presets, 'route'), null);
   assert.equal(prerequisiteHint('Parser Error: syntax error', presets, 'route'), null);
 });
+
+test('workshop presets carry the licence, the attribution and a chapter link each', () => {
+  const file = presetFile('workshop-hiroshima');
+  assert.equal(file.license, 'CC-BY-SA-3.0');
+  assert.equal(file.licenseUrl, 'https://creativecommons.org/licenses/by-sa/3.0/');
+  assert.match(file.attribution ?? '', /© pgRouting developers/);
+  assert.match(file.attribution ?? '', /Changed for DuckDB/);
+  for (const p of file.presets) {
+    assert.match(p.source ?? '', /^https:\/\/workshop\.pgrouting\.org\/dev\/en\/basic\/\w+\.html$/, p.id);
+    assert.match(p.group, /^[2-6] /, p.id);
+  }
+});
+
+test('every workshop preset that uses a view or macro comes after the one creating it', () => {
+  const presets = presetFile('workshop-hiroshima').presets;
+  const created = new Map<string, number>();
+  presets.forEach((p, i) => {
+    for (const name of createdNames(p.sql)) if (!created.has(name)) created.set(name, i);
+  });
+  presets.forEach((p, i) => {
+    for (const [name, at] of created) {
+      if (at > i && new RegExp(`\\b${name}\\b`, 'i').test(p.sql)) assert.fail(`${p.id} uses ${name}, created later`);
+    }
+  });
+});
