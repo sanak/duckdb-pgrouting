@@ -34,8 +34,8 @@ Every Release's notes list the ready-to-paste `INSTALL` line for each platform. 
 Platforms: `linux_amd64`, `linux_arm64`, `osx_amd64`, `osx_arm64`, `windows_amd64`,
 `windows_amd64_mingw`, and DuckDB-Wasm (`wasm_mvp`, `wasm_eh`, `wasm_threads`; see below).
 
-Releases are built from the `v1.5-variegata` branch, which targets the current DuckDB v1.5
-release. `main` targets DuckDB 2.0, which is not released yet.
+Releases are built from `main`, which targets the current DuckDB v1.5 release. The
+`v2.0-cyanoptera` branch targets DuckDB 2.0, which is not released yet.
 
 ## Example
 

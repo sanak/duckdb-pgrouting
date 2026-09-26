@@ -24,8 +24,8 @@ Every public function carries a catalog description and an example (`duckdb_func
 
 ## Layout
 
-- `duckdb/` — DuckDB submodule: a `v2.0-cyanoptera` commit on `main`, the latest v1.5 release tag
-  on the `v1.5-variegata` stable branch.
+- `duckdb/` — DuckDB submodule: the latest v1.5 release tag on `main`, a `v2.0-cyanoptera`
+  commit on the `v2.0-cyanoptera` next branch.
 - `extension-ci-tools/` — DuckDB's extension build/CI tooling (submodule).
 - `third_party/pgrouting/` — pgRouting submodule, pinned to a release tag.
 - `cmake/pgrouting_sources.cmake` — explicit list of compiled upstream files; also reads the
@@ -93,14 +93,15 @@ asserted against `true` / `false`.
 
 ## Release lines and releases
 
-Until DuckDB 2.0.0 ships there are two lines. `v1.5-variegata` (stable) is built against the
-current DuckDB v1.5 release and is what users install; `main` (next) is built against DuckDB's
-`v2.0-cyanoptera` branch. Every change lands on `main` first and is cherry-picked onto the
-branch; the branch differs only in its submodule pins, its v1.5 source adaptations, the two
-`if: false` lines of `MainDistributionPipeline.yml` and the one deleted test
-`test/sql/dijkstra_interrupt.test`. No `#if` compatibility macros go on `main`.
+Until DuckDB 2.0.0 ships there are two lines. `main` (stable) is built against the current
+DuckDB v1.5 release and is what users install; the `v2.0-cyanoptera` branch (next) is built
+against DuckDB's branch of that name. Every change lands on `main` first and is cherry-picked
+onto the branch; the branch differs only in its submodule pins, its v2.0 source adaptations, the
+two `if: false` lines of `MainDistributionPipeline.yml` and the one extra test
+`test/sql/dijkstra_interrupt.test`. No `#if` compatibility macros go on either line. When DuckDB
+2.0.0 ships, `v2.0-cyanoptera` is merged into `main` and a v1.5 maintenance branch is cut first.
 
-Releases are tags on the stable line only. A pushed `v*` tag runs the distribution pipeline, and
+Releases are tags on `main` only. A pushed `v*` tag runs the distribution pipeline, and
 its `Draft GitHub Release` job turns that run's nine artifacts into a draft Release:
 `scripts/release_assets.py` names them
 `pgrouting.<duckdb version>.<platform>.duckdb_extension.gz` / `…<variant>.duckdb_extension.wasm`,
