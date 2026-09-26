@@ -15,7 +15,7 @@ query I
 SELECT count(DISTINCT function_name) FROM duckdb_functions()
 WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL;
 ----
-17
+18
 
 # No overload of any of them lacks a description or an example.
 query I
