@@ -32,13 +32,3 @@ export function stateFromHash(hash: string): { dataset: string | null; sql: stri
 export function hashFor(dataset: string, sql: string): string {
   return `#d=${dataset}&q=${encodeQuery(sql)}`;
 }
-
-// Temporary: main.ts uses this until it is rewritten.
-export function queryFromHash(hash: string): string | null {
-  return stateFromHash(hash).sql;
-}
-
-// Temporary: main.ts uses this until it is rewritten.
-export function hashForQuery(sql: string): string {
-  return `#q=${encodeQuery(sql)}`;
-}

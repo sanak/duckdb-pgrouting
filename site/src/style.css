@@ -66,6 +66,17 @@ main {
   max-width: 100%;
 }
 
+.dataset {
+  display: inline-block;
+  margin: 6px 0 0;
+}
+
+.preset-note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 button {
   padding: 4px 14px;
 }
