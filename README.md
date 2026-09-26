@@ -130,7 +130,9 @@ Functions deliberately not ported are listed, each with its reason, in
 
 To try it without installing anything, open the
 [Playground](https://sanak.github.io/duckdb-pgrouting/): it serves the Wasm builds of every
-published Release and runs them on pgRouting's sample graph, with the routes drawn on a map.
+published Release and runs them on pgRouting's sample graph, or on the Hiroshima road network of
+the [pgRouting workshop](https://workshop.pgrouting.org/) with the workshop's queries adapted to
+DuckDB, with the routes drawn on a map.
 
 GitHub serves Release downloads without CORS headers, so DuckDB-Wasm cannot fetch the Wasm assets
 from a Release directly. Host `pgrouting.<duckdb version>.<variant>.duckdb_extension.wasm` on your

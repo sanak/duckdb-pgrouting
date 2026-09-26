@@ -68,9 +68,13 @@ Every public function carries a catalog description and an example (`duckdb_func
 - `test/w2/` — W2, the browser smoke test of the Wasm build: a Node project of its own (pinned
   `@duckdb/duckdb-wasm`, Playwright, esbuild) with a standard-library static server.
 - `site/` — the Playground published on GitHub Pages: an MIT-licensed Vanilla TypeScript + Vite
-  project (Node 24, Biome, `node --test`) that runs the extension in DuckDB-Wasm on the sample
-  graph and draws results with MapLibre. `npm run collect` copies the sample CSVs and every
-  published Release's Wasm builds into `site/public/` before a dev server or build.
+  project (Node 24, Biome, `node --test`) that runs the extension in DuckDB-Wasm and draws results
+  with MapLibre. Each dataset is a folder `site/datasets/<id>/` (`sampledata`,
+  `workshop-hiroshima`) with a `dataset.json` (data files, table SQL, map mode) and a
+  `presets.json`; in the browser each dataset lives in its own attached catalog.
+  `npm run collect` copies those files, the data from `test/data/<id>/` and every published
+  Release's Wasm builds into `site/public/` before a dev server or build.
+  `scripts/tests/test_site_presets.py` runs every preset natively, in order and twice.
 - `docs/RELEASE.md` — how a release is cut; `docs/UPSTREAM_SYNC.md` — how pgRouting is bumped.
 
 ## Build and test
@@ -262,7 +266,9 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
    metadata, not source).
    Under `site/` the identifier is `MIT` instead (`site/LICENSE`), in the same comment forms plus
    `/* … */` in CSS; `site/package.json`, `site/package-lock.json`, `site/tsconfig.json`,
-   `site/.nvmrc` and `site/NOTICE.md` are exempt like their counterparts above. In a
+   `site/.nvmrc`, `site/NOTICE.md` and the JSON files under `site/datasets/` are exempt like their
+   counterparts above; `site/datasets/workshop-hiroshima/presets.json` is CC BY-SA 3.0, not MIT,
+   and says so in its `license` field. In a
    sqllogictest the header goes *after* the `# name:` / `# description:` / `# group:` block,
    which is parsed positionally.
 7. The `pgrouting_name` function tag marks every function that corresponds to an upstream
