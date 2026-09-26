@@ -26,9 +26,10 @@ struct OldStyleOutput {
 };
 
 // Runs one per-family driver. `kind` must not be SHORTEST_PATH. An empty combinations_sql means
-// "array form". `directed` is ignored by DAG_SHORTEST_PATH, `only_cost` by EDWARD_MOORE and
-// BINARY_BFS, and `normal` by every kind but DAG_SHORTEST_PATH: those drivers take no such
-// parameter. CONNECTED_COMPONENTS reads only edges_sql and fills `pairs` rather than `rows`.
+// "array form". `directed` is ignored by DAG_SHORTEST_PATH and CONNECTED_COMPONENTS, `only_cost`
+// by EDWARD_MOORE, BINARY_BFS and CONNECTED_COMPONENTS, and `normal` by every kind but
+// DAG_SHORTEST_PATH: those drivers take no such parameter. CONNECTED_COMPONENTS reads only
+// edges_sql and fills `pairs` rather than `rows`.
 OldStyleOutput RunOldStyle(DriverKind kind, const std::string &edges_sql, const std::string &combinations_sql,
                            ArrayType *starts, ArrayType *ends, bool directed, bool only_cost, bool normal);
 

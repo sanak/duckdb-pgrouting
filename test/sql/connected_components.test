@@ -38,6 +38,20 @@ SELECT component, count(*) FROM pgr_connectedComponents(
 2	2
 13	2
 
+# More than one 2048-row vector: exercises HAVE_MORE_OUTPUT across chunks, with seq continuous.
+statement ok
+CREATE TABLE big AS SELECT i AS id, 2*i AS source, 2*i+1 AS target, 1.0::DOUBLE AS cost FROM range(3000) t(i);
+
+query III
+SELECT count(*), max(seq), count(DISTINCT component) FROM pgr_connectedComponents('SELECT id, source, target, cost FROM big');
+----
+6000	6000	3000
+
+query I
+SELECT count(*) FROM (SELECT seq, row_number() OVER (ORDER BY seq) AS rn FROM pgr_connectedComponents('SELECT id, source, target, cost FROM big')) WHERE seq <> rn;
+----
+0
+
 # An edge with both costs negative is not inserted and neither are its vertices (3 and 4 are
 # absent, not singletons); one usable direction connects both ends in the undirected graph.
 statement ok
@@ -53,6 +67,12 @@ SELECT * FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_
 2	1	2
 3	5	5
 4	5	6
+
+# A graph whose every edge has both costs negative: no edge is inserted, so no rows and no error.
+query I
+SELECT count(*) FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM neg WHERE id = 2');
+----
+0
 
 # No edges: no rows and no error (upstream reports a notice).
 query I
