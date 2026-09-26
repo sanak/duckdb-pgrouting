@@ -13,12 +13,14 @@ replaced. License: GPL-2.0-or-later.
 Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`,
 `pgr_dijkstraNear`, `pgr_dijkstraNearCost`, `pgr_withPoints`, `pgr_withPointsCost`,
 `pgr_withPointsCostMatrix`, `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`,
-`pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath` and `pgr_binaryBreadthFirstSearch` —
-pgRouting's seventy-two corresponding signatures, each registered once per number of its defaulted
-parameters passed positionally — and `pgr_version()`. The `pgr_dijkstra` and `pgr_withPoints`
-families call pgRouting's unified `do_shortestPath` driver; with points given, DuckDB also
-materializes the two edge queries that driver derives from the edge and points SQL. The other five
-families call their own per-family `pgr_do_*` drivers through one adapter on the pg_compat side.
+`pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch` and
+`pgr_connectedComponents` — pgRouting's seventy-three corresponding signatures, each registered
+once per number of its defaulted parameters passed positionally — and `pgr_version()`. The
+`pgr_dijkstra` and `pgr_withPoints` families call pgRouting's unified `do_shortestPath` driver;
+with points given, DuckDB also materializes the two edge queries that driver derives from the edge
+and points SQL. The other five families call their own per-family `pgr_do_*` drivers through one
+adapter on the pg_compat side. `pgr_connectedComponents` goes through the same adapter and exec
+function, which returns its vertex/component pairs instead of path rows.
 Every public function carries a catalog description and an example (`duckdb_functions().description`
 / `.examples`), registered from `src/functions/function_docs.cpp`.
 
