@@ -159,3 +159,56 @@ SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
 WHERE edge = -1;
 ----
 6	10	5
+
+# Connected components (docqueries connectedComponents q1): three components, each named by its
+# smallest vertex, nodes ascending inside a component, seq numbering the rows from 1.
+query III
+SELECT seq, component, node FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false,
+  result_kind := 'components', driver := 'connected_components');
+----
+1	1	1
+2	1	3
+3	1	5
+4	1	6
+5	1	7
+6	1	8
+7	1	9
+8	1	10
+9	1	11
+10	1	12
+11	1	15
+12	1	16
+13	1	17
+14	2	2
+15	2	4
+16	13	13
+17	13	14
+
+# An edge query with no rows: upstream reports "No edges found" as a notice and returns nothing.
+query I
+SELECT count(*) FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0) e)
+     AS edges),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0',
+  null_input := false, result_kind := 'components', driver := 'connected_components');
+----
+0
+
+# result_kind and driver must agree, in both directions, as an ordinary input error.
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false,
+  result_kind := 'components', driver := 'bellman_ford');
+----
+Invalid Input Error: _pgr_shortestpath_exec: result_kind 'components' needs driver 'connected_components'
+
+statement error
+SELECT * FROM _pgr_shortestpath_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false,
+  result_kind := 'path', driver := 'connected_components');
+----
+Invalid Input Error: _pgr_shortestpath_exec: driver 'connected_components' needs result_kind 'components'
