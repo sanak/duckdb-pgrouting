@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
-// A share link carries the editor's SQL in the URL fragment, which never reaches the server:
-// #q=<base64url of the UTF-8 text, unpadded>.
+// A share link carries the dataset and the editor's SQL in the URL fragment, which never reaches the
+// server: #d=<dataset id>&q=<base64url of the UTF-8 text, unpadded>. Links made before datasets
+// existed have no d; they open the default dataset.
+import { DATASET_ID } from './datasets.ts';
 
 export function encodeQuery(sql: string): string {
   let binary = '';
@@ -20,11 +22,23 @@ export function decodeQuery(encoded: string): string | null {
   }
 }
 
-export function queryFromHash(hash: string): string | null {
-  const encoded = new URLSearchParams(hash.replace(/^#/, '')).get('q');
-  return encoded === null ? null : decodeQuery(encoded);
+export function stateFromHash(hash: string): { dataset: string | null; sql: string | null } {
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const d = params.get('d');
+  const q = params.get('q');
+  return { dataset: d !== null && DATASET_ID.test(d) ? d : null, sql: q === null ? null : decodeQuery(q) };
 }
 
+export function hashFor(dataset: string, sql: string): string {
+  return `#d=${dataset}&q=${encodeQuery(sql)}`;
+}
+
+// Temporary: main.ts uses this until it is rewritten.
+export function queryFromHash(hash: string): string | null {
+  return stateFromHash(hash).sql;
+}
+
+// Temporary: main.ts uses this until it is rewritten.
 export function hashForQuery(sql: string): string {
   return `#q=${encodeQuery(sql)}`;
 }

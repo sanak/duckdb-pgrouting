@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // One DuckDB-Wasm database per page. It is opened with unsigned extensions allowed — a setting
 // DuckDB accepts only at start-up — and loads this site's own build of pgrouting, which is
-// unsigned because only DuckDB's core and community repositories are signed.
+// unsigned because only DuckDB's core and community repositories are signed. Datasets are built
+// separately (loader.ts).
 import * as duckdb from '@duckdb/duckdb-wasm';
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
@@ -12,6 +13,7 @@ import { plainValue, type ResultSet, type Shape } from './result.ts';
 
 // apache-arrow's Type ids; the enum is not imported so that arrow stays an indirect dependency.
 const ARROW_DECIMAL = 7;
+const ARROW_BINARY = 4;
 const ARROW_LIST = 12;
 const ARROW_FIXED_SIZE_LIST = 16;
 
@@ -19,15 +21,19 @@ const ARROW_FIXED_SIZE_LIST = 16;
 interface ArrowType {
   typeId: number;
   scale?: number;
-  children?: { type: ArrowType }[];
+  children?: { type: ArrowType; metadata?: Map<string, string> }[];
 }
 
-// DECIMAL values arrive unscaled, also as list elements; the type carries the scale.
-function shapeOf(type: ArrowType): Shape | undefined {
+// DECIMAL values arrive unscaled, also as list elements; the type carries the scale. A binary
+// field is a geometry when its extension name says geoarrow.wkb.
+function shapeOf(type: ArrowType, metadata?: Map<string, string>): Shape | undefined {
   if (type.typeId === ARROW_DECIMAL) return { scale: type.scale ?? 0 };
-  const element = type.children?.[0]?.type;
+  if (type.typeId === ARROW_BINARY) {
+    return { binary: metadata?.get('ARROW:extension:name') === 'geoarrow.wkb' ? 'geometry' : 'blob' };
+  }
+  const element = type.children?.[0];
   if ((type.typeId === ARROW_LIST || type.typeId === ARROW_FIXED_SIZE_LIST) && element) {
-    const items = shapeOf(element);
+    const items = shapeOf(element.type, element.metadata);
     return items && { items };
   }
   return undefined;
@@ -43,6 +49,8 @@ export interface Session {
   variant: string;
   pgrVersion: string;
   query(sql: string): Promise<ResultSet>;
+  // Makes bytes readable by SQL under `name` (read_csv, read_parquet), without a network request.
+  registerFile(name: string, bytes: Uint8Array): Promise<void>;
 }
 
 export class ExtensionLoadError extends Error {
@@ -57,20 +65,6 @@ export class ExtensionLoadError extends Error {
   }
 }
 
-const SAMPLE_TABLES: [name: string, select: string][] = [
-  ['edges', "SELECT * FROM read_csv('edges.csv')"],
-  [
-    'vertices',
-    "SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges, CAST(out_edges AS BIGINT[]) AS out_edges, x, y FROM read_csv('vertices.csv')",
-  ],
-  ['pointsofinterest', "SELECT * FROM read_csv('pointsofinterest.csv')"],
-  ['combinations', "SELECT * FROM read_csv('combinations.csv')"],
-  [
-    'restrictions',
-    "SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost FROM read_csv('restrictions.csv')",
-  ],
-];
-
 function sqlString(text: string): string {
   return `'${text.replaceAll("'", "''")}'`;
 }
@@ -78,7 +72,7 @@ function sqlString(text: string): string {
 function toResultSet(table: Awaited<ReturnType<duckdb.AsyncDuckDBConnection['query']>>): ResultSet {
   const fields = table.schema.fields;
   const columns = fields.map((f) => f.name);
-  const shapes = fields.map((f) => shapeOf(f.type as unknown as ArrowType));
+  const shapes = fields.map((f) => shapeOf(f.type as unknown as ArrowType, f.metadata));
   const vectors = fields.map((_, i) => table.getChildAt(i));
   const rows = [];
   for (let r = 0; r < table.numRows; r++) rows.push(vectors.map((v, i) => plainValue(v?.get(r), shapes[i])));
@@ -105,13 +99,7 @@ export async function startSession(): Promise<Session> {
     throw new ExtensionLoadError(duckdbVersion, variant, url, error instanceof Error ? error.message : error);
   }
 
-  for (const [name] of SAMPLE_TABLES) {
-    const response = await fetch(`${import.meta.env.BASE_URL}data/${name}.csv`);
-    if (!response.ok) throw new Error(`Could not fetch data/${name}.csv: HTTP ${response.status}`);
-    await db.registerFileText(`${name}.csv`, await response.text());
-  }
-  for (const [name, select] of SAMPLE_TABLES) await conn.query(`CREATE TABLE ${name} AS ${select}`);
-
   const pgrVersion = String((await query('SELECT pgr_version()')).rows[0]?.[0]);
-  return { duckdbVersion, variant, pgrVersion, query };
+  const registerFile = (name: string, bytes: Uint8Array) => db.registerFileBuffer(name, bytes);
+  return { duckdbVersion, variant, pgrVersion, query, registerFile };
 }

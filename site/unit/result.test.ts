@@ -24,6 +24,15 @@ test('plainValue turns Arrow values into plain JS', () => {
   assert.equal(plainValue(null, { scale: 1 }), null);
 });
 
+test('plainValue shows GEOMETRY and BLOB values as their size, not their bytes', () => {
+  const wkb = new Uint8Array(41);
+  assert.equal(plainValue(wkb, { binary: 'geometry' }), '<geometry, 41 bytes>');
+  assert.equal(plainValue(new Uint8Array(3), { binary: 'blob' }), '<blob, 3 bytes>');
+  assert.equal(plainValue(null, { binary: 'geometry' }), null);
+  // A list of geometries keeps the element shape.
+  assert.deepEqual(plainValue([wkb, null], { items: { binary: 'geometry' } }), ['<geometry, 41 bytes>', null]);
+});
+
 test('plainValue scales DECIMAL elements inside lists (SELECT [1.5, 2.5], [[0.5]])', () => {
   const unscaled = (n: number) => ({ [Symbol.toPrimitive]: () => n });
   // Like an Arrow Vector of DECIMAL: iterating yields one value per element, but toArray() returns
