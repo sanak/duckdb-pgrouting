@@ -1,15 +1,27 @@
 // SPDX-License-Identifier: MIT
 // Fills public/ before `vite dev` or `vite build`:
-//   public/data/*.csv  — the sample graph, copied from test/data/sampledata/
+//   public/data/…      — every dataset under datasets/<id>/ (its dataset.json and presets.json) with
+//                        the data files it names from test/data/<id>/, and data/index.json
 //   public/wasm/…      — the Wasm builds of every published Release (newest per DuckDB version and
 //                        variant), which the browser cannot fetch from GitHub itself (no CORS).
 // Needs the gh CLI, authenticated (GH_TOKEN in CI). --allow-empty tolerates finding no Release.
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildIndex, parseDataset } from '../src/datasets.ts';
 import { extensionPath } from '../src/paths.ts';
+import { parsePresetFile } from '../src/presets.ts';
 import { newestPerTarget, parseAssetName, type WasmAsset } from './assets.ts';
 
 const site = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -20,14 +32,25 @@ function gh(args: string[]): string {
   return execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 }
 
-function copySampleData(): void {
-  const from = join(site, '..', 'test', 'data', 'sampledata');
+function copyDatasets(): void {
+  const from = join(site, 'datasets');
+  const data = join(site, '..', 'test', 'data');
   const to = join(site, 'public', 'data');
   rmSync(to, { recursive: true, force: true });
-  mkdirSync(to, { recursive: true });
-  const files = readdirSync(from).filter((f) => f.endsWith('.csv'));
-  for (const f of files) copyFileSync(join(from, f), join(to, f));
-  console.log(`data: ${files.length} CSV files`);
+  const entries: { id: string; title: string }[] = [];
+  for (const id of readdirSync(from).sort()) {
+    if (!existsSync(join(from, id, 'dataset.json'))) continue;
+    // Parsing here fails the build on a broken file instead of shipping it.
+    const dataset = parseDataset(id, JSON.parse(readFileSync(join(from, id, 'dataset.json'), 'utf8')));
+    parsePresetFile(`${id}/presets.json`, JSON.parse(readFileSync(join(from, id, 'presets.json'), 'utf8')));
+    mkdirSync(join(to, id), { recursive: true });
+    for (const f of ['dataset.json', 'presets.json']) copyFileSync(join(from, id, f), join(to, id, f));
+    for (const f of dataset.files) copyFileSync(join(data, id, f), join(to, id, f));
+    if (existsSync(join(data, id, 'NOTICE.md'))) copyFileSync(join(data, id, 'NOTICE.md'), join(to, id, 'NOTICE.md'));
+    entries.push({ id, title: dataset.title });
+    console.log(`data: ${id} (${dataset.files.length} files)`);
+  }
+  writeFileSync(join(to, 'index.json'), `${JSON.stringify(buildIndex(entries), null, 2)}\n`);
 }
 
 function listWasmAssets(): WasmAsset[] {
@@ -84,5 +107,5 @@ function copyWasmBuilds(): void {
   }
 }
 
-copySampleData();
+copyDatasets();
 copyWasmBuilds();

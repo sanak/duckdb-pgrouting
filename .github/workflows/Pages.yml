@@ -8,6 +8,7 @@ on:
     paths:
       - 'site/**'
       - 'test/data/sampledata/**'
+      - 'test/data/workshop-hiroshima/**'
       - 'test/w2/package.json'
       - '.github/workflows/Pages.yml'
   push:
@@ -15,6 +16,7 @@ on:
     paths:
       - 'site/**'
       - 'test/data/sampledata/**'
+      - 'test/data/workshop-hiroshima/**'
       - 'test/w2/package.json'
       - '.github/workflows/Pages.yml'
   workflow_dispatch:
