@@ -1,0 +1,153 @@
+# name: test/sql/find_close_edges_geom.test
+# description: pgr_findCloseEdges distances, fractions and sides, with duckdb-spatial loaded
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Expected rows are upstream's documented results on its sample graph. DuckDB takes no subquery as
+# a table-function argument, so the points arrive through a variable instead of upstream's
+# (SELECT array_agg(geom) FROM pointsOfInterest). Rows come in input-point order, then by distance.
+# spatial's ST_Buffer has no single-sided option, so `side` is the sign of the cross product of
+# the edge's direction at the closest point and the vector to the point. The last block pins that
+# rule's corner cases, which were checked once against PostGIS's single-sided buffer.
+
+tags spatial
+
+require pgrouting
+
+statement ok
+INSTALL spatial;
+
+statement ok
+LOAD spatial;
+
+statement ok
+CREATE TABLE edges AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+SET VARIABLE pois = (SELECT list(geom ORDER BY pid) FROM pointsofinterest);
+
+statement ok
+SET VARIABLE poi5 = (SELECT geom FROM pointsofinterest WHERE pid = 5);
+
+# Every point of interest: its closest edge within 0.5.
+query IRTRTT
+SELECT edge_id, round(fraction, 12), side, round(distance, 12), ST_AsText(geom), ST_AsText(edge)
+FROM pgr_findCloseEdges('SELECT id, geom FROM edges', getvariable('pois'), 0.5);
+----
+1	0.4	l	0.2	POINT (1.8 0.4)	LINESTRING (1.8 0.4, 2 0.4)
+15	0.4	r	0.2	POINT (4.2 2.4)	LINESTRING (4.2 2.4, 4 2.4)
+12	0.6	l	0.2	POINT (2.6 3.2)	LINESTRING (2.6 3.2, 2.6 3)
+6	0.3	r	0.2	POINT (0.3 1.8)	LINESTRING (0.3 1.8, 0.3 2)
+5	0.8	l	0.1	POINT (2.9 1.8)	LINESTRING (2.9 1.8, 3 1.8)
+4	0.7	r	0.2	POINT (2.2 1.7)	LINESTRING (2.2 1.7, 2 1.7)
+
+# One point, its two closest edges.
+query IRTR
+SELECT edge_id, round(fraction, 12), side, round(distance, 12)
+FROM pgr_findCloseEdges('SELECT id, geom FROM edges', getvariable('poi5'), 0.5, cap := 2);
+----
+5	0.8	l	0.1
+8	0.9	r	0.2
+
+# Positional cap gives the same.
+query I
+SELECT count(*) FROM pgr_findCloseEdges('SELECT id, geom FROM edges', getvariable('poi5'), 0.5, 2);
+----
+2
+
+# One point left of a line going north.
+query IRTRTT
+SELECT edge_id, fraction, side, distance, ST_AsText(geom), ST_AsText(edge)
+FROM pgr_findCloseEdges(
+  'SELECT 1 AS id, ST_MakeLine(ST_MakePoint(2, 0), ST_MakePoint(2, 3)) AS geom',
+  ST_MakePoint(0, 1.5), 5);
+----
+1	0.5	l	2	POINT (0 1.5)	LINESTRING (0 1.5, 2 1.5)
+
+# Two points, one on each side.
+# The list uses ST_Point: ST_MakePoint returns POINT_2D, whose list does not cast to GEOMETRY[].
+query IRTRTT
+SELECT edge_id, round(fraction, 12), side, distance, ST_AsText(geom), ST_AsText(edge)
+FROM pgr_findCloseEdges(
+  'SELECT 1 AS id, ST_MakeLine(ST_MakePoint(1, 0), ST_MakePoint(1, 3)) AS geom',
+  [ST_Point(0, 2), ST_Point(3, 1)], 5);
+----
+1	0.666666666667	l	1	POINT (0 2)	LINESTRING (0 2, 1 2)
+1	0.333333333333	r	2	POINT (3 1)	LINESTRING (3 1, 1 1)
+
+# The side rule's corner cases on a line going east: on the line, beyond its end, at tolerance 0,
+# below (right) and above (left).
+statement ok
+CREATE TABLE east AS SELECT 1 AS id, CAST('LINESTRING(0 0,2 0)' AS GEOMETRY) AS geom;
+
+query RTR
+SELECT fraction, side, round(distance, 12)
+FROM pgr_findCloseEdges('SELECT id, geom FROM east', CAST('POINT(1 0)' AS GEOMETRY), 1);
+----
+0.5	r	0
+
+query RTR
+SELECT fraction, side, round(distance, 12)
+FROM pgr_findCloseEdges('SELECT id, geom FROM east', CAST('POINT(3 -0.5)' AS GEOMETRY), 2);
+----
+1	l	1.11803398875
+
+query RTR
+SELECT fraction, side, round(distance, 12)
+FROM pgr_findCloseEdges('SELECT id, geom FROM east', CAST('POINT(1 0)' AS GEOMETRY), 0);
+----
+0.5	l	0
+
+query RTR
+SELECT fraction, side, round(distance, 12)
+FROM pgr_findCloseEdges('SELECT id, geom FROM east', CAST('POINT(1 -0.5)' AS GEOMETRY), 1);
+----
+0.5	r	0.5
+
+query RTR
+SELECT fraction, side, round(distance, 12)
+FROM pgr_findCloseEdges('SELECT id, geom FROM east', CAST('POINT(1 0.5)' AS GEOMETRY), 1);
+----
+0.5	l	0.5
+
+# Caller columns named like the generated query's own names change nothing.
+query IT
+SELECT edge_id, side FROM pgr_findCloseEdges(
+  'SELECT id, geom, 1 AS point, 2 AS tolerance, 3 AS cap FROM edges', getvariable('poi5'), 0.5,
+  cap := 2);
+----
+5	l
+8	r
+
+# Empty inputs: no rows, no error.
+query I
+SELECT count(*) FROM pgr_findCloseEdges('SELECT id, geom FROM edges', []::GEOMETRY[], 0.5);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_findCloseEdges(
+  'SELECT id, geom FROM edges WHERE false', getvariable('pois'), 0.5);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_findCloseEdges('SELECT id, geom FROM edges', getvariable('poi5'), 0.5, 0);
+----
+0
+
+# The result's types.
+query TTTTTT
+SELECT DISTINCT typeof(edge_id), typeof(fraction), typeof(side), typeof(distance), typeof(geom),
+       typeof(edge)
+FROM pgr_findCloseEdges('SELECT id, geom FROM edges', getvariable('pois'), 0.5);
+----
+BIGINT	DOUBLE	VARCHAR	DOUBLE	GEOMETRY	GEOMETRY

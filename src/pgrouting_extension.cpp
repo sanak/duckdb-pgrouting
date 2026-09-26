@@ -13,6 +13,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	RegisterShortestPathExec(loader);
 	RegisterShortestPathFunctions(loader);
 	RegisterExtractVertices(loader);
+	RegisterFindCloseEdges(loader);
 }
 
 void PgroutingExtension::Load(ExtensionLoader &loader) {
