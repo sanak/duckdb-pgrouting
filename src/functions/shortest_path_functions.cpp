@@ -16,7 +16,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -70,8 +69,8 @@ unique_ptr<SelectStatement> WrapNode(unique_ptr<SelectNode> node) {
 
 unique_ptr<SubqueryExpression> ScalarSubquery(unique_ptr<SelectNode> node) {
 	auto sub = make_uniq<SubqueryExpression>();
-	sub->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
-	sub->SubqueryMutable() = WrapNode(std::move(node));
+	sub->subquery_type = SubqueryType::SCALAR;
+	sub->subquery = WrapNode(std::move(node));
 	return sub;
 }
 
@@ -90,9 +89,9 @@ unique_ptr<ParsedExpression> ListOfRows(unique_ptr<SelectStatement> query) {
 	static constexpr const char *ROW_ALIAS = "_pgr_row";
 	auto node = make_uniq<SelectNode>();
 	vector<unique_ptr<ParsedExpression>> args;
-	args.push_back(make_uniq<ColumnRefExpression>(Identifier(ROW_ALIAS)));
-	node->select_list.push_back(make_uniq<FunctionExpression>(Identifier("list"), std::move(args)));
-	node->from_table = make_uniq<SubqueryRef>(std::move(query), Identifier(ROW_ALIAS));
+	args.push_back(make_uniq<ColumnRefExpression>(string(ROW_ALIAS)));
+	node->select_list.push_back(make_uniq<FunctionExpression>("list", std::move(args)));
+	node->from_table = make_uniq<SubqueryRef>(std::move(query), string(ROW_ALIAS));
 	return ScalarSubquery(std::move(node));
 }
 
@@ -109,20 +108,20 @@ unique_ptr<ParsedExpression> ListOfRows(ClientContext &context, const string &sq
 // parser.
 void AddCTE(ClientContext &context, SelectNode &node, const char *name, const string &sql) {
 	auto info = make_uniq<CommonTableExpressionInfo>();
-	info->query_node = std::move(ParseSingleSelect(context, sql)->node);
-	node.cte_map.map.insert(Identifier(name), std::move(info));
+	info->query = ParseSingleSelect(context, sql);
+	node.cte_map.map.insert(name, std::move(info));
 }
 
 unique_ptr<TableRef> NamedTableRef(const char *name) {
 	auto ref = make_uniq<BaseTableRef>();
-	ref->SetTable(Identifier(name));
+	ref->table_name = name;
 	return std::move(ref);
 }
 
 unique_ptr<ParsedExpression> IdEqualsEdgeId() {
 	return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-	                                       make_uniq<ColumnRefExpression>(Identifier("id")),
-	                                       make_uniq<ColumnRefExpression>(Identifier("edge_id")));
+	                                       make_uniq<ColumnRefExpression>("id"),
+	                                       make_uniq<ColumnRefExpression>("edge_id"));
 }
 
 // WITH edges AS (<edges_sql>), points AS (<points_sql>)
@@ -132,7 +131,7 @@ unique_ptr<SelectStatement> EdgesOfPoints(ClientContext &context, const string &
 	auto node = make_uniq<SelectNode>();
 	AddCTE(context, *node, "edges", edges_sql);
 	AddCTE(context, *node, "points", points_sql);
-	node->select_list.push_back(make_uniq<StarExpression>(Identifier("edges")));
+	node->select_list.push_back(make_uniq<StarExpression>("edges"));
 	auto join = make_uniq<JoinRef>(JoinRefType::REGULAR);
 	join->type = JoinType::INNER;
 	join->left = NamedTableRef("edges");
@@ -148,17 +147,17 @@ unique_ptr<SelectStatement> EdgesOfPoints(ClientContext &context, const string &
 unique_ptr<SelectStatement> EdgesWithoutPoints(ClientContext &context, const string &edges_sql,
                                                const string &points_sql) {
 	auto inner = make_uniq<SelectNode>();
-	inner->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier("edge_id")));
+	inner->select_list.push_back(make_uniq<ColumnRefExpression>("edge_id"));
 	inner->from_table = NamedTableRef("points");
 	inner->where_clause = IdEqualsEdgeId();
 	auto exists = make_uniq<SubqueryExpression>();
-	exists->GetSubqueryTypeMutable() = SubqueryType::EXISTS;
-	exists->SubqueryMutable() = WrapNode(std::move(inner));
+	exists->subquery_type = SubqueryType::EXISTS;
+	exists->subquery = WrapNode(std::move(inner));
 
 	auto node = make_uniq<SelectNode>();
 	AddCTE(context, *node, "edges", edges_sql);
 	AddCTE(context, *node, "points", points_sql);
-	node->select_list.push_back(make_uniq<StarExpression>(Identifier("edges")));
+	node->select_list.push_back(make_uniq<StarExpression>("edges"));
 	node->from_table = NamedTableRef("edges");
 	node->where_clause = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(exists));
 	return WrapNode(std::move(node));
@@ -166,12 +165,12 @@ unique_ptr<SelectStatement> EdgesWithoutPoints(ClientContext &context, const str
 
 // A named table-function argument is encoded as an aliased expression.
 unique_ptr<ParsedExpression> Named(unique_ptr<ParsedExpression> expr, const char *name) {
-	expr->SetAlias(Identifier(name));
+	expr->SetAlias(string(name));
 	return expr;
 }
 
 unique_ptr<ParsedExpression> Constant(Value value) {
-	return ConstantExpression::FromValue(std::move(value));
+	return make_uniq<ConstantExpression>(std::move(value));
 }
 
 unique_ptr<ParsedExpression> IdList(const Value &id) {
@@ -329,8 +328,8 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	// A SELECT without FROM still needs a table reference.
 	row->from_table = make_uniq<EmptyTableRef>();
 
-	unique_ptr<ParsedExpression> edges_expr = Named(ConstantExpression::Null(), "edges");
-	unique_ptr<ParsedExpression> combinations_expr = Named(ConstantExpression::Null(), "combinations");
+	unique_ptr<ParsedExpression> edges_expr = Named(make_uniq<ConstantExpression>(Value()), "edges");
+	unique_ptr<ParsedExpression> combinations_expr = Named(make_uniq<ConstantExpression>(Value()), "combinations");
 	unique_ptr<ParsedExpression> starts_expr = Named(EmptyIdList(), "starts");
 	unique_ptr<ParsedExpression> ends_expr = Named(EmptyIdList(), "ends");
 	// Only an overload with a points argument emits these three; see the loop below.
@@ -421,11 +420,11 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	args.push_back(Named(Constant(Value("path")), "result_kind"));
 
 	auto fref = make_uniq<TableFunctionRef>();
-	fref->function = make_uniq<FunctionExpression>(Identifier("_pgr_shortestpath_exec"), std::move(args));
+	fref->function = make_uniq<FunctionExpression>("_pgr_shortestpath_exec", std::move(args));
 
 	auto outer = make_uniq<SelectNode>();
 	for (const auto *column : OutputColumns(spec.flags.columns)) {
-		outer->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier(column)));
+		outer->select_list.push_back(make_uniq<ColumnRefExpression>(string(column)));
 	}
 	outer->from_table = std::move(fref);
 	if (spec.flags.columns == duckdb_pgrouting::ResultColumns::COST_OF_PATH) {
@@ -433,7 +432,7 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 		// only each path's closing row, identified the same way pgRouting's own SQL does: edge =
 		// -1.
 		outer->where_clause = make_uniq<ComparisonExpression>(
-		    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>(Identifier("edge")),
+		    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>("edge"),
 		    Constant(Value::BIGINT(-1)));
 	}
 	return make_uniq<SubqueryRef>(WrapNode(std::move(outer)));
@@ -446,10 +445,9 @@ void TagFunctions(ExtensionLoader &loader) {
 	auto &db = loader.GetDatabaseInstance();
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
+	auto &schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
 	for (auto &spec : duckdb_pgrouting::SHORTEST_PATH_SPECS) {
-		auto entry =
-		    schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier(spec.upstream_name));
+		auto entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, spec.upstream_name);
 		if (!entry) {
 			throw InternalException("pgrouting: function %s was not registered", spec.upstream_name);
 		}
@@ -470,7 +468,7 @@ void RegisterShortestPathFunctions(ExtensionLoader &loader) {
 		const string name = spec.upstream_name;
 		auto entry = sets.find(name);
 		if (entry == sets.end()) {
-			entry = sets.emplace(name, TableFunctionSet(Identifier(name))).first;
+			entry = sets.emplace(name, TableFunctionSet(name)).first;
 		}
 		vector<LogicalType> types;
 		for (auto kind : spec.args) {

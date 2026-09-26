@@ -11,11 +11,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -92,15 +88,16 @@ duckdb_pgrouting::ColumnClass ClassOf(const LogicalType &type) {
 }
 
 // Unpacks one LIST(STRUCT) cell into per-child vectors. Returns false when the cell is NULL.
-bool Unpack(ClientContext &context, Vector &list_column, idx_t row, duckdb_pgrouting::MaterializedInput &out) {
+bool Unpack(ClientContext &context, Vector &list_column, idx_t count, idx_t row,
+            duckdb_pgrouting::MaterializedInput &out) {
 	UnifiedVectorFormat list_format;
-	list_column.ToUnifiedFormat(list_format);
+	list_column.ToUnifiedFormat(count, list_format);
 	const auto list_idx = list_format.sel->get_index(row);
 	if (!list_format.validity.RowIsValid(list_idx)) {
 		return false; // NULL input
 	}
 	const auto entry = UnifiedVectorFormat::GetData<list_entry_t>(list_format)[list_idx];
-	auto &child = ListVector::GetChildMutable(list_column);
+	auto &child = ListVector::GetEntry(list_column);
 	const auto child_count = ListVector::GetListSize(list_column);
 	auto &struct_children = StructVector::GetEntries(child);
 	auto &struct_type = ListType::GetChildType(list_column.GetType());
@@ -109,8 +106,8 @@ bool Unpack(ClientContext &context, Vector &list_column, idx_t row, duckdb_pgrou
 	out.count = entry.length;
 	out.columns.resize(struct_children.size());
 	for (idx_t c = 0; c < struct_children.size(); c++) {
-		out.names.push_back(StructType::GetChildName(struct_type, c).GetIdentifierName());
-		auto *source = &struct_children[c];
+		out.names.push_back(StructType::GetChildName(struct_type, c));
+		auto *source = struct_children[c].get();
 		if (source->GetType().id() == LogicalTypeId::DECIMAL) {
 			// pgRouting's ANY-NUMERICAL includes DECIMAL, but reading a DECIMAL cell means
 			// knowing its scale and physical width. Cast the whole column once instead.
@@ -121,7 +118,7 @@ bool Unpack(ClientContext &context, Vector &list_column, idx_t row, duckdb_pgrou
 		}
 		out.types.push_back(source->GetType());
 		out.classes.push_back(ClassOf(source->GetType()));
-		source->ToUnifiedFormat(out.columns[c]);
+		source->ToUnifiedFormat(child_count, out.columns[c]);
 	}
 	return true;
 }
@@ -197,7 +194,7 @@ idx_t FindInputColumn(TableFunctionBindInput &input, const char *name) {
 }
 
 // `_pgr_shortestpath_exec` is catalogued and callable by any user, not only through the public
-// overloads' bind_replace. Unpack and ReadIdList reach ListVector::GetChildMutable /
+// overloads' bind_replace. Unpack and ReadIdList reach ListVector::GetEntry /
 // StructVector::GetEntries / ListValue::GetChildren / BigIntValue::Get, all of which raise
 // InternalException (via D_ASSERT) on a type mismatch -- a class that invalidates the whole
 // database instance. Checking each column's shape once, here at bind time, turns a wrong-typed
@@ -254,14 +251,14 @@ void CaptureRowSchema(TableFunctionBindInput &input, idx_t column, RowSchema &sc
 	}
 	auto &struct_type = ListType::GetChildType(type);
 	for (idx_t c = 0; c < StructType::GetChildCount(struct_type); c++) {
-		schema.names.push_back(StructType::GetChildName(struct_type, c).GetIdentifierName());
+		schema.names.push_back(StructType::GetChildName(struct_type, c));
 		schema.types.push_back(StructType::GetChildType(struct_type, c));
 	}
 	schema.known = true;
 }
 
 unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBindInput &input,
-                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
+                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto data = make_uniq<ShortestPathExecBindData>();
 	auto &request = data->request;
 	request.edges_sql = NamedStringOr(input, "edges_sql", "");
@@ -337,7 +334,7 @@ void RegisterRowList(ClientContext &context, duckdb_pgrouting::InputRegistry &re
 		return;
 	}
 	duckdb_pgrouting::MaterializedInput rows;
-	if (Unpack(context, input.data[column], 0, rows)) {
+	if (Unpack(context, input.data[column], input.size(), 0, rows)) {
 		registry.Register(sql, kind, std::move(rows));
 	} else if (schema.known) {
 		registry.Register(sql, kind, EmptyInput(schema));
@@ -395,14 +392,14 @@ OperatorResultType ShortestPathExecFunction(ExecutionContext &context, TableFunc
 
 	const auto remaining = state.result.count - state.offset;
 	const auto n = MinValue<idx_t>(STANDARD_VECTOR_SIZE, remaining);
-	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
-	auto path_seq = FlatVector::ScatterWriter<int32_t>(output.data[1]);
-	auto start_vid = FlatVector::ScatterWriter<int64_t>(output.data[2]);
-	auto end_vid = FlatVector::ScatterWriter<int64_t>(output.data[3]);
-	auto node = FlatVector::ScatterWriter<int64_t>(output.data[4]);
-	auto edge = FlatVector::ScatterWriter<int64_t>(output.data[5]);
-	auto cost = FlatVector::ScatterWriter<double>(output.data[6]);
-	auto agg_cost = FlatVector::ScatterWriter<double>(output.data[7]);
+	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
+	auto path_seq = FlatVector::GetData<int32_t>(output.data[1]);
+	auto start_vid = FlatVector::GetData<int64_t>(output.data[2]);
+	auto end_vid = FlatVector::GetData<int64_t>(output.data[3]);
+	auto node = FlatVector::GetData<int64_t>(output.data[4]);
+	auto edge = FlatVector::GetData<int64_t>(output.data[5]);
+	auto cost = FlatVector::GetData<double>(output.data[6]);
+	auto agg_cost = FlatVector::GetData<double>(output.data[7]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		const auto &row = state.result.rows[k];
@@ -417,7 +414,7 @@ OperatorResultType ShortestPathExecFunction(ExecutionContext &context, TableFunc
 		// A negative edge id marks the last row of a path, so the next row starts a new one.
 		state.next_path_seq = row.edge < 0 ? 1 : state.next_path_seq + 1;
 	}
-	output.SetChildCardinality(n);
+	output.SetCardinality(n);
 	state.offset += n;
 	if (state.offset < state.result.count) {
 		return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -432,9 +429,8 @@ void TagExecFunction(ExtensionLoader &loader) {
 	auto &db = loader.GetDatabaseInstance();
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
-	auto entry =
-	    schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier("_pgr_shortestpath_exec"));
+	auto &schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
+	auto entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, "_pgr_shortestpath_exec");
 	if (!entry) {
 		throw InternalException("pgrouting: _pgr_shortestpath_exec was not registered");
 	}
