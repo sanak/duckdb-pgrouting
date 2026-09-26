@@ -203,12 +203,15 @@ const vector<const char *> &OutputColumns(duckdb_pgrouting::ResultColumns column
 	static const vector<const char *> PATH = {"seq", "path_seq", "start_vid", "end_vid",
 	                                          "node", "edge", "cost", "agg_cost"};
 	static const vector<const char *> COST = {"start_vid", "end_vid", "agg_cost"};
+	static const vector<const char *> COMPONENTS = {"seq", "component", "node"};
 	switch (columns) {
 	case duckdb_pgrouting::ResultColumns::PATH:
 		return PATH;
 	case duckdb_pgrouting::ResultColumns::COST:
 	case duckdb_pgrouting::ResultColumns::COST_OF_PATH:
 		return COST;
+	case duckdb_pgrouting::ResultColumns::COMPONENTS:
+		return COMPONENTS;
 	}
 	throw InternalException("Unhandled ResultColumns");
 }
@@ -416,9 +419,10 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	args.push_back(Named(Constant(Value::BOOLEAN(details)), "details"));
 	args.push_back(Named(Constant(Value::BOOLEAN(null_input)), "null_input"));
 	args.push_back(Named(Constant(Value(duckdb_pgrouting::DriverKindName(spec.flags.driver))), "driver"));
-	// The exec function always returns the path columns; the public overload's shape is the
-	// outer projection below.
-	args.push_back(Named(Constant(Value("path")), "result_kind"));
+	// The exec function returns the path columns for every path driver, and the public overload's
+	// shape is the outer projection below; the components driver has a shape of its own.
+	const bool components = spec.flags.columns == duckdb_pgrouting::ResultColumns::COMPONENTS;
+	args.push_back(Named(Constant(Value(components ? "components" : "path")), "result_kind"));
 
 	auto fref = make_uniq<TableFunctionRef>();
 	fref->function = make_uniq<FunctionExpression>(Identifier("_pgr_shortestpath_exec"), std::move(args));

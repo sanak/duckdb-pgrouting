@@ -50,8 +50,10 @@ constexpr OptionalParam DETAILS {"details", OptionalType::BOOLEAN, 0};
 // FROM_DIRECTED: the other withPoints signatures pass (CASE WHEN directed THEN 'r' ELSE 'b' END).
 enum class DrivingSideSource : uint8_t { NONE, ARGUMENT, FROM_DIRECTED };
 
-// Which columns a public overload returns. The exec function always produces the eight path
-// columns; COST is the projection upstream's Cost wrappers apply on top of the same driver call.
+// Which columns a public overload returns. The exec function produces the eight path columns for
+// every path driver; COST is the projection upstream's Cost wrappers apply on top of the same
+// driver call. COMPONENTS is the one shape that is not a projection of the path columns: the exec
+// function runs with result_kind 'components' and returns it directly.
 enum class ResultColumns : uint8_t {
 	PATH, // seq, path_seq, start_vid, end_vid, node, edge, cost, agg_cost
 	COST, // start_vid, end_vid, agg_cost
@@ -63,7 +65,8 @@ enum class ResultColumns : uint8_t {
 	// return the wrong nearest destination. Upstream fixed this in commit b27576bd58 (not in
 	// any released version yet): once the pinned release contains that fix, the NearCost
 	// overloads can go back to only_cost = true with plain COST.
-	COST_OF_PATH
+	COST_OF_PATH,
+	COMPONENTS // seq, component, node
 };
 
 // The driver flags that are fixed per overload rather than chosen by the caller. n_goals, global

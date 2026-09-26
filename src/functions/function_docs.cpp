@@ -81,6 +81,10 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "breadth-first search over a double-ended queue.",
      "SELECT * FROM pgr_binaryBreadthFirstSearch('SELECT id, source, target, cost, reverse_cost FROM "
      "edges', 6, 10)"},
+    {"pgr_connectedComponents",
+     "Groups the vertices of an undirected graph into connected components, one row per vertex; each "
+     "component is numbered by its smallest vertex id.",
+     "SELECT * FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM edges')"},
     {"pgr_version", "Version of the pgRouting library built into this extension.", "SELECT pgr_version()"},
 };
 

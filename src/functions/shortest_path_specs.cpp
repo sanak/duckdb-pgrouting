@@ -256,6 +256,11 @@ const duckdb::vector<FunctionSpec> SHORTEST_PATH_SPECS = {
      OldStyleFlags(DriverKind::BINARY_BFS, false, ResultColumns::PATH)},
     {"pgr_binaryBreadthFirstSearch", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED},
      OldStyleFlags(DriverKind::BINARY_BFS, false, ResultColumns::PATH)},
+
+    // pgr_connectedComponents (sql/components): not a path function, but the same exec pipeline
+    // with result_kind 'components'. No starts or ends, no defaulted parameters.
+    {"pgr_connectedComponents", {ArgKind::EDGES_SQL}, {},
+     OldStyleFlags(DriverKind::CONNECTED_COMPONENTS, false, ResultColumns::COMPONENTS)},
 };
 
 } // namespace duckdb_pgrouting
