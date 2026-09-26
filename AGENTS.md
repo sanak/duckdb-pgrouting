@@ -233,8 +233,10 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
 - Geometry comes from duckdb-spatial at run time only: never built, linked or vendored. spatial is
   not autoloadable, so a function that needs it calls `RequireSpatial`
   (`src/functions/sql_template.cpp`), which names `INSTALL spatial; LOAD spatial` when it is
-  missing. Geometry data for the Playground is stored as WKB in a BLOB column, not GeoParquet,
-  which DuckDB-Wasm cannot read yet.
+  missing; with `autoload_known_extensions` on it loads spatial itself, and with
+  `autoinstall_known_extensions` also on (the release-build default) it installs it first. Geometry
+  data for the Playground is stored as WKB in a BLOB column, not GeoParquet, which DuckDB-Wasm
+  cannot read yet.
 - `pgr_extractVertices` and `pgr_findCloseEdges` are translations of upstream's PL/pgSQL
   (`sql/utilities/*.sql`), not calls into it; `docs/UPSTREAM_SYNC.md` has them re-diffed at every
   bump.

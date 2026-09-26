@@ -20,7 +20,7 @@ CREATE TABLE edges AS
 statement ok
 INSTALL spatial;
 
-# With autoloading on, an installed spatial is loaded by the function itself.
+# With autoloading on, the function loads spatial itself (installing it too when autoinstall is on).
 statement ok
 SET autoload_known_extensions = true;
 

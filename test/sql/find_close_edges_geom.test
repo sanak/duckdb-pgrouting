@@ -94,6 +94,13 @@ FROM pgr_findCloseEdges('SELECT id, geom FROM east', CAST('POINT(1 0)' AS GEOMET
 ----
 0.5	r	0
 
+# On the line at its start.
+query RTR
+SELECT fraction, side, round(distance, 12)
+FROM pgr_findCloseEdges('SELECT id, geom FROM east', CAST('POINT(0 0)' AS GEOMETRY), 1);
+----
+0	r	0
+
 query RTR
 SELECT fraction, side, round(distance, 12)
 FROM pgr_findCloseEdges('SELECT id, geom FROM east', CAST('POINT(3 -0.5)' AS GEOMETRY), 2);

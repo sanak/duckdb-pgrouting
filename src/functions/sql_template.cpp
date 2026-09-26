@@ -119,8 +119,9 @@ void RequireSpatial(ClientContext &context, const char *function_name) {
 	if (SpatialIsLoaded(context)) {
 		return;
 	}
-	// TryAutoLoadExtension ignores autoload_known_extensions and would load an installed spatial
-	// even for a caller who turned autoloading off, so the setting is checked here first.
+	// TryAutoLoadExtension ignores autoload_known_extensions and would load spatial (installing it
+	// first when autoinstall_known_extensions is on) even for a caller who turned autoloading off, so
+	// the setting is checked here first.
 	if (AutoloadEnabled(context) && ExtensionHelper::TryAutoLoadExtension(context, "spatial") &&
 	    SpatialIsLoaded(context)) {
 		return;
