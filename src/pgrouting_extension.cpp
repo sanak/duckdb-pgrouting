@@ -12,6 +12,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	RegisterMetaFunctions(loader);
 	RegisterShortestPathExec(loader);
 	RegisterShortestPathFunctions(loader);
+	RegisterExtractVertices(loader);
 }
 
 void PgroutingExtension::Load(ExtensionLoader &loader) {

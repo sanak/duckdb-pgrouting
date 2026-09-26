@@ -1,0 +1,162 @@
+# name: test/sql/extract_vertices.test
+# description: pgr_extractVertices from source/target ids, its errors, dryrun and the spatial check
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Upstream writes pgr_extractVertices in PL/pgSQL; this extension rewrites it at bind time into
+# one of six DuckDB queries. The two source/target modes need no spatial extension, so this file
+# runs everywhere (Wasm included); the geometry modes are in extract_vertices_geom.test.
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * FROM (VALUES
+  (1::BIGINT, 5::BIGINT, 6::BIGINT, CAST('LINESTRING(2 0,2 1)' AS GEOMETRY)),
+  (2, 6, 10, CAST('LINESTRING(2 1,3 1)' AS GEOMETRY)),
+  (4, 6, 7, CAST('LINESTRING(2 1,2 2)' AS GEOMETRY))) AS t(id, source, target, geom);
+
+# id, source, target: each vertex with the edges that enter and leave it, ids ascending.
+query IIIRRT
+SELECT * FROM pgr_extractVertices('SELECT id, source, target FROM edges');
+----
+5	NULL	[1]	NULL	NULL	NULL
+6	[1]	[2, 4]	NULL	NULL	NULL
+7	[4]	NULL	NULL	NULL	NULL
+10	[2]	NULL	NULL	NULL	NULL
+
+# source, target without id: the vertices only.
+query IIIRRT
+SELECT * FROM pgr_extractVertices('SELECT source, target FROM edges');
+----
+5	NULL	NULL	NULL	NULL	NULL
+6	NULL	NULL	NULL	NULL	NULL
+7	NULL	NULL	NULL	NULL	NULL
+10	NULL	NULL	NULL	NULL	NULL
+
+# The result's types are upstream's, whatever integer type the ids come in.
+query TTTTTT
+SELECT DISTINCT typeof(id), typeof(in_edges), typeof(out_edges), typeof(x), typeof(y), typeof(geom)
+FROM pgr_extractVertices(
+  'SELECT CAST(id AS INTEGER) AS id, CAST(source AS SMALLINT) AS source, CAST(target AS INTEGER) AS target FROM edges');
+----
+BIGINT	BIGINT[]	BIGINT[]	DOUBLE	DOUBLE	GEOMETRY
+
+# A caller's column named like one of the generated query's own names changes nothing.
+query IIIRRT
+SELECT * FROM pgr_extractVertices('SELECT id, source, target, 99 AS vid, 1.5 AS x FROM edges');
+----
+5	NULL	[1]	NULL	NULL	NULL
+6	[1]	[2, 4]	NULL	NULL	NULL
+7	[4]	NULL	NULL	NULL	NULL
+10	[2]	NULL	NULL	NULL	NULL
+
+# An edge query without rows: no vertices, no error.
+query I
+SELECT count(*) FROM pgr_extractVertices('SELECT id, source, target FROM edges WHERE false');
+----
+0
+
+# STRICT: a NULL argument, positional or named, gives no rows.
+query I
+SELECT count(*) FROM pgr_extractVertices(NULL::VARCHAR);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_extractVertices('SELECT id, source, target FROM edges', NULL::BOOLEAN);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_extractVertices('SELECT id, source, target FROM edges', dryrun := NULL);
+----
+0
+
+# Upstream's errors, verbatim, with the query as the hint.
+statement error
+SELECT * FROM pgr_extractVertices('SELECT id, target FROM edges');
+----
+Invalid Input Error: column "source" does not exist
+HINT: SELECT id, target FROM edges
+
+statement error
+SELECT * FROM pgr_extractVertices('SELECT id, source FROM edges');
+----
+Invalid Input Error: column "target" does not exist
+HINT: SELECT id, source FROM edges
+
+statement error
+SELECT * FROM pgr_extractVertices('SELECT id, geom AS startpoint FROM edges');
+----
+Invalid Input Error: column "endpoint" does not exist
+HINT: SELECT id, geom AS startpoint FROM edges
+
+statement error
+SELECT * FROM pgr_extractVertices('SELECT id, geom AS endpoint FROM edges');
+----
+Invalid Input Error: column "startpoint" does not exist
+HINT: SELECT id, geom AS endpoint FROM edges
+
+statement error
+SELECT * FROM pgr_extractVertices('SELECT id FROM edges');
+----
+Invalid Input Error: column "geom" does not exist
+HINT: SELECT id FROM edges
+
+statement error
+SELECT * FROM pgr_extractVertices('SELECT CAST(id AS DOUBLE) AS id, source, target FROM edges');
+----
+Invalid Input Error: Expected type of column "id" is ANY-INTEGER
+HINT: Query: SELECT CAST(id AS DOUBLE) AS id, source, target FROM edges
+
+statement error
+SELECT * FROM pgr_extractVertices('SELECT id, source, target, ''x'' AS geom FROM edges');
+----
+Invalid Input Error: Expected type of column "geom" is geometry
+HINT: Query: SELECT id, source, target, 'x' AS geom FROM edges
+
+statement error
+SELECT * FROM pgr_extractVertices('DELETE FROM edges');
+----
+Invalid Input Error: Expected a single SELECT statement: DELETE FROM edges
+
+# dryrun, as upstream, checks only which columns exist, not their types, and returns no rows.
+query I
+SELECT count(*) FROM pgr_extractVertices(
+  'SELECT CAST(id AS DOUBLE) AS id, source, target FROM edges', dryrun := true);
+----
+0
+
+# A geometry mode needs spatial. With autoloading off, and spatial not loaded, the call names what
+# to run instead of failing on a missing ST_ function.
+statement ok
+SET autoload_known_extensions = false;
+
+statement error
+SELECT * FROM pgr_extractVertices('SELECT id, geom FROM edges');
+----
+Invalid Input Error: pgr_extractVertices needs the spatial extension: INSTALL spatial; LOAD spatial
+
+# dryrun never runs the query, so it needs no spatial: the generated SQL goes to the INFO log,
+# where upstream sends it as a NOTICE.
+statement ok
+SET logging_storage = 'memory';
+
+statement ok
+SET enable_logging = true;
+
+query I
+SELECT count(*) FROM pgr_extractVertices('SELECT id, geom FROM edges', true);
+----
+0
+
+statement ok
+SET enable_logging = false;
+
+query I
+SELECT count(*) FROM duckdb_logs
+WHERE type = '' AND log_level = 'INFO'
+  AND message ILIKE '%st_startpoint%' AND message ILIKE '%FROM edges%';
+----
+1

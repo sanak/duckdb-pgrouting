@@ -85,6 +85,11 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "Groups the vertices of an undirected graph into connected components, one row per vertex; each "
      "component is numbered by its smallest vertex id.",
      "SELECT * FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_extractVertices",
+     "Lists the vertices of a graph found from its edges, either from their source and target ids or "
+     "from the end points of their geometry (the latter needs the spatial extension), with the edges "
+     "that enter and leave each vertex.",
+     "SELECT * FROM pgr_extractVertices('SELECT id, source, target FROM edges')"},
     {"pgr_version", "Version of the pgRouting library built into this extension.", "SELECT pgr_version()"},
 };
 

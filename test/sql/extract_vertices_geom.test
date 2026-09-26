@@ -1,0 +1,103 @@
+# name: test/sql/extract_vertices_geom.test
+# description: pgr_extractVertices from edge geometry, with duckdb-spatial loaded
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The four geometry modes call spatial's ST_StartPoint / ST_EndPoint / ST_X / ST_Y. Expected rows
+# are upstream's documented result for its sample graph (the vertex ids are the sample edges'
+# own source/target ids, which upstream derived with this very function).
+
+tags spatial
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+INSTALL spatial;
+
+# With autoloading on, an installed spatial is loaded by the function itself.
+statement ok
+SET autoload_known_extensions = true;
+
+query I
+SELECT count(*) FROM pgr_extractVertices('SELECT id, geom FROM edges');
+----
+17
+
+statement ok
+LOAD spatial;
+
+# id, geom
+query IIIRRT
+SELECT id, in_edges, out_edges, x, y, ST_AsText(geom)
+FROM pgr_extractVertices('SELECT id, geom FROM edges');
+----
+1	NULL	[6]	0	2	POINT (0 2)
+2	NULL	[17]	0.5	3.5	POINT (0.5 3.5)
+3	[6]	[7]	1	2	POINT (1 2)
+4	[17]	NULL	1.999999999999	3.5	POINT (1.999999999999 3.5)
+5	NULL	[1]	2	0	POINT (2 0)
+6	[1]	[2, 4]	2	1	POINT (2 1)
+7	[4, 7]	[8, 10]	2	2	POINT (2 2)
+8	[10]	[12, 14]	2	3	POINT (2 3)
+9	[14]	NULL	2	4	POINT (2 4)
+10	[2]	[3, 5]	3	1	POINT (3 1)
+11	[5, 8]	[9, 11]	3	2	POINT (3 2)
+12	[11, 12]	[13]	3	3	POINT (3 3)
+13	NULL	[18]	3.5	2.3	POINT (3.5 2.3)
+14	[18]	NULL	3.5	4	POINT (3.5 4)
+15	[3]	[16]	4	1	POINT (4 1)
+16	[9, 16]	[15]	4	2	POINT (4 2)
+17	[13, 15]	NULL	4	3	POINT (4 3)
+
+# The id, source, target mode on the same edges agrees on every vertex and its edges.
+query I
+SELECT count(*) FROM (
+  SELECT id, in_edges, out_edges FROM pgr_extractVertices('SELECT id, geom FROM edges')
+  EXCEPT
+  SELECT id, in_edges, out_edges FROM pgr_extractVertices('SELECT id, source, target FROM edges'));
+----
+0
+
+# id, startpoint, endpoint gives the same vertices as id, geom.
+query I
+SELECT count(*) FROM (
+  SELECT id, in_edges, out_edges, x, y FROM pgr_extractVertices('SELECT id, geom FROM edges')
+  EXCEPT
+  SELECT id, in_edges, out_edges, x, y FROM pgr_extractVertices(
+    'SELECT id, ST_StartPoint(geom) AS startpoint, ST_EndPoint(geom) AS endpoint FROM edges'));
+----
+0
+
+# Without id, the vertices are the same but carry no edge lists.
+query III
+SELECT count(*), count(in_edges), count(out_edges) FROM pgr_extractVertices('SELECT geom FROM edges');
+----
+17	0	0
+
+query III
+SELECT count(*), count(in_edges), count(out_edges) FROM pgr_extractVertices(
+  'SELECT ST_StartPoint(geom) AS startpoint, ST_EndPoint(geom) AS endpoint FROM edges');
+----
+17	0	0
+
+# Caller columns named like the generated query's own names change nothing.
+query I
+SELECT count(*) FROM (
+  SELECT id, in_edges, out_edges, x, y FROM pgr_extractVertices('SELECT id, geom FROM edges')
+  EXCEPT
+  SELECT id, in_edges, out_edges, x, y
+  FROM pgr_extractVertices('SELECT id, geom, 5 AS x, 7 AS point FROM edges'));
+----
+0
+
+# An edge query without rows: no vertices, no error.
+query I
+SELECT count(*) FROM pgr_extractVertices('SELECT id, geom FROM edges WHERE false');
+----
+0

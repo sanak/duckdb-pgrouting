@@ -27,9 +27,11 @@ set(DUCKDB_PGROUTING_SOURCES
     src/exec/shortest_path_exec.cpp
     src/exec/withpoints_keys.cpp
     src/functions/function_docs.cpp
+    src/functions/extract_vertices.cpp
     src/functions/meta_functions.cpp
     src/functions/shortest_path_functions.cpp
     src/functions/shortest_path_specs.cpp
+    src/functions/sql_template.cpp
     src/pg_compat/src/get_check_data.cpp
     src/pg_compat/src/old_style_drivers.cpp
     src/pg_compat/src/pg_types.cpp)

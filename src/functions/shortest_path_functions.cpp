@@ -41,25 +41,19 @@
 
 #include "function_spec.hpp"
 #include "function_docs.hpp"
+#include "sql_template.hpp"
 
 namespace duckdb {
 
 namespace {
+
+using duckdb_pgrouting::ParseSingleSelect;
 
 //===--------------------------------------------------------------------===//
 // AST helpers
 //===--------------------------------------------------------------------===//
 // The replacement is built as a parsed AST, never by string concatenation: the user's SQL is
 // parsed once, as its own statement, and can therefore not escape into the generated query.
-
-unique_ptr<SelectStatement> ParseSingleSelect(ClientContext &context, const string &sql) {
-	Parser parser(context.GetParserOptions());
-	parser.ParseQuery(sql);
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw InvalidInputException("Expected a single SELECT statement: %s", sql);
-	}
-	return unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
-}
 
 unique_ptr<SelectStatement> WrapNode(unique_ptr<SelectNode> node) {
 	auto stmt = make_uniq<SelectStatement>();
