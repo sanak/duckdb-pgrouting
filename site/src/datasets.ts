@@ -108,6 +108,8 @@ export function parseDatasetIndex(value: unknown): DatasetIndex {
   return { default: fallback, datasets };
 }
 
+// Mirrored by scripts/tests/test_site_presets.py's quote_ident() for the native preset test
+// (stdlib-only Python cannot import TypeScript); keep the two in step.
 export function quoteIdent(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
@@ -118,6 +120,8 @@ export function useStatement(id: string): string {
 
 // The statements that build a dataset in its own catalog, in order; the catalog stays selected.
 // They can run again after a failure part-way (spatial could not be downloaded, say).
+// Mirrored by scripts/tests/test_site_presets.py's setup_sql() for the native preset test
+// (stdlib-only Python cannot import TypeScript); keep the two in step.
 export function setupStatements(d: Dataset): string[] {
   return [
     `ATTACH IF NOT EXISTS ':memory:' AS ${quoteIdent(d.id)}`,
@@ -125,4 +129,12 @@ export function setupStatements(d: Dataset): string[] {
     ...(d.spatial ? ['LOAD spatial'] : []),
     ...d.tables.map((t) => `CREATE OR REPLACE TABLE ${quoteIdent(t.name)} AS ${t.sql}`),
   ];
+}
+
+// The index collect.ts writes to public/data/index.json: the default dataset first, then by id.
+export function buildIndex(entries: { id: string; title: string }[], fallback = 'sampledata'): DatasetIndex {
+  const datasets = [...entries].sort((a, b) =>
+    a.id === fallback ? -1 : b.id === fallback ? 1 : a.id.localeCompare(b.id),
+  );
+  return parseDatasetIndex({ default: fallback, datasets });
 }

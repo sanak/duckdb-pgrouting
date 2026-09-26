@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { parseDataset, parseDatasetIndex, quoteIdent, setupStatements } from '../src/datasets.ts';
+import { buildIndex, parseDataset, parseDatasetIndex, quoteIdent, setupStatements } from '../src/datasets.ts';
 
 const DATASETS = join(import.meta.dirname, '..', 'datasets');
 
@@ -104,4 +104,19 @@ test('workshop-hiroshima loads spatial and draws a geographic map', () => {
     ['ways', 'configuration'],
   );
   assert.ok(setupStatements(d).indexOf('LOAD spatial') < setupStatements(d).findIndex((s) => s.includes('ways')));
+});
+
+test('buildIndex puts the default first, then the rest by id', () => {
+  const index = buildIndex([
+    { id: 'zeta', title: 'Z' },
+    { id: 'sampledata', title: 'S' },
+    { id: 'alpha', title: 'A' },
+  ]);
+  assert.equal(index.default, 'sampledata');
+  assert.deepEqual(
+    index.datasets.map((d) => d.id),
+    ['sampledata', 'alpha', 'zeta'],
+  );
+  assert.deepEqual(parseDatasetIndex(JSON.parse(JSON.stringify(index))), index);
+  assert.throws(() => buildIndex([{ id: 'alpha', title: 'A' }]), /default/);
 });
