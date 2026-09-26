@@ -188,3 +188,16 @@ SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', [1, NULL]::BIGINT[], 3);
 ----
 Invalid Input Error: _pgr_shortestpath_exec: column 'starts' contains a NULL id
+
+# An edge query may return columns the algorithm never reads, of any type. The sample graph's
+# edges table carries a GEOMETRY column, so every `SELECT * FROM edges` passes one through.
+statement ok
+CREATE TABLE geom_edges AS
+  SELECT 1::BIGINT AS id, 1::BIGINT AS source, 2::BIGINT AS target, 1.0::DOUBLE AS cost,
+         'LINESTRING(0 0,1 0)'::GEOMETRY AS geom;
+
+query IIIIIIRR
+SELECT * FROM pgr_dijkstra('SELECT * FROM geom_edges', 1, 2);
+----
+1	1	1	2	1	1	1	0
+2	2	1	2	2	-1	0	1
