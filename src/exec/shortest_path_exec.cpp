@@ -21,6 +21,7 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 
 #include "c_types/path_rt.h"
+#include "c_types/ii_t_rt.h"
 #include "pgrouting/exec_common.hpp"
 #include "pgrouting/input_registry.hpp"
 #include "pgrouting/withpoints_keys.hpp"
@@ -41,6 +42,8 @@ struct RowSchema {
 struct ShortestPathExecBindData : public TableFunctionData {
 	duckdb_pgrouting::DriverRequest request;
 	bool null_input = false;
+	// result_kind 'components': the driver returned vertex/component pairs, not path rows.
+	bool components = false;
 	// Column positions of the input row, resolved by name so that new columns can be added
 	// without disturbing the ones already bound.
 	idx_t edges_column = DConstants::INVALID_INDEX;
@@ -288,7 +291,21 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	data->null_input = NamedOr<bool>(input, "null_input", false);
 
 	const auto result_kind = NamedStringOr(input, "result_kind", "path");
-	if (result_kind != "path") {
+	const auto components_name =
+	    duckdb_pgrouting::DriverKindName(duckdb_pgrouting::DriverKind::CONNECTED_COMPONENTS);
+	const bool components_driver = request.driver == duckdb_pgrouting::DriverKind::CONNECTED_COMPONENTS;
+	if (result_kind == "components") {
+		if (!components_driver) {
+			throw InvalidInputException("_pgr_shortestpath_exec: result_kind 'components' needs driver '%s'",
+			                            components_name);
+		}
+		data->components = true;
+	} else if (result_kind == "path") {
+		if (components_driver) {
+			throw InvalidInputException("_pgr_shortestpath_exec: driver '%s' needs result_kind 'components'",
+			                            components_name);
+		}
+	} else {
 		throw InvalidInputException("_pgr_shortestpath_exec: unsupported result_kind '%s'", result_kind);
 	}
 
@@ -315,9 +332,15 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	CaptureRowSchema(input, data->edges_of_points_column, data->edges_of_points_schema);
 	CaptureRowSchema(input, data->edges_no_points_column, data->edges_no_points_schema);
 
-	return_types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT,
-	                LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::DOUBLE, LogicalType::DOUBLE};
-	names = {"seq", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
+	if (data->components) {
+		// Upstream's pgr_connectedComponents: all three BIGINT, seq included.
+		return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
+		names = {"seq", "component", "node"};
+	} else {
+		return_types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT,
+		                LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::DOUBLE, LogicalType::DOUBLE};
+		names = {"seq", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
+	}
 	return std::move(data);
 }
 
@@ -380,6 +403,21 @@ void RunOnce(ClientContext &context, const ShortestPathExecBindData &bind, Short
 	state.result = duckdb_pgrouting::RunShortestPath(context, state.registry, request);
 }
 
+// Upstream's _pgr_connectedComponents emits (call counter + 1, d2.value, d1.id) per pair; so does
+// this. The driver has already sorted the pairs by component, then by node.
+void EmitComponents(const ShortestPathExecState &state, idx_t n, DataChunk &output) {
+	auto seq = FlatVector::ScatterWriter<int64_t>(output.data[0]);
+	auto component = FlatVector::ScatterWriter<int64_t>(output.data[1]);
+	auto node = FlatVector::ScatterWriter<int64_t>(output.data[2]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		const auto &pair = state.result.pairs[k];
+		seq[i] = NumericCast<int64_t>(k + 1);
+		component[i] = pair.d2.value;
+		node[i] = pair.d1.id;
+	}
+}
+
 OperatorResultType ShortestPathExecFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
                                             DataChunk &output) {
 	auto &bind = data_p.bind_data->Cast<ShortestPathExecBindData>();
@@ -395,6 +433,16 @@ OperatorResultType ShortestPathExecFunction(ExecutionContext &context, TableFunc
 
 	const auto remaining = state.result.count - state.offset;
 	const auto n = MinValue<idx_t>(STANDARD_VECTOR_SIZE, remaining);
+	if (bind.components) {
+		EmitComponents(state, n, output);
+		output.SetChildCardinality(n);
+		state.offset += n;
+		if (state.offset < state.result.count) {
+			return OperatorResultType::HAVE_MORE_OUTPUT;
+		}
+		state.ran = false;
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
 	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
 	auto path_seq = FlatVector::ScatterWriter<int32_t>(output.data[1]);
 	auto start_vid = FlatVector::ScatterWriter<int64_t>(output.data[2]);

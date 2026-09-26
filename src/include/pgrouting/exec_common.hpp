@@ -8,6 +8,7 @@
 
 #include "pgrouting/driver_kind.hpp"
 
+struct II_t_rt;
 struct Path_rt;
 
 namespace duckdb {
@@ -52,7 +53,8 @@ public:
 	DriverResult &operator=(const DriverResult &) = delete;
 
 	Path_rt *rows = nullptr;
-	std::size_t count = 0;
+	II_t_rt *pairs = nullptr; // set instead of rows by DriverKind::CONNECTED_COMPONENTS
+	std::size_t count = 0;    // of whichever of the two arrays is set
 	bool is_matrix = false;
 };
 

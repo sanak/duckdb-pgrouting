@@ -26,6 +26,7 @@ set(PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/common/identifier.cpp
     ${PGROUTING_DIR}/src/common/path.cpp
     ${PGROUTING_DIR}/src/common/xy_vertex.cpp
+    ${PGROUTING_DIR}/src/components/componentsResult.cpp
     ${PGROUTING_DIR}/src/cpp_common/bpoint.cpp
     ${PGROUTING_DIR}/src/cpp_common/compPaths.cpp
     ${PGROUTING_DIR}/src/cpp_common/Dmatrix.cpp
@@ -40,6 +41,8 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/bellman_ford/bellman_ford_driver.cpp
     ${PGROUTING_DIR}/src/bellman_ford/edwardMoore_driver.cpp
     ${PGROUTING_DIR}/src/breadthFirstSearch/binaryBreadthFirstSearch_driver.cpp
+    ${PGROUTING_DIR}/src/components/components.cpp
+    ${PGROUTING_DIR}/src/components/connectedComponents_driver.cpp
     ${PGROUTING_DIR}/src/cpp_common/combinations.cpp
     ${PGROUTING_DIR}/src/cpp_common/pgdata_fetchers.cpp
     ${PGROUTING_DIR}/src/cpp_common/pgdata_getters.cpp

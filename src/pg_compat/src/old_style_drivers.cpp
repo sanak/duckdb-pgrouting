@@ -6,6 +6,7 @@
 //
 // One case per family. If upstream moves a family onto do_shortestPath, delete its case and switch
 // that family's spec rows (shortest_path_specs.cpp) to DriverKind::SHORTEST_PATH.
+// CONNECTED_COMPONENTS is not a path family; its rows are vertex/component pairs.
 
 #include "pgrouting/old_style_drivers.hpp"
 
@@ -14,6 +15,7 @@
 #include "drivers/bellman_ford/bellman_ford_driver.h"
 #include "drivers/bellman_ford/edwardMoore_driver.h"
 #include "drivers/breadthFirstSearch/binaryBreadthFirstSearch_driver.h"
+#include "drivers/components/connectedComponents_driver.h"
 #include "drivers/dagShortestPath/dagShortestPath_driver.h"
 
 namespace duckdb_pgrouting {
@@ -67,6 +69,11 @@ OldStyleOutput RunOldStyle(DriverKind kind, const std::string &edges_sql, const 
 			// No only_cost: pgr_binaryBreadthFirstSearch has no Cost variant.
 			pgr_do_binaryBreadthFirstSearch(edges, combinations, starts, ends, directed, &out.rows, &out.count, &log,
 			                                &notice, &err);
+			break;
+		case DriverKind::CONNECTED_COMPONENTS:
+			// Upstream's develop branch replaces this driver with do_coloring(..., CONNECTEDCOMPONENTS);
+			// at the pgRouting bump that brings it, call that here instead.
+			pgr_do_connectedComponents(edges, &out.pairs, &out.count, &log, &notice, &err);
 			break;
 		case DriverKind::SHORTEST_PATH:
 			out.err = "Internal error: RunOldStyle called for the unified driver";

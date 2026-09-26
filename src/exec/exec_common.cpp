@@ -21,11 +21,15 @@ DriverResult::~DriverResult() {
 	if (rows) {
 		std::free(rows);
 	}
+	if (pairs) {
+		std::free(pairs);
+	}
 }
 
 DriverResult::DriverResult(DriverResult &&other) noexcept
-    : rows(other.rows), count(other.count), is_matrix(other.is_matrix) {
+    : rows(other.rows), pairs(other.pairs), count(other.count), is_matrix(other.is_matrix) {
 	other.rows = nullptr;
+	other.pairs = nullptr;
 	other.count = 0;
 }
 
@@ -34,10 +38,15 @@ DriverResult &DriverResult::operator=(DriverResult &&other) noexcept {
 		if (rows) {
 			std::free(rows);
 		}
+		if (pairs) {
+			std::free(pairs);
+		}
 		rows = other.rows;
+		pairs = other.pairs;
 		count = other.count;
 		is_matrix = other.is_matrix;
 		other.rows = nullptr;
+		other.pairs = nullptr;
 		other.count = 0;
 	}
 	return *this;
@@ -72,6 +81,7 @@ DriverResult RunShortestPath(duckdb::ClientContext &context, InputRegistry &regi
 			auto out = RunOldStyle(request.driver, request.edges_sql, request.combinations_sql, starts_arg, ends_arg,
 			                       request.directed, request.only_cost, request.normal);
 			result.rows = out.rows;
+			result.pairs = out.pairs;
 			result.count = out.count;
 			log_text = std::move(out.log);
 			notice_text = std::move(out.notice);
