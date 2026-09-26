@@ -4,7 +4,7 @@
 name: Main Extension Distribution Pipeline
 on:
   push:
-    branches: [main, v1.5-variegata]
+    branches: [main, v2.0-cyanoptera]
     # A pushed release tag builds its own run, so the binaries report the tag as their version
     # (a build reports a tag only when its checkout contains it) and the release job below can
     # publish them.
@@ -13,13 +13,14 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v1.5-variegata') || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v2.0-cyanoptera') || github.sha }}
   cancel-in-progress: true
 
-# Two release lines until DuckDB 2.0.0 ships. The stable line is the v1.5-variegata branch, built
-# against the latest DuckDB v1.5 release, and it is what users install. The next line is main,
-# built against DuckDB's v2.0-cyanoptera branch. Both branches carry this same file and each one
-# disables the job that is not its own, so a change here cherry-picks between them unchanged.
+# Two release lines until DuckDB 2.0.0 ships. The stable line is main, built against the latest
+# DuckDB v1.5 release; it is what users install and where tags are cut. The next line is the
+# v2.0-cyanoptera branch, built against DuckDB's branch of that name. Both branches carry this
+# same file and each one disables the job that is not its own, so a change here cherry-picks
+# between them unchanged.
 #
 # reduced_ci_mode is left at its upstream default, which gates osx/windows/wasm on the linux job
 # and turns fail-fast on: a broken build then reports as one job instead of nine. WasmTests.yml
@@ -31,7 +32,7 @@ concurrency:
 jobs:
   duckdb-stable-build:
     name: Build extension binaries (stable)
-    if: false # enabled on the v1.5-variegata branch only
+    if: false # enabled on the main branch only
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
     with:
       duckdb_version: v1.5.5
@@ -49,7 +50,7 @@ jobs:
       vcpkg_commit: 84bab45d415d22042bd0b9081aea57f362da3f35
 
   # Turns a tag's build into a draft GitHub Release. It needs the stable job, which is disabled on
-  # main, so a tag on main skips this job too: releases are cut on the stable line only. The
+  # v2.0-cyanoptera, so a tag there skips this job too: releases are cut on main only. The
   # Release stays a draft on purpose. A human reviews and publishes it, and only a Release
   # published by a person (not by this job's GITHUB_TOKEN) starts other workflows on publication.
   release:

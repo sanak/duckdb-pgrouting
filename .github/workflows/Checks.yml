@@ -7,7 +7,7 @@
 name: Checks
 on:
   push:
-    branches: [main, v1.5-variegata]
+    branches: [main, v2.0-cyanoptera]
   pull_request:
   workflow_dispatch:
 
@@ -18,7 +18,7 @@ permissions:
 # release branch, so two quick pushes cannot drop the run that carries the all-three-variants
 # guarantee.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v1.5-variegata') || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v2.0-cyanoptera') || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -113,15 +113,15 @@ jobs:
       - name: Layer 5 - no public name collides with another extension
         run: build/release/test/unittest test/sql/collisions.test
 
-      # The v1.5-variegata branch is the stable release line: this repository backported to the
-      # latest DuckDB v1.5 release. Its tests and test-control files must stay identical to main's,
-      # because a difference is either a porting defect or a real behaviour difference, and both
-      # want a human rather than a quiet edit. The one deliberate exception is
-      # dijkstra_interrupt.test, deleted on that branch: it needs the max_execution_time setting,
-      # which DuckDB v1.5 does not have. checkout's fetch-depth 0 makes origin/main available.
-      - name: Test parity with main (v1.5 line only)
-        if: github.ref == 'refs/heads/v1.5-variegata' || github.base_ref == 'v1.5-variegata'
+      # The v2.0-cyanoptera branch is the next line: main's code ported to DuckDB's v2.0 branch.
+      # Its tests and test-control files must stay identical to main's, because a difference is
+      # either a porting defect or a real behaviour difference, and both want a human rather than
+      # a quiet edit. The one deliberate exception is dijkstra_interrupt.test, which exists only
+      # there: it needs the max_execution_time setting, which DuckDB v1.5 does not have.
+      # checkout's fetch-depth 0 makes origin/main available.
+      - name: Test parity with main (v2.0 line only)
+        if: github.ref == 'refs/heads/v2.0-cyanoptera' || github.base_ref == 'v2.0-cyanoptera'
         run: |
           diff <(git diff --name-status origin/main HEAD -- test/sql test/pgrouting_skip.json \
                    test/pgrouting_ties.json test/pgrouting_not_ported.json) \
-               <(printf 'D\ttest/sql/dijkstra_interrupt.test\n')
+               <(printf 'A\ttest/sql/dijkstra_interrupt.test\n')

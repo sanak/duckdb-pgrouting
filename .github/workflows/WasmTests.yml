@@ -4,7 +4,7 @@
 name: Wasm Tests
 on:
   push:
-    branches: [main, v1.5-variegata]
+    branches: [main, v2.0-cyanoptera]
   pull_request:
   workflow_dispatch:
 
@@ -15,7 +15,7 @@ permissions:
 # release branch, so two quick pushes cannot drop the run that carries the all-three-variants
 # guarantee.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v1.5-variegata') || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v2.0-cyanoptera') || github.sha }}
   cancel-in-progress: true
 
 jobs:
