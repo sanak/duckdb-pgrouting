@@ -33,7 +33,13 @@ the following checklist, in order. Every step either passes or tells you exactly
    Only each implemented function's own documentation page is processed; a generated file that
    is no longer produced (its function's page vanished upstream, or it emits nothing) is removed
    by a regenerating run and reported by `--check`.
-5. Run `python3 scripts/check_signatures.py`. It reports signatures that upstream added, removed or
+5. Re-diff the two PL/pgSQL functions this extension reimplements:
+   `git -C third_party/pgrouting diff <old tag> <new tag> -- sql/utilities/extractVertices.sql sql/utilities/findCloseEdges.sql`.
+   Carry any change to their column checks, modes, error texts or query into
+   `src/functions/extract_vertices.cpp` / `src/functions/find_close_edges.cpp`. The generated
+   `test/sql/pgrouting/utilities/*.test` cover only the documented queries, so a silent change
+   elsewhere would go unnoticed.
+6. Run `python3 scripts/check_signatures.py`. It reports signatures that upstream added, removed or
    retyped. Adapt the overload table in `src/functions/shortest_path_specs.cpp` for new, changed or
    removed overloads. For a new upstream function whose name collides with a DuckDB name, or which
    does not apply to DuckDB, add it to `test/pgrouting_not_ported.json` with a reason. Never rename
@@ -48,11 +54,11 @@ the following checklist, in order. Every step either passes or tells you exactly
    second copy of the same template in `third_party/pgrouting/src/withPoints/get_new_queries.cpp`,
    used by the pgr_withPoints drivers not ported yet (Via, DD, KSP); a port of those must use the
    same keys.
-6. Run the full suite: `make test_debug`, then push and let CI cover the remaining eight native
+7. Run the full suite: `make test_debug`, then push and let CI cover the remaining eight native
    platforms and the three Wasm variants.
-7. The bump lands on `main` first. Cherry-pick it onto the `v2.0-cyanoptera` next line and push;
+8. The bump lands on `main` first. Cherry-pick it onto the `v2.0-cyanoptera` next line and push;
    its three workflows must be green too, including the Checks step that keeps its tests
    identical to `main`'s. A compile error there only, not on `main`, means the new upstream code
    uses something the v2.0 adaptations do not cover.
-8. Update `AGENTS.md` if the bump changed build commands, layout or conventions.
-9. Users get the new pgRouting version only with a new release (`docs/RELEASE.md`).
+9. Update `AGENTS.md` if the bump changed build commands, layout or conventions.
+10. Users get the new pgRouting version only with a new release (`docs/RELEASE.md`).

@@ -13,14 +13,19 @@ replaced. License: GPL-2.0-or-later.
 Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`,
 `pgr_dijkstraNear`, `pgr_dijkstraNearCost`, `pgr_withPoints`, `pgr_withPointsCost`,
 `pgr_withPointsCostMatrix`, `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`,
-`pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch` and
-`pgr_connectedComponents` — pgRouting's seventy-three corresponding signatures, each registered
-once per number of its defaulted parameters passed positionally — and `pgr_version()`. The
-`pgr_dijkstra` and `pgr_withPoints` families call pgRouting's unified `do_shortestPath` driver;
-with points given, DuckDB also materializes the two edge queries that driver derives from the edge
-and points SQL. The other five families call their own per-family `pgr_do_*` drivers through one
-adapter on the pg_compat side. `pgr_connectedComponents` goes through the same adapter and exec
-function, which returns its vertex/component pairs instead of path rows.
+`pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch`,
+`pgr_connectedComponents`, `pgr_extractVertices` and `pgr_findCloseEdges` — pgRouting's
+seventy-six corresponding signatures, each registered once per number of its defaulted parameters
+passed positionally — and `pgr_version()`. The `pgr_dijkstra` and `pgr_withPoints` families call
+pgRouting's unified `do_shortestPath` driver; with points given, DuckDB also materializes the two
+edge queries that driver derives from the edge and points SQL. The other five families call their
+own per-family `pgr_do_*` drivers through one adapter on the pg_compat side.
+`pgr_connectedComponents` goes through the same adapter and exec function, which returns its
+vertex/component pairs instead of path rows. `pgr_extractVertices` and `pgr_findCloseEdges`, which
+upstream writes in PL/pgSQL, are reimplemented as bind_replace functions. Each binds the caller's
+edge query, picks one of upstream's modes, and rewrites the call into a fixed DuckDB query
+(`src/functions/sql_template.cpp`). Their geometry work calls duckdb-spatial's `ST_*` functions at
+run time.
 Every public function carries a catalog description and an example (`duckdb_functions().description`
 / `.examples`), registered from `src/functions/function_docs.cpp`.
 
@@ -45,10 +50,16 @@ Every public function carries a catalog description and an example (`duckdb_func
 - `src/exec/` — input registry, driver invocation, the internal in-out table function, and the copy
   of upstream's withPoints derived-query key template (`withpoints_keys.cpp`).
 - `src/functions/` — the declarative overload table (`shortest_path_specs.cpp`), the catalog
-  descriptions and examples (`function_docs.cpp`), and the public function registration.
+  descriptions and examples (`function_docs.cpp`), the public function registration, the two
+  PL/pgSQL reimplementations (`extract_vertices.cpp`, `find_close_edges.cpp`) and their shared
+  template machinery (`sql_template.cpp`).
 - `test/sql/` — sqllogictests. `test/sql/pgrouting/<category>/<name>.test` is generated from
   upstream's documentation queries and is never hand-edited.
 - `test/data/sampledata/` — CSV fixtures rebuilt from upstream's committed sample data.
+- `test/configs/skip_spatial.json` — unittest config that skips every test tagged `spatial`.
+- `test/data/workshop-hiroshima/` — the pgRouting workshop's OpenStreetMap road network as
+  Parquet (ODbL; see its `NOTICE.md`), rebuilt by `scripts/export_workshop_hiroshima.sh`
+  (one-off, Docker).
 - `test/pgrouting_skip.json`, `test/pgrouting_ties.json`, `test/pgrouting_not_ported.json` — the
   three control files the test tooling reads; see *Test tooling* for who owns each.
 - `scripts/` — the Python test and release tooling and its `unittest` suite under
@@ -93,14 +104,21 @@ sqllogictest `query` directives accept only the column-type characters `T` (text
 and `R` (floating point). There is no `B` for boolean, so a boolean column is declared `T` and
 asserted against `true` / `false`.
 
+Tests that need duckdb-spatial start with `tags spatial` and run `INSTALL spatial;` and
+`LOAD spatial;` as statements (network): spatial is not autoloadable, and `require spatial` only
+finds statically linked extensions. `--test-config test/configs/skip_spatial.json` skips them; the
+Wasm unittest always passes it, and on `v2.0-cyanoptera` the Makefile exports it as
+`DUCKDB_TEST_CONFIG`, because no spatial binary exists for an unreleased DuckDB.
+
 ## Release lines and releases
 
 Until DuckDB 2.0.0 ships there are two lines. `main` (stable) is built against the current
 DuckDB v1.5 release and is what users install; the `v2.0-cyanoptera` branch (next) is built
 against DuckDB's branch of that name. Every change lands on `main` first and is cherry-picked
 onto the branch; the branch differs only in its submodule pins, its v2.0 source adaptations, the
-two `if: false` lines of `MainDistributionPipeline.yml` and the one extra test
-`test/sql/dijkstra_interrupt.test`. No `#if` compatibility macros go on either line. When DuckDB
+two `if: false` lines of `MainDistributionPipeline.yml`, the one extra test
+`test/sql/dijkstra_interrupt.test` and the Makefile line that exports `DUCKDB_TEST_CONFIG`. No
+`#if` compatibility macros go on either line. When DuckDB
 2.0.0 ships, `v2.0-cyanoptera` is merged into `main` and a v1.5 maintenance branch is cut first.
 
 Releases are tags on `main` only. A pushed `v*` tag runs the distribution pipeline, and
@@ -138,13 +156,20 @@ their `unittest` suite. The test tools read upstream's committed fixtures and dr
   committed fixtures no longer match what those upstream files say.
 - `scripts/gen_docqueries_tests.py` — turns upstream's documentation queries into
   `test/sql/pgrouting/<category>/<name>.test`, executing every query so it can tell an
-  equal-cost tie from a defect. `--check` regenerates and fails on any difference.
+  equal-cost tie from a defect. `--check` regenerates and fails on any difference. Pages of a
+  function tagged `pgrouting_requires = spatial` are generated with `tags spatial` and run with
+  spatial loaded, unless `PGROUTING_NO_SPATIAL=1` (set by `Checks.yml` on the next line), which
+  keeps them unchecked. Upstream's WKT cells are respelled as duckdb-spatial writes them
+  (`POINT (1 2)`).
 - `scripts/check_signatures.py` — compares upstream's `sql/sigs/pgrouting--<ver>.sig` against
   `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
   signature is intentionally registered as several DuckDB variants, one per number of its
   defaulted parameters passed positionally.
 - `scripts/release_assets.py` — turns one distribution run's artifacts into GitHub Release assets
   (see *Release lines and releases*); run by the release job, not by hand.
+- `scripts/export_workshop_hiroshima.sh` — rebuilds `test/data/workshop-hiroshima/*.parquet` with
+  Docker and osm2pgrouting. It is a data tool, not test tooling: the no-PostgreSQL rule does not
+  cover it, and no test or CI job runs it.
 
 The generators execute queries against the release binary, so build it first:
 
@@ -205,6 +230,14 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
   and is never copied). Registration throws when a row is missing, `test/sql/descriptions.test`
   asserts every `pgrouting_name`-tagged function has both, and
   `scripts/tests/test_catalog_examples.py` runs every example on the sample graph.
+- Geometry comes from duckdb-spatial at run time only: never built, linked or vendored. spatial is
+  not autoloadable, so a function that needs it calls `RequireSpatial`
+  (`src/functions/sql_template.cpp`), which names `INSTALL spatial; LOAD spatial` when it is
+  missing. Geometry data for the Playground is stored as WKB in a BLOB column, not GeoParquet,
+  which DuckDB-Wasm cannot read yet.
+- `pgr_extractVertices` and `pgr_findCloseEdges` are translations of upstream's PL/pgSQL
+  (`sql/utilities/*.sql`), not calls into it; `docs/UPSTREAM_SYNC.md` has them re-diffed at every
+  bump.
 
 ## Conventions
 
@@ -219,10 +252,12 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
 6. Every new source file carries an SPDX header (`# SPDX-License-Identifier: GPL-2.0-or-later`
    for the `#`-comment class, `// SPDX-…` in JavaScript, `<!-- SPDX-… -->` in HTML). Deliberate
    exemptions: `vcpkg.json` and `test/w2/package.json` / `package-lock.json` (JSON has no comment
-   syntax; `package.json` states the licence in its `license` field),
-   the CSV test fixtures under `test/data/` (CSV has no comment syntax either, and a `#` line
-   would be read as data), the Markdown documentation (`README.md`, `AGENTS.md`, `CLAUDE.md`) and
-   `LICENSE`, and `.gitignore` / `.gitmodules` (git metadata, not source).
+   syntax; `package.json` states the licence in its `license` field), the CSV test fixtures under
+   `test/data/` (CSV has no comment syntax either, and a `#` line would be read as data), the
+   Parquet data files under `test/data/` (binary), `test/data/workshop-hiroshima/NOTICE.md`
+   (Markdown) and `test/configs/skip_spatial.json` (JSON), the Markdown documentation
+   (`README.md`, `AGENTS.md`, `CLAUDE.md`) and `LICENSE`, and `.gitignore` / `.gitmodules` (git
+   metadata, not source).
    Under `site/` the identifier is `MIT` instead (`site/LICENSE`), in the same comment forms plus
    `/* … */` in CSS; `site/package.json`, `site/package-lock.json`, `site/tsconfig.json`,
    `site/.nvmrc` and `site/NOTICE.md` are exempt like their counterparts above. In a
@@ -232,6 +267,8 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
    pgRouting function and holds that function's upstream name, which is also its public name.
    The tooling reads the set of implemented functions back from `duckdb_functions()` through
    that tag and nowhere else; never keep a second list of them in a script.
+   `pgrouting_requires = spatial` marks a function whose queries need duckdb-spatial; the tooling
+   reads it the same way.
 8. The Python tooling under `scripts/` uses the standard library only. No `pip install` step exists
    in CI or in the developer prerequisites, and its tests use `unittest`, not `pytest`. A
    dependency that would need one is a reason to change the approach, not to add the dependency.
