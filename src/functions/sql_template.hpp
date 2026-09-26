@@ -54,9 +54,9 @@ void CheckColumnType(const QueryColumn *column, const char *name, bool integer, 
 duckdb::unique_ptr<duckdb::TableRef> AsTableRef(duckdb::unique_ptr<duckdb::SelectStatement> statement);
 
 // Returns when duckdb-spatial's functions are in the catalog. spatial is not autoloadable in DuckDB,
-// so a missing ST_ function never loads it; when the caller's autoload_known_extensions is on, an
-// installed spatial is loaded here instead. Otherwise throws "<function_name> needs the spatial
-// extension: INSTALL spatial; LOAD spatial".
+// so a missing ST_ function never loads it; when the caller's autoload_known_extensions is on,
+// spatial is loaded here instead, and installed first when autoinstall_known_extensions is on too.
+// Otherwise throws "<function_name> needs the spatial extension: INSTALL spatial; LOAD spatial".
 void RequireSpatial(duckdb::ClientContext &context, const char *function_name);
 
 // What upstream's dryrun raises as a NOTICE: the generated query, logged at INFO.

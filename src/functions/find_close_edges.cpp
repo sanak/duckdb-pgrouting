@@ -12,11 +12,14 @@
 // - side: spatial's ST_Buffer has no single-sided option, so instead of intersecting the point
 //   with upstream's right-side flat-ended buffer, side is the sign of the cross product between
 //   the edge's direction around the closest point and the vector to the point. Upstream's
-//   corner cases are kept: a point on the line is 'r', a point past either end (fraction 0 or 1)
-//   is 'l', and a tolerance of 0 (an empty buffer) gives 'l'. Near a vertex where the edge
-//   turns, the two rules can disagree.
+//   corner cases are kept: a point on the line, its end points included, is 'r'; a point whose
+//   closest point is an end of the edge (fraction 0 or 1) and which is not on the line is 'l';
+//   and a tolerance of 0 (an empty buffer) gives 'l'. Near a vertex where the edge turns, the
+//   two rules can disagree.
 // - Rows are ordered by the point's position in the input, then by distance and edge id;
 //   upstream leaves the order unspecified.
+// - Rows are partitioned by the point's position in the input, so each input point gets its own
+//   `cap`, even when the same point appears twice; upstream partitions by the point itself.
 
 #include "pgrouting/register.hpp"
 
@@ -63,7 +66,8 @@ ranked AS (
          row_number() OVER (PARTITION BY point_index ORDER BY distance, edge_id) AS rn
   FROM results)
 SELECT edge_id, fraction,
-       CASE WHEN tolerance > 0 AND fraction > 0 AND fraction < 1
+       CASE WHEN tolerance > 0 AND distance = 0 THEN 'r'
+            WHEN tolerance > 0 AND fraction > 0 AND fraction < 1
                  AND (ST_X(ahead) - ST_X(behind)) * (ST_Y(point) - ST_Y(behind))
                      - (ST_Y(ahead) - ST_Y(behind)) * (ST_X(point) - ST_X(behind)) <= 0
             THEN 'r' ELSE 'l' END AS side,

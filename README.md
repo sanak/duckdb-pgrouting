@@ -104,8 +104,10 @@ Functions deliberately not ported are listed, each with its reason, in
 - **Geometry needs the spatial extension.** `pgr_findCloseEdges`, and `pgr_extractVertices` on
   geometry, call [duckdb-spatial](https://duckdb.org/docs/stable/core_extensions/spatial/overview):
   run `INSTALL spatial; LOAD spatial;` first. DuckDB does not autoload spatial; with
-  `autoload_known_extensions` on, the function loads an installed spatial itself. `GEOMETRY`
-  arguments and columns are DuckDB's own type, so `'POINT(1 2)'::GEOMETRY` works without it.
+  `autoload_known_extensions` on, the function loads spatial itself, and with
+  `autoinstall_known_extensions` also on (the default in release builds) it first installs it from
+  the extension repository. `GEOMETRY` arguments and columns are DuckDB's own type, so
+  `'POINT(1 2)'::GEOMETRY` works without it.
 - **`pgr_findCloseEdges`'s point-array signature** takes `GEOMETRY[]`. `ST_MakePoint` returns
   `POINT_2D`, and a list of those does not cast to `GEOMETRY[]` implicitly; build the list with
   `ST_Point` instead, or cast each element to `GEOMETRY`. A single `ST_MakePoint` point works.
@@ -113,11 +115,12 @@ Functions deliberately not ported are listed, each with its reason, in
   documentation passes `(SELECT geom FROM ...)` as a point; use `SET VARIABLE` and
   `getvariable()` instead.
 - **`dryrun := true`** writes the generated query to DuckDB's log (`duckdb_logs`, level INFO)
-  instead of a NOTICE.
+  instead of a NOTICE. Logging is off by default, so run `SET enable_logging = true;` first, with a
+  readable `logging_storage` such as `'memory'`, and read the query from `duckdb_logs`.
 - **`pgr_findCloseEdges`'s `side`** follows the edge's direction at the closest point, because
-  duckdb-spatial has no single-sided buffer. Upstream's corner cases are kept (on the line: `r`;
-  past either end, or tolerance 0: `l`), but near a vertex where an edge turns the two rules can
-  differ. Rows come in input-point order, then by distance.
+  duckdb-spatial has no single-sided buffer. Upstream's corner cases are kept (on the line, end
+  points included: `r`; past either end off the line, or tolerance 0: `l`), but near a vertex where
+  an edge turns the two rules can differ. Rows come in input-point order, then by distance.
 - **`pgr_findCloseEdges`** gives each input point its own `cap`, even when the same point is given
   twice; upstream groups identical points into one `cap`.
 - **`pgr_extractVertices`** always sorts `in_edges` and `out_edges`, and returns its rows ordered
