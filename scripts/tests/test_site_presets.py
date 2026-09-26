@@ -66,8 +66,21 @@ def setup_sql(dataset_id, dataset, presets):
     return "\n".join(lines) + "\n"
 
 
+def map_queries(dataset):
+    """The dataset's map queries, each with the key it is registered under.
+
+    Which keys a `map` object has depends on its `mode` (see site/src/datasets.ts parseMap):
+    abstract has vertices/edges/points, geographic has edges/nodes. Read back every string value
+    except `mode` and `attribution` instead of hard-coding either list, so the two stay in step.
+    """
+    return [(key, value) for key, value in dataset["map"].items()
+            if key not in ("mode", "attribution") and isinstance(value, str)]
+
+
 def chain_sql(dataset_id, dataset, presets):
     parts = [setup_sql(dataset_id, dataset, presets)]
+    for key, query in map_queries(dataset):
+        parts.append(".print map {}\nSELECT count(*) FROM ({});\n".format(key, query.strip().rstrip(";")))
     for preset in presets:
         body = preset_sql(preset).rstrip().rstrip(";") + ";\n"
         parts.append(".print preset {}\n{}".format(preset["id"], body))
@@ -101,9 +114,30 @@ class TestChainSql(unittest.TestCase):
         self.assertNotIn("\nLOAD spatial;", setup_sql("a", dataset, presets))
 
     def test_every_preset_runs_twice_after_a_marker(self):
-        dataset = {"tables": [{"name": "t", "sql": "SELECT 1"}]}
+        dataset = {
+            "tables": [{"name": "t", "sql": "SELECT 1"}],
+            "map": {"mode": "abstract", "vertices": "SELECT 1", "edges": "SELECT 1", "points": "SELECT 1"},
+        }
         chain = chain_sql("a", dataset, [{"id": "p", "sql": "SELECT 2;"}])
         self.assertTrue(chain.endswith(".print preset p\nSELECT 2;\n.print again p\nSELECT 2;\n"))
+
+    def test_map_queries_run_once_after_setup_and_before_presets(self):
+        dataset = {
+            "tables": [{"name": "t", "sql": "SELECT 1"}],
+            "map": {"mode": "abstract", "vertices": "SELECT 1", "edges": "SELECT 2", "points": "SELECT 3"},
+        }
+        chain = chain_sql("a", dataset, [{"id": "p", "sql": "SELECT 4;"}])
+        self.assertIn(".print map vertices\nSELECT count(*) FROM (SELECT 1);\n", chain)
+        self.assertIn(".print map edges\nSELECT count(*) FROM (SELECT 2);\n", chain)
+        self.assertIn(".print map points\nSELECT count(*) FROM (SELECT 3);\n", chain)
+        self.assertLess(chain.index(".print map points"), chain.index(".print preset p"))
+
+    def test_geographic_map_skips_attribution(self):
+        dataset = {
+            "tables": [{"name": "t", "sql": "SELECT 1"}],
+            "map": {"mode": "geographic", "edges": "SELECT 1", "nodes": "SELECT 2", "attribution": "© someone"},
+        }
+        self.assertEqual([("edges", "SELECT 1"), ("nodes", "SELECT 2")], map_queries(dataset))
 
 
 @unittest.skipUnless(BINARY.exists(), "build/release/duckdb not built")

@@ -42,7 +42,11 @@ test('stateFromHash ignores what it cannot use instead of throwing', () => {
   assert.deepEqual(stateFromHash(''), { dataset: null, sql: null });
   assert.deepEqual(stateFromHash('#x=1'), { dataset: null, sql: null });
   assert.deepEqual(stateFromHash('#q=%%%'), { dataset: null, sql: null });
-  // A d that cannot be a dataset id is dropped; a well-formed unknown id is kept for main.ts to report.
-  assert.deepEqual(stateFromHash(`#d=Bad%20Id&q=${encodeQuery('SELECT 3')}`), { dataset: null, sql: 'SELECT 3' });
+  // A d that cannot be a dataset id is kept raw, same as a well-formed unknown id: main.ts looks
+  // either up in its index, finds neither, and reports the one it got.
+  assert.deepEqual(stateFromHash(`#d=Bad%20Id&q=${encodeQuery('SELECT 3')}`), {
+    dataset: 'Bad Id',
+    sql: 'SELECT 3',
+  });
   assert.deepEqual(stateFromHash('#d=no-such-dataset'), { dataset: 'no-such-dataset', sql: null });
 });
