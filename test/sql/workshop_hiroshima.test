@@ -1,0 +1,224 @@
+# name: test/sql/workshop_hiroshima.test
+# description: The workshop-hiroshima dataset reproduces the pgRouting workshop's published numbers
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# test/data/workshop-hiroshima holds the OpenStreetMap road network the pgRouting workshop (FOSS4G
+# Hiroshima) builds with osm2pgrouting (see that directory's NOTICE.md). Every expected value
+# below is one the workshop publishes for this data, so a difference means the data or a function
+# no longer matches the workshop. Costs are compared at the two decimals the workshop's figures
+# are quoted to. The networks are this file's own restatement of the workshop's filters.
+
+tags spatial
+
+require pgrouting
+
+require parquet
+
+statement ok
+INSTALL spatial;
+
+statement ok
+LOAD spatial;
+
+statement ok
+CREATE TABLE ways AS
+  SELECT * REPLACE (ST_GeomFromWKB(geom) AS geom)
+  FROM read_parquet('test/data/workshop-hiroshima/ways.parquet');
+
+statement ok
+CREATE TABLE configuration AS
+  SELECT * FROM read_parquet('test/data/workshop-hiroshima/configuration.parquet');
+
+query I
+SELECT count(*) FROM ways;
+----
+32163
+
+# Chapter 2: vertices from the edges' source and target ids.
+statement ok
+CREATE TABLE vertices AS
+  SELECT * FROM pgr_extractVertices('SELECT id, source, target FROM ways ORDER BY id');
+
+query I
+SELECT count(*) FROM vertices;
+----
+22889
+
+# Chapter 2: 51 components, the largest (component 1) holding all but 149 edges.
+statement ok
+CREATE TABLE components AS
+  SELECT node, component
+  FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM ways');
+
+query II
+SELECT count(*), count(DISTINCT component) FROM components;
+----
+22889	51
+
+statement ok
+CREATE TABLE ways_in AS
+  SELECT ways.*, components.component FROM ways JOIN components ON ways.source = components.node;
+
+query II
+SELECT component, count(*) FROM ways_in GROUP BY component ORDER BY count(*) DESC LIMIT 1;
+----
+1	32014
+
+query I
+SELECT count(*) FROM ways_in GROUP BY component ORDER BY count(*) DESC LIMIT 1 OFFSET 1;
+----
+20
+
+# Chapter 2: the three networks, each restricted to the largest component.
+statement ok
+CREATE VIEW vehicle_net AS
+  SELECT w.id, w.source, w.target, w.cost_s AS cost, w.reverse_cost_s AS reverse_cost, w.name,
+         w.length_m AS length, w.tag_id, w.geom
+  FROM ways_in AS w JOIN configuration AS c ON c.tag_id = w.tag_id
+  WHERE w.component = 1 AND c.tag_value NOT IN ('pedestrian', 'steps', 'footway', 'path', 'cycleway');
+
+statement ok
+CREATE VIEW walk_net AS
+  SELECT w.id, w.source, w.target, w.length_m / 2.0 AS cost, w.length_m / 2.0 AS reverse_cost,
+         w.name, w.length_m AS length, w.geom
+  FROM ways_in AS w JOIN configuration AS c ON c.tag_id = w.tag_id
+  WHERE w.component = 1
+    AND c.tag_value IN ('residential', 'pedestrian', 'steps', 'footway', 'path', 'cycleway');
+
+# The workshop selects the taxi area with PostGIS's `&&` operator, which compares each geometry's
+# bounding box at single (FLOAT) precision, rounded outward. Comparing the envelope's bounds as
+# FLOAT reproduces that selection; comparing at exact (DOUBLE) precision misses four edges that
+# lie within float rounding of the envelope's edge.
+statement ok
+CREATE VIEW taxi_net AS
+  SELECT id, source, target, cost * 1.10 AS cost, reverse_cost * 1.10 AS reverse_cost, name, length,
+         tag_id, geom
+  FROM vehicle_net
+  WHERE ST_XMin(geom)::FLOAT <= 132.46::FLOAT AND ST_XMax(geom)::FLOAT >= 132.439::FLOAT
+    AND ST_YMin(geom)::FLOAT <= 34.40::FLOAT AND ST_YMax(geom)::FLOAT >= 34.38::FLOAT;
+
+query III
+SELECT (SELECT count(*) FROM vehicle_net), (SELECT count(*) FROM walk_net),
+       (SELECT count(*) FROM taxi_net);
+----
+13833	24174	2887
+
+# Chapter 2: cost matrices between the workshop's five places.
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 2)
+FROM pgr_dijkstraCostMatrix('SELECT * FROM vehicle_net', ARRAY[7508, 4128, 4632, 2110, 1688])
+ORDER BY start_vid, end_vid;
+----
+1688	2110	471.59
+1688	4128	145.32
+1688	4632	194.29
+1688	7508	174.4
+2110	1688	472.94
+2110	4128	523.56
+2110	4632	418.13
+2110	7508	452.07
+4128	1688	131.36
+4128	2110	501.87
+4128	4632	129.52
+4128	7508	93.94
+4632	1688	192.91
+4632	2110	420.69
+4632	4128	124.6
+4632	7508	33.94
+7508	1688	173.01
+7508	2110	453.99
+7508	4128	90.66
+7508	4632	36.48
+
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 2)
+FROM pgr_dijkstraCostMatrix('SELECT * FROM taxi_net', ARRAY[7508, 4128, 4632, 2110, 1688])
+ORDER BY start_vid, end_vid;
+----
+4128	4632	142.47
+4128	7508	103.33
+4632	4128	137.06
+4632	7508	37.33
+7508	4128	99.72
+7508	4632	40.13
+
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 2)
+FROM pgr_dijkstraCostMatrix('SELECT * FROM walk_net', ARRAY[7508, 4128, 4632, 2110, 1688])
+ORDER BY start_vid, end_vid;
+----
+1688	4128	974.11
+1688	4632	1513.42
+1688	7508	1349.9
+4128	1688	974.11
+4128	4632	750.31
+4128	7508	508.04
+4632	1688	1513.42
+4632	4128	750.31
+4632	7508	242.27
+7508	1688	1349.9
+7508	4128	508.04
+7508	4632	242.27
+
+# Chapter 3: pedestrian routes (rows, and the total where the result is one path).
+query IR
+SELECT count(*), round(max(agg_cost), 2) FROM pgr_dijkstra(
+  'SELECT id, source, target, length AS cost FROM walk_net', 7508, 4632, directed := false);
+----
+31	484.55
+
+query I
+SELECT count(*) FROM pgr_dijkstra(
+  'SELECT id, source, target, length / 1000 AS cost FROM walk_net', ARRAY[7508, 4128], 4632,
+  directed := false);
+----
+110
+
+query I
+SELECT count(*) FROM pgr_dijkstra(
+  'SELECT id, source, target, length / 1.3 / 60 AS cost FROM walk_net', ARRAY[7508, 4128],
+  ARRAY[4632, 1688], directed := false);
+----
+330
+
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 2) FROM pgr_dijkstraCost(
+  'SELECT id, source, target, length / 1.3 / 60 AS cost FROM walk_net', ARRAY[7508, 4128],
+  ARRAY[4632, 1688], directed := false)
+WHERE start_vid = 7508 AND end_vid = 1688;
+----
+7508	1688	34.61
+
+# Chapter 4: vehicle routes.
+query IR
+SELECT count(*), round(max(agg_cost), 2) FROM pgr_dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM vehicle_net', 7508, 1688, directed := true);
+----
+76	173.01
+
+query IR
+SELECT count(*), round(max(agg_cost), 2) FROM pgr_dijkstra(
+  'SELECT id, source, target, cost, reverse_cost FROM vehicle_net', 1688, 7508, directed := true);
+----
+75	174.4
+
+query IR
+SELECT count(*), round(max(agg_cost), 2) FROM pgr_dijkstra(
+  'SELECT id, source, target, cost / 3600 * 100 AS cost, reverse_cost / 3600 * 100 AS reverse_cost FROM vehicle_net',
+  1688, 7508);
+----
+75	4.84
+
+# Chapter 6: the closest vehicle edge to each of two places.
+query IIRTR
+SELECT 1 AS place, edge_id, round(fraction, 6), side, round(distance, 9)
+FROM pgr_findCloseEdges('SELECT id, geom FROM vehicle_net', ST_Point(132.453875, 34.399086), 0.5)
+UNION ALL
+SELECT 2, edge_id, round(fraction, 6), side, round(distance, 9)
+FROM pgr_findCloseEdges('SELECT id, geom FROM vehicle_net', ST_Point(132.451490, 34.391111), 0.5)
+ORDER BY 1;
+----
+1	21869	0.859931	l	0.000232727
+2	25137	0.305301	l	0.000179449
