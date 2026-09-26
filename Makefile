@@ -8,6 +8,11 @@ EXT_CONFIG=${PROJ_DIR}extension_config.cmake
 # Include the Makefile from extension-ci-tools
 include extension-ci-tools/makefiles/duckdb_extension.Makefile
 
+# No duckdb-spatial binary is published for an unreleased DuckDB, so on this line every unittest
+# run, native or Wasm, skips the tests tagged spatial. Drop this when the branch builds against
+# a released DuckDB.
+export DUCKDB_TEST_CONFIG := $(CURDIR)/test/configs/skip_spatial.json
+
 HOOKS_SRC ?= $(PROJ_DIR)scripts/git-hooks
 
 # Installs the local commit guards. Patterns live in .git/info/forbidden-patterns (untracked).
