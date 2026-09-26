@@ -1,0 +1,31 @@
+{
+  "title": "pgRouting sample data",
+  "license": "MIT",
+  "spatial": false,
+  "files": ["edges.csv", "vertices.csv", "pointsofinterest.csv", "combinations.csv", "restrictions.csv"],
+  "tables": [
+    {
+      "name": "edges",
+      "sql": "SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom) FROM read_csv('sampledata/edges.csv')"
+    },
+    {
+      "name": "vertices",
+      "sql": "SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges, CAST(out_edges AS BIGINT[]) AS out_edges, x, y FROM read_csv('sampledata/vertices.csv')"
+    },
+    {
+      "name": "pointsofinterest",
+      "sql": "SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom) FROM read_csv('sampledata/pointsofinterest.csv')"
+    },
+    { "name": "combinations", "sql": "SELECT * FROM read_csv('sampledata/combinations.csv')" },
+    {
+      "name": "restrictions",
+      "sql": "SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost FROM read_csv('sampledata/restrictions.csv')"
+    }
+  ],
+  "map": {
+    "mode": "abstract",
+    "vertices": "SELECT id, x, y FROM vertices",
+    "edges": "SELECT id, source, target FROM edges",
+    "points": "SELECT pid, edge_id, fraction FROM pointsofinterest"
+  }
+}
