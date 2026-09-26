@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-// The sample graph has abstract grid coordinates. MapLibre draws only Web Mercator, so each grid
-// unit is taken as METRES_PER_UNIT Mercator metres and inverse-projected to longitude/latitude;
-// MapLibre's own forward projection then cancels it and the grid is drawn without distortion.
+// The sample graph has abstract grid coordinates; the other datasets are longitude/latitude.
+// MapLibre draws only Web Mercator, so each grid unit is taken as METRES_PER_UNIT Mercator metres
+// and inverse-projected to longitude/latitude; MapLibre's own forward projection then cancels it
+// and the grid is drawn without distortion.
 import type { FeatureCollection, LineString, Point, Position } from 'geojson';
 
 export const EARTH_RADIUS = 6378137;
@@ -27,7 +28,7 @@ export interface PointRow {
 
 export type NodeProps = { id: number; label: string; kind: 'vertex' | 'point' };
 
-export interface SampleGeometry {
+export interface NetworkGeometry {
   edges: FeatureCollection<LineString, { id: number }>;
   nodes: FeatureCollection<Point, NodeProps>;
   bounds: [[number, number], [number, number]];
@@ -39,10 +40,10 @@ export function toLngLat(x: number, y: number): [number, number] {
   return [((mx / EARTH_RADIUS) * 180) / Math.PI, (Math.atan(Math.sinh(my / EARTH_RADIUS)) * 180) / Math.PI];
 }
 
-export function sampleGeometry(vertices: VertexRow[], edges: EdgeRow[], points: PointRow[]): SampleGeometry {
+export function sampleGeometry(vertices: VertexRow[], edges: EdgeRow[], points: PointRow[]): NetworkGeometry {
   const at = new Map(vertices.map((v) => [v.id, v]));
   const ends = new Map<number, [VertexRow, VertexRow]>();
-  const edgeFeatures: SampleGeometry['edges']['features'] = [];
+  const edgeFeatures: NetworkGeometry['edges']['features'] = [];
   for (const e of edges) {
     const a = at.get(e.source);
     const b = at.get(e.target);
@@ -57,7 +58,7 @@ export function sampleGeometry(vertices: VertexRow[], edges: EdgeRow[], points: 
 
   const node = (id: number, label: string, kind: NodeProps['kind'], position: Position) =>
     ({ type: 'Feature', properties: { id, label, kind }, geometry: { type: 'Point', coordinates: position } }) as const;
-  const nodeFeatures: SampleGeometry['nodes']['features'] = vertices.map((v) =>
+  const nodeFeatures: NetworkGeometry['nodes']['features'] = vertices.map((v) =>
     node(v.id, String(v.id), 'vertex', toLngLat(v.x, v.y)),
   );
   for (const p of points) {
@@ -70,20 +71,70 @@ export function sampleGeometry(vertices: VertexRow[], edges: EdgeRow[], points: 
     nodeFeatures.push(node(-p.pid, String(-p.pid), 'point', toLngLat(x, y)));
   }
 
+  return {
+    edges: { type: 'FeatureCollection', features: edgeFeatures },
+    nodes: { type: 'FeatureCollection', features: nodeFeatures },
+    bounds: boundsOf(nodeFeatures.map((f) => f.geometry.coordinates)),
+  };
+}
+
+export interface GeoEdgeRow {
+  id: number;
+  geojson: string; // ST_AsGeoJSON of a LineString
+}
+
+export interface GeoNodeRow {
+  id: number;
+  x: number; // longitude
+  y: number; // latitude
+}
+
+function boundsOf(positions: Iterable<Position>): NetworkGeometry['bounds'] {
   let [west, south, east, north] = [Infinity, Infinity, -Infinity, -Infinity];
-  for (const f of nodeFeatures) {
-    const [lng = 0, lat = 0] = f.geometry.coordinates;
+  for (const [lng = 0, lat = 0] of positions) {
     west = Math.min(west, lng);
     south = Math.min(south, lat);
     east = Math.max(east, lng);
     north = Math.max(north, lat);
   }
+  // With no edge and no node, west/east/south/north stay infinite: MapLibre would otherwise be
+  // given a bounding box it cannot fit to, and fail with an error that does not say why.
+  if (!Number.isFinite(west) || !Number.isFinite(south) || !Number.isFinite(east) || !Number.isFinite(north)) {
+    throw new Error('the map has nothing to draw');
+  }
+  return [
+    [west, south],
+    [east, north],
+  ];
+}
+
+function lineString(geojson: string): LineString | null {
+  try {
+    const parsed = JSON.parse(geojson) as { type?: unknown; coordinates?: unknown };
+    return parsed.type === 'LineString' && Array.isArray(parsed.coordinates) ? (parsed as LineString) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function geographicGeometry(edges: GeoEdgeRow[], nodes: GeoNodeRow[]): NetworkGeometry {
+  const edgeFeatures: NetworkGeometry['edges']['features'] = [];
+  for (const e of edges) {
+    const geometry = lineString(e.geojson);
+    if (geometry) edgeFeatures.push({ type: 'Feature', properties: { id: e.id }, geometry });
+  }
+  const nodeFeatures: NetworkGeometry['nodes']['features'] = nodes.map((n) => ({
+    type: 'Feature',
+    properties: { id: n.id, label: String(n.id), kind: 'vertex' },
+    geometry: { type: 'Point', coordinates: [n.x, n.y] },
+  }));
+  const positions = [
+    ...edgeFeatures.flatMap((f) => f.geometry.coordinates),
+    ...nodeFeatures.map((f) => f.geometry.coordinates),
+  ];
   return {
     edges: { type: 'FeatureCollection', features: edgeFeatures },
     nodes: { type: 'FeatureCollection', features: nodeFeatures },
-    bounds: [
-      [west, south],
-      [east, north],
-    ],
+    bounds: boundsOf(positions),
   };
 }

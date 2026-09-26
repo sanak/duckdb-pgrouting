@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { EARTH_RADIUS, METRES_PER_UNIT, sampleGeometry, toLngLat } from '../src/geometry.ts';
+import { EARTH_RADIUS, geographicGeometry, METRES_PER_UNIT, sampleGeometry, toLngLat } from '../src/geometry.ts';
 
 // Web Mercator's forward projection, which MapLibre applies when it draws.
 function forward([lng, lat]: [number, number]): [number, number] {
@@ -69,4 +69,46 @@ test('vertices are nodes labelled by id, and bounds cover every node', () => {
     ],
   );
   assert.deepEqual(g.bounds, [toLngLat(0, 0), toLngLat(2, 2)]);
+});
+
+test('geographicGeometry with nothing to draw throws a clear error', () => {
+  assert.throws(() => geographicGeometry([], []), /nothing to draw/);
+});
+
+test('geographic edges come from GeoJSON LineStrings; anything else is skipped', () => {
+  const g = geographicGeometry(
+    [
+      { id: 7, geojson: '{"type":"LineString","coordinates":[[132.45,34.39],[132.46,34.4]]}' },
+      { id: 8, geojson: '{"type":"Point","coordinates":[132.45,34.39]}' },
+      { id: 9, geojson: 'not json' },
+    ],
+    [],
+  );
+  assert.deepEqual(
+    g.edges.features.map((f) => [f.properties.id, f.geometry.coordinates]),
+    [
+      [
+        7,
+        [
+          [132.45, 34.39],
+          [132.46, 34.4],
+        ],
+      ],
+    ],
+  );
+});
+
+test('geographic nodes are vertices at their longitude and latitude; bounds cover edges and nodes', () => {
+  const g = geographicGeometry(
+    [{ id: 7, geojson: '{"type":"LineString","coordinates":[[132.45,34.39],[132.46,34.4]]}' }],
+    [{ id: 1688, x: 132.44, y: 34.395 }],
+  );
+  assert.deepEqual(
+    g.nodes.features.map((f) => [f.properties.id, f.properties.kind, f.geometry.coordinates]),
+    [[1688, 'vertex', [132.44, 34.395]]],
+  );
+  assert.deepEqual(g.bounds, [
+    [132.44, 34.39],
+    [132.46, 34.4],
+  ]);
 });

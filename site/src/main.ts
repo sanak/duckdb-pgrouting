@@ -68,7 +68,7 @@ async function main(): Promise<void> {
   versions.textContent = `pgRouting ${session.pgrVersion} · DuckDB ${session.duckdbVersion} · ${session.variant}`;
 
   // Without the map (no WebGL, for instance) queries still run; only the highlighting is lost.
-  let routeMap: RouteMap = { highlight() {}, select() {}, onEdgeClick() {} };
+  let routeMap: RouteMap = { highlight() {}, select() {}, onEdgeClick() {}, remove() {} };
   try {
     const vertices = numbers(await session.query('SELECT id, x, y FROM vertices'));
     const edges = numbers(await session.query('SELECT id, source, target FROM edges'));
