@@ -28,12 +28,19 @@ class ExportSampledataTest(unittest.TestCase):
     def test_edges_join_transcript_with_pg_literals(self):
         header, rows = self.tables["edges"]
         self.assertEqual(
-            ["id", "source", "target", "cost", "reverse_cost", "capacity", "reverse_capacity"],
+            ["id", "source", "target", "cost", "reverse_cost", "capacity", "reverse_capacity",
+             "geom"],
             header)
         self.assertEqual(18, len(rows))
-        self.assertEqual(["1", "5", "6", "1.0", "1.0", "80", "130"], rows[0])
-        self.assertEqual(["2", "6", "10", "-1.0", "1.0", "-1", "100"], rows[1])
+        self.assertEqual(["1", "5", "6", "1.0", "1.0", "80", "130", "LINESTRING(2 0,2 1)"], rows[0])
+        self.assertEqual(["2", "6", "10", "-1.0", "1.0", "-1", "100", "LINESTRING(2 1,3 1)"], rows[1])
         self.assertEqual([str(n) for n in range(1, 19)], [row[0] for row in rows])
+
+    def test_edge_geometry_keeps_the_literal_digits(self):
+        _, rows = self.tables["edges"]
+        # Edge 17 ends a hair short of x = 2 upstream; the digits are copied, never re-formatted.
+        self.assertEqual("LINESTRING(0.5 3.5,1.999999999999 3.5)", rows[16][7])
+        self.assertEqual("LINESTRING(3.5 2.3,3.5 4)", rows[17][7])
 
     def test_vertices_arrays_and_nulls(self):
         header, rows = self.tables["vertices"]
@@ -45,11 +52,11 @@ class ExportSampledataTest(unittest.TestCase):
         # The transcript's full precision survives verbatim.
         self.assertEqual("1.999999999999", rows[3][3])
 
-    def test_pointsofinterest_renames_and_drops_geometry(self):
+    def test_pointsofinterest_carry_their_point(self):
         header, rows = self.tables["pointsofinterest"]
-        self.assertEqual(["pid", "edge_id", "side", "fraction", "distance"], header)
+        self.assertEqual(["pid", "edge_id", "side", "fraction", "distance", "geom"], header)
         self.assertEqual(6, len(rows))
-        self.assertEqual(["3", "12", "l", "0.6", "0.2"], rows[2])
+        self.assertEqual(["3", "12", "l", "0.6", "0.2", "POINT(2.6 3.2)"], rows[2])
 
     def test_combinations_is_byte_identical_to_the_committed_file(self):
         committed = (REPO / "test/data/sampledata/combinations.csv").read_text(
@@ -74,6 +81,11 @@ class ExportSampledataTest(unittest.TestCase):
             self.assertIn(f"test/data/sampledata/{name}.csv", export_sampledata.LOADER_SQL)
         self.assertIn("CAST(in_edges AS BIGINT[])", export_sampledata.LOADER_SQL)
         self.assertIn("CAST(path AS BIGINT[])", export_sampledata.LOADER_SQL)
+
+    def test_loader_casts_geometry_without_spatial(self):
+        # The cast is core DuckDB: the generated tests must load without the spatial extension.
+        self.assertEqual(2, export_sampledata.LOADER_SQL.count("CAST(geom AS GEOMETRY)"))
+        self.assertNotIn("spatial", export_sampledata.LOADER_SQL)
 
     def test_check_mode_is_quiet_and_clean_on_a_regenerated_tree(self):
         out = io.StringIO()

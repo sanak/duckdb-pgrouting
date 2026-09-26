@@ -14,8 +14,12 @@ The one thing the transcript does not print is the four literal columns of the e
 file, joined to the transcript on ``id``. ``edges.id`` is a BIGSERIAL filled by a single
 multi-row INSERT, so id = row index + 1.
 
-Geometry is dropped on purpose: no query in this repository can consume it. The ``x``/``y``
-columns of ``vertices`` survive, which is everything the sample graph's coordinates are used for.
+Geometry is kept as WKT text in upstream's own spelling (``LINESTRING(2 0,2 1)``). The edges'
+comes from the ``.pg`` INSERT, whose ``ST_MakeLine(ST_POINT(x, y), ST_POINT(x, y))`` literals are
+copied digit for digit; the points' comes from the p6 transcript (``ST_AsText(geom)``). LOADER_SQL
+casts it to GEOMETRY, a core DuckDB type, so loading the fixtures needs no spatial extension; only
+the queries that call ``ST_*`` functions (pgr_extractVertices and pgr_findCloseEdges on geometry)
+need it.
 """
 
 from __future__ import annotations
@@ -40,17 +44,25 @@ OUT_DIR = pathlib.Path("test/data/sampledata")
 EDGES_START = "/* --EDGE TABLE ADD DATA start */"
 EDGES_END = "/* --EDGE TABLE ADD DATA end */"
 
-# "( 1,  1,  80, 130,   ST_MakeLine(...))," -- cost, reverse_cost, capacity, reverse_capacity.
-_EDGE_ROW_RE = re.compile(r"^\(\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),")
+# "( 1,  1,  80, 130,   ST_MakeLine(ST_POINT(2, 0), ST_POINT(2, 1)))," -- cost, reverse_cost,
+# capacity, reverse_capacity, then the two end points' coordinates as written.
+_NUM = r"(-?\d+(?:\.\d+)?)"
+_EDGE_ROW_RE = re.compile(
+    r"^\(\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*"
+    r"ST_MakeLine\(\s*ST_POINT\(\s*" + _NUM + r",\s*" + _NUM + r"\s*\),\s*"
+    r"ST_POINT\(\s*" + _NUM + r",\s*" + _NUM + r"\s*\)\s*\)\s*\)",
+    re.IGNORECASE)
 
 # Emitted verbatim into every generated sqllogictest. The two array columns ship as text because
 # read_csv_auto has no list inference; CAST('[4, 7]' AS BIGINT[]) reads them back, and an empty
 # field stays NULL. restrictions.cost is cast because every value is whole and would otherwise be
-# inferred BIGINT, where upstream's column is FLOAT.
+# inferred BIGINT, where upstream's column is FLOAT. geom ships as WKT text and is cast to
+# GEOMETRY, a core type, so no spatial extension is needed to load it.
 LOADER_SQL = """\
 statement ok
 CREATE TABLE edges AS
-  SELECT * FROM read_csv_auto('test/data/sampledata/edges.csv');
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/edges.csv');
 
 statement ok
 CREATE TABLE vertices AS
@@ -60,7 +72,8 @@ CREATE TABLE vertices AS
 
 statement ok
 CREATE TABLE pointsofinterest AS
-  SELECT * FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
 
 statement ok
 CREATE TABLE combinations AS
@@ -121,16 +134,18 @@ def _project(table: pgparse.AlignedTable, columns: List[str]) -> Rows:
 
 
 def _edge_literals(repo: pathlib.Path) -> Rows:
-    """cost, reverse_cost, capacity and reverse_capacity, in id order, from the .pg INSERT."""
+    """cost, reverse_cost, capacity, reverse_capacity and the WKT geometry, in id order, from the
+    .pg INSERT."""
     lines = (repo / PG_FILE).read_text(encoding="utf-8").splitlines()
     body = lines[lines.index(EDGES_START) : lines.index(EDGES_END)]
     rows: Rows = []
     for line in body:
         match = _EDGE_ROW_RE.match(line.strip())
         if match:
-            cost, reverse_cost, capacity, reverse_capacity = match.groups()
+            cost, reverse_cost, capacity, reverse_capacity, x1, y1, x2, y2 = match.groups()
             # The two cost columns are FLOAT upstream; the two capacity columns are BIGINT.
-            rows.append([str(float(cost)), str(float(reverse_cost)), capacity, reverse_capacity])
+            rows.append([str(float(cost)), str(float(reverse_cost)), capacity, reverse_capacity,
+                         f"LINESTRING({x1} {y1},{x2} {y2})"])
     return rows
 
 
@@ -144,7 +159,8 @@ def build_tables(repo: pathlib.Path) -> Tables:
     if len(ids) != len(literals):
         raise SystemExit(f"edges: {len(ids)} rows in marker q4, {len(literals)} in {PG_FILE}")
     tables["edges"] = (
-        ["id", "source", "target", "cost", "reverse_cost", "capacity", "reverse_capacity"],
+        ["id", "source", "target", "cost", "reverse_cost", "capacity", "reverse_capacity",
+         "geom"],
         [left + right for left, right in zip(ids, literals)],
     )
 
@@ -156,8 +172,8 @@ def build_tables(repo: pathlib.Path) -> Tables:
     )
 
     tables["pointsofinterest"] = (
-        ["pid", "edge_id", "side", "fraction", "distance"],
-        _project(_one_table(found, "p6"), ["pid", "edge_id", "side", "frac", "dist"]),
+        ["pid", "edge_id", "side", "fraction", "distance", "geom"],
+        _project(_one_table(found, "p6"), ["pid", "edge_id", "side", "frac", "dist", "geom"]),
     )
 
     tables["combinations"] = (

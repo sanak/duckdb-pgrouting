@@ -16,7 +16,8 @@ require pgrouting
 
 statement ok
 CREATE TABLE edges AS
-  SELECT * FROM read_csv_auto('test/data/sampledata/edges.csv');
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/edges.csv');
 
 statement ok
 CREATE TABLE vertices AS
@@ -26,7 +27,8 @@ CREATE TABLE vertices AS
 
 statement ok
 CREATE TABLE pointsofinterest AS
-  SELECT * FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
 
 statement ok
 CREATE TABLE combinations AS
