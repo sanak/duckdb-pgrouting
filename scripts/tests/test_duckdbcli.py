@@ -48,6 +48,20 @@ class TestDuckDB(unittest.TestCase):
         ).rows
         self.assertGreater(rows[0][0], 0)
 
+    def test_script_returns_everything_it_printed(self):
+        out = self.db.script(".print hello\nSELECT 42 AS answer;\n")
+        self.assertIn("hello", out)
+        self.assertIn("42", out)
+
+    def test_script_error_carries_the_output_so_far(self):
+        db = duckdbcli.DuckDB(str(BINARY), flags=["-bail"])
+        with self.assertRaises(duckdbcli.DuckDBError) as caught:
+            db.script(".print before\nSELECT * FROM nope;\n.print after\n")
+        message = str(caught.exception)
+        self.assertIn("before", message)
+        self.assertIn("nope", message)
+        self.assertNotIn("after", message)
+
 
 class TimeoutTest(unittest.TestCase):
     def test_every_query_runs_with_a_timeout(self):
