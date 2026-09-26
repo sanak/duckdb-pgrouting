@@ -74,7 +74,7 @@ WHERE function_name LIKE 'pgr\_%' ESCAPE '\' ORDER BY ALL;
 
 ## Functions
 
-Sixteen pgRouting functions — seventy-three of pgRouting 4.0's signatures — plus `pgr_version()`.
+Eighteen pgRouting functions — seventy-six of pgRouting 4.0's signatures — plus `pgr_version()`.
 The [pgRouting documentation](https://docs.pgrouting.org/4.0/en/) describes each algorithm, its
 parameters and its result columns, all of which this extension keeps.
 
@@ -85,6 +85,7 @@ parameters and its result columns, all of which this extension keeps.
 | Bidirectional Dijkstra | `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix` |
 | Other shortest paths | `pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch` |
 | Components | `pgr_connectedComponents` |
+| Utilities | `pgr_extractVertices`, `pgr_findCloseEdges` |
 
 Functions deliberately not ported are listed, each with its reason, in
 `test/pgrouting_not_ported.json`.
@@ -100,6 +101,27 @@ Functions deliberately not ported are listed, each with its reason, in
   either one between runs. Every answer is still optimal; PostgreSQL's unordered scans give
   pgRouting the same property.
 - **Memory.** pgRouting's own allocations are not counted against DuckDB's `memory_limit`.
+- **Geometry needs the spatial extension.** `pgr_findCloseEdges`, and `pgr_extractVertices` on
+  geometry, call [duckdb-spatial](https://duckdb.org/docs/stable/core_extensions/spatial/overview):
+  run `INSTALL spatial; LOAD spatial;` first. DuckDB does not autoload spatial; with
+  `autoload_known_extensions` on, the function loads an installed spatial itself. `GEOMETRY`
+  arguments and columns are DuckDB's own type, so `'POINT(1 2)'::GEOMETRY` works without it.
+- **`pgr_findCloseEdges`'s point-array signature** takes `GEOMETRY[]`. `ST_MakePoint` returns
+  `POINT_2D`, and a list of those does not cast to `GEOMETRY[]` implicitly; build the list with
+  `ST_Point` instead, or cast each element to `GEOMETRY`. A single `ST_MakePoint` point works.
+- **No subquery as a table-function argument.** DuckDB does not accept one where pgRouting's
+  documentation passes `(SELECT geom FROM ...)` as a point; use `SET VARIABLE` and
+  `getvariable()` instead.
+- **`dryrun := true`** writes the generated query to DuckDB's log (`duckdb_logs`, level INFO)
+  instead of a NOTICE.
+- **`pgr_findCloseEdges`'s `side`** follows the edge's direction at the closest point, because
+  duckdb-spatial has no single-sided buffer. Upstream's corner cases are kept (on the line: `r`;
+  past either end, or tolerance 0: `l`), but near a vertex where an edge turns the two rules can
+  differ. Rows come in input-point order, then by distance.
+- **`pgr_findCloseEdges`** gives each input point its own `cap`, even when the same point is given
+  twice; upstream groups identical points into one `cap`.
+- **`pgr_extractVertices`** always sorts `in_edges` and `out_edges`, and returns its rows ordered
+  by `id`.
 
 ## DuckDB-Wasm
 
@@ -132,3 +154,6 @@ prerequisites and the build and test commands. `docs/RELEASE.md` describes how r
 GPL-2.0-or-later (see `LICENSE`), because pgRouting's GPL-2.0-or-later code is statically linked.
 The corresponding source of each released binary is this repository at the commit its Release
 names, including the submodules recorded there.
+
+The workshop-hiroshima data under `test/data/workshop-hiroshima/` is © OpenStreetMap contributors,
+available under the Open Database License 1.0; see its `NOTICE.md`.
