@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Rebuild test/data/pgrouting_sample/*.csv from pgRouting's committed sample data.
+"""Rebuild test/data/sampledata/*.csv from pgRouting's committed sample data.
 
 Upstream builds its sample graph by running ``tools/testers/sampledata.pg`` against a
 PostgreSQL+PostGIS database: ``pgr_extractVertices`` derives the vertices, and ``ST_StartPoint``
@@ -35,7 +35,7 @@ import pgparse  # noqa: E402
 
 PG_FILE = pathlib.Path("third_party/pgrouting/tools/testers/sampledata.pg")
 RESULT_FILE = pathlib.Path("third_party/pgrouting/docqueries/src/sampledata.result")
-OUT_DIR = pathlib.Path("test/data/pgrouting_sample")
+OUT_DIR = pathlib.Path("test/data/sampledata")
 
 EDGES_START = "/* --EDGE TABLE ADD DATA start */"
 EDGES_END = "/* --EDGE TABLE ADD DATA end */"
@@ -50,26 +50,26 @@ _EDGE_ROW_RE = re.compile(r"^\(\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),")
 LOADER_SQL = """\
 statement ok
 CREATE TABLE edges AS
-  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/edges.csv');
+  SELECT * FROM read_csv_auto('test/data/sampledata/edges.csv');
 
 statement ok
 CREATE TABLE vertices AS
   SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges,
          CAST(out_edges AS BIGINT[]) AS out_edges, x, y
-  FROM read_csv_auto('test/data/pgrouting_sample/vertices.csv');
+  FROM read_csv_auto('test/data/sampledata/vertices.csv');
 
 statement ok
 CREATE TABLE pointsofinterest AS
-  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/pointsofinterest.csv');
+  SELECT * FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
 
 statement ok
 CREATE TABLE combinations AS
-  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/combinations.csv');
+  SELECT * FROM read_csv_auto('test/data/sampledata/combinations.csv');
 
 statement ok
 CREATE TABLE restrictions AS
   SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
-  FROM read_csv_auto('test/data/pgrouting_sample/restrictions.csv');
+  FROM read_csv_auto('test/data/sampledata/restrictions.csv');
 """
 
 Rows = List[List[str]]

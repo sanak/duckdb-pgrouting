@@ -39,7 +39,7 @@ function defaultRoots() {
     files: { '/': join(HERE, 'index.html'), '/harness.js': join(HERE, 'build/harness.js') },
     prefixes: [
       ['/duckdb/', join(HERE, 'node_modules/@duckdb/duckdb-wasm/dist')],
-      ['/data/', resolve(HERE, '../data/pgrouting_sample')],
+      ['/data/', resolve(HERE, '../data/sampledata')],
       ['/ext/', process.env.W2_EXTENSION_DIR || null],
     ],
   };

@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { resolvePath } from '../server.mjs';
 
-const roots = { files: { '/': '/w2/index.html' }, prefixes: [['/ext/', '/tmp/ext'], ['/data/', '/repo/test/data/pgrouting_sample']] };
+const roots = { files: { '/': '/w2/index.html' }, prefixes: [['/ext/', '/tmp/ext'], ['/data/', '/repo/test/data/sampledata']] };
 
 test('exact files and prefixed files resolve', () => {
   assert.equal(resolvePath('/', roots), '/w2/index.html');
   assert.equal(resolvePath('/ext/wasm_eh/pgrouting.duckdb_extension.wasm', roots), '/tmp/ext/wasm_eh/pgrouting.duckdb_extension.wasm');
-  assert.equal(resolvePath('/data/edges.csv', roots), '/repo/test/data/pgrouting_sample/edges.csv');
+  assert.equal(resolvePath('/data/edges.csv', roots), '/repo/test/data/sampledata/edges.csv');
 });
 
 test('paths outside a root do not resolve', () => {

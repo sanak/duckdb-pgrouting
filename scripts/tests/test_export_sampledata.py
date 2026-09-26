@@ -52,7 +52,7 @@ class ExportSampledataTest(unittest.TestCase):
         self.assertEqual(["3", "12", "l", "0.6", "0.2"], rows[2])
 
     def test_combinations_is_byte_identical_to_the_committed_file(self):
-        committed = (REPO / "test/data/pgrouting_sample/combinations.csv").read_text(
+        committed = (REPO / "test/data/sampledata/combinations.csv").read_text(
             encoding="utf-8")
         self.assertEqual(committed, export_sampledata.render_csv(*self.tables["combinations"]))
 
@@ -71,7 +71,7 @@ class ExportSampledataTest(unittest.TestCase):
 
     def test_loader_sql_covers_every_fixture(self):
         for name in self.tables:
-            self.assertIn(f"test/data/pgrouting_sample/{name}.csv", export_sampledata.LOADER_SQL)
+            self.assertIn(f"test/data/sampledata/{name}.csv", export_sampledata.LOADER_SQL)
         self.assertIn("CAST(in_edges AS BIGINT[])", export_sampledata.LOADER_SQL)
         self.assertIn("CAST(path AS BIGINT[])", export_sampledata.LOADER_SQL)
 

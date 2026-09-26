@@ -46,7 +46,7 @@ Every public function carries a catalog description and an example (`duckdb_func
   descriptions and examples (`function_docs.cpp`), and the public function registration.
 - `test/sql/` — sqllogictests. `test/sql/pgrouting/<category>/<name>.test` is generated from
   upstream's documentation queries and is never hand-edited.
-- `test/data/pgrouting_sample/` — CSV fixtures rebuilt from upstream's committed sample data.
+- `test/data/sampledata/` — CSV fixtures rebuilt from upstream's committed sample data.
 - `test/pgrouting_skip.json`, `test/pgrouting_ties.json`, `test/pgrouting_not_ported.json` — the
   three control files the test tooling reads; see *Test tooling* for who owns each.
 - `scripts/` — the Python test and release tooling and its `unittest` suite under
@@ -131,7 +131,7 @@ their `unittest` suite. The test tools read upstream's committed fixtures and dr
   binary already has the extension statically linked, so nothing is `LOAD`ed and no Python DuckDB
   package is involved; a pip-installed driver would exercise a different build than the one CI
   ships.
-- `scripts/export_sampledata.py` — rebuilds `test/data/pgrouting_sample/*.csv` from upstream's
+- `scripts/export_sampledata.py` — rebuilds `test/data/sampledata/*.csv` from upstream's
   `tools/testers/sampledata.pg` and `docqueries/src/sampledata.result`. `--check` fails when the
   committed fixtures no longer match what those upstream files say.
 - `scripts/gen_docqueries_tests.py` — turns upstream's documentation queries into

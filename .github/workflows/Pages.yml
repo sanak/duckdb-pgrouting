@@ -7,14 +7,14 @@ on:
   pull_request:
     paths:
       - 'site/**'
-      - 'test/data/pgrouting_sample/**'
+      - 'test/data/sampledata/**'
       - 'test/w2/package.json'
       - '.github/workflows/Pages.yml'
   push:
     branches: [main]
     paths:
       - 'site/**'
-      - 'test/data/pgrouting_sample/**'
+      - 'test/data/sampledata/**'
       - 'test/w2/package.json'
       - '.github/workflows/Pages.yml'
   workflow_dispatch:

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Fills public/ before `vite dev` or `vite build`:
-//   public/data/*.csv  — the sample graph, copied from test/data/pgrouting_sample/
+//   public/data/*.csv  — the sample graph, copied from test/data/sampledata/
 //   public/wasm/…      — the Wasm builds of every published Release (newest per DuckDB version and
 //                        variant), which the browser cannot fetch from GitHub itself (no CORS).
 // Needs the gh CLI, authenticated (GH_TOKEN in CI). --allow-empty tolerates finding no Release.
@@ -21,7 +21,7 @@ function gh(args: string[]): string {
 }
 
 function copySampleData(): void {
-  const from = join(site, '..', 'test', 'data', 'pgrouting_sample');
+  const from = join(site, '..', 'test', 'data', 'sampledata');
   const to = join(site, 'public', 'data');
   rmSync(to, { recursive: true, force: true });
   mkdirSync(to, { recursive: true });

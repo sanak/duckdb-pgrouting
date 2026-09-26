@@ -23,7 +23,7 @@ BINARY = REPO / "build/release/duckdb"
 @unittest.skipUnless(BINARY.exists(), "build/release/duckdb not built")
 class TestCatalogExamples(unittest.TestCase):
     def setUp(self):
-        # The sample-data loader reads test/data/pgrouting_sample/*.csv by repository-relative path.
+        # The sample-data loader reads test/data/sampledata/*.csv by repository-relative path.
         self.addCleanup(os.chdir, os.getcwd())
         os.chdir(REPO)
 
