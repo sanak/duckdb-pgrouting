@@ -44,6 +44,7 @@ pgr_dijkstraNear	pgr_dijkstraNear
 pgr_dijkstraNearCost	pgr_dijkstraNearCost
 pgr_edwardMoore	pgr_edwardMoore
 pgr_extractVertices	pgr_extractVertices
+pgr_findCloseEdges	pgr_findCloseEdges
 pgr_version	pgr_version
 pgr_withPoints	pgr_withPoints
 pgr_withPointsCost	pgr_withPointsCost

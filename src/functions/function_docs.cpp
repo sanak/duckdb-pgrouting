@@ -90,6 +90,12 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "
      "that enter and leave each vertex.",
      "SELECT * FROM pgr_extractVertices('SELECT id, source, target FROM edges')"},
+    {"pgr_findCloseEdges",
+     "For each given point, the nearest edges within a distance, with where along each edge the "
+     "closest point lies, on which side of the edge the point is, and the connecting segment; needs "
+     "the spatial extension.",
+     "SELECT edge_id, fraction, side, distance FROM pgr_findCloseEdges('SELECT id, geom FROM edges', "
+     "ST_Point(2.9, 1.8), 0.5, cap := 2)"},
     {"pgr_version", "Version of the pgRouting library built into this extension.", "SELECT pgr_version()"},
 };
 

@@ -1,0 +1,137 @@
+# name: test/sql/find_close_edges.test
+# description: pgr_findCloseEdges argument checks, dryrun and the spatial check, without spatial
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# GEOMETRY is a core DuckDB type, so both signatures bind, and every check that upstream makes
+# before running its query can be tested here without duckdb-spatial. The distances and sides are
+# in find_close_edges_geom.test.
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * FROM (VALUES
+  (1::BIGINT, CAST('LINESTRING(2 0,2 1)' AS GEOMETRY)),
+  (2, CAST('LINESTRING(2 1,3 1)' AS GEOMETRY))) AS t(id, geom);
+
+# STRICT: a NULL argument, positional or named, gives no rows.
+query I
+SELECT count(*) FROM pgr_findCloseEdges('SELECT id, geom FROM edges', NULL::GEOMETRY, 0.5);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_findCloseEdges('SELECT id, geom FROM edges', NULL::GEOMETRY[], 0.5);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_findCloseEdges(
+  'SELECT id, geom FROM edges', CAST('POINT(1 1)' AS GEOMETRY), NULL::DOUBLE);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_findCloseEdges(
+  'SELECT id, geom FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5, cap := NULL);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_findCloseEdges(
+  'SELECT id, geom FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5, 1, NULL::BOOLEAN);
+----
+0
+
+# Upstream checks the two numbers first, then the columns.
+statement error
+SELECT * FROM pgr_findCloseEdges('SELECT id FROM edges', CAST('POINT(1 1)' AS GEOMETRY), -1);
+----
+Invalid Input Error: Invalid value for "tolerance"
+
+statement error
+SELECT * FROM pgr_findCloseEdges(
+  'SELECT id FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5, cap := -1);
+----
+Invalid Input Error: Invalid value for "cap"
+
+statement error
+SELECT * FROM pgr_findCloseEdges('SELECT geom FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5);
+----
+Invalid Input Error: column "id" does not exist
+HINT: SELECT geom FROM edges
+
+statement error
+SELECT * FROM pgr_findCloseEdges('SELECT id FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5);
+----
+Invalid Input Error: column "geom" does not exist
+HINT: SELECT id FROM edges
+
+statement error
+SELECT * FROM pgr_findCloseEdges(
+  'SELECT CAST(id AS DOUBLE) AS id, geom FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5);
+----
+Invalid Input Error: Expected type of column "id" is ANY-INTEGER
+HINT: Query: SELECT CAST(id AS DOUBLE) AS id, geom FROM edges
+
+statement error
+SELECT * FROM pgr_findCloseEdges(
+  'SELECT id, ''x'' AS geom FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5);
+----
+Invalid Input Error: Expected type of column "geom" is geometry
+HINT: Query: SELECT id, 'x' AS geom FROM edges
+
+# dryrun still requires the two columns (upstream checks them as non-optional) but not their types.
+statement error
+SELECT * FROM pgr_findCloseEdges(
+  'SELECT id FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5, dryrun := true);
+----
+Invalid Input Error: column "geom" does not exist
+HINT: SELECT id FROM edges
+
+query I
+SELECT count(*) FROM pgr_findCloseEdges(
+  'SELECT CAST(id AS DOUBLE) AS id, geom FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5,
+  dryrun := true);
+----
+0
+
+# Running the query needs spatial.
+statement ok
+SET autoload_known_extensions = false;
+
+statement error
+SELECT * FROM pgr_findCloseEdges('SELECT id, geom FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5);
+----
+Invalid Input Error: pgr_findCloseEdges needs the spatial extension: INSTALL spatial; LOAD spatial
+
+# dryrun does not: both signatures log the generated query at INFO and return no rows.
+statement ok
+SET logging_storage = 'memory';
+
+statement ok
+SET enable_logging = true;
+
+query I
+SELECT count(*) FROM pgr_findCloseEdges(
+  'SELECT id, geom FROM edges', CAST('POINT(1 1)' AS GEOMETRY), 0.5, 1, true);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_findCloseEdges(
+  'SELECT id, geom FROM edges', [CAST('POINT(1 1)' AS GEOMETRY), CAST('POINT(3 0)' AS GEOMETRY)],
+  0.5, dryrun := true);
+----
+0
+
+statement ok
+SET enable_logging = false;
+
+query I
+SELECT count(*) FROM duckdb_logs
+WHERE type = '' AND log_level = 'INFO'
+  AND message ILIKE '%st_dwithin%' AND message ILIKE '%FROM edges%';
+----
+2

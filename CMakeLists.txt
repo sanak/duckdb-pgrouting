@@ -28,6 +28,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/exec/withpoints_keys.cpp
     src/functions/function_docs.cpp
     src/functions/extract_vertices.cpp
+    src/functions/find_close_edges.cpp
     src/functions/meta_functions.cpp
     src/functions/shortest_path_functions.cpp
     src/functions/shortest_path_specs.cpp
