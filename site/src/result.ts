@@ -20,14 +20,18 @@ function isArrayLike(value: object): value is { toArray(): ArrayLike<unknown> } 
 }
 
 // What plainValue needs to know about an Arrow type: a DECIMAL's scale (its values arrive
-// unscaled), and a list's element type, which may itself be a DECIMAL.
+// unscaled), a list's element type, which may itself be a DECIMAL, and whether a binary value is a
+// geometry (DuckDB sends GEOMETRY as geoarrow.wkb) or a plain BLOB.
 export interface Shape {
   scale?: number;
   items?: Shape;
+  binary?: 'geometry' | 'blob';
 }
 
 export function plainValue(value: unknown, shape?: Shape): Plain {
   if (value === null || value === undefined) return null;
+  // Binary values are shown by size: a way's WKB is hundreds of bytes, and ST_AsText shows it.
+  if (shape?.binary && value instanceof Uint8Array) return `<${shape.binary}, ${value.length} bytes>`;
   if (shape?.scale !== undefined) return Number(value) / 10 ** shape.scale;
   if (typeof value === 'bigint') return Number(value);
   if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') return value;
