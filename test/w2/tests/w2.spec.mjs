@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // W2: the extension's Wasm build loads into the pinned DuckDB-Wasm and routes on the sample graph.
 // Only tie-insensitive facts are asserted (row count, path_seq, endpoints, total cost), because an
-// equal-cost tie may legitimately resolve to another route.
+// equal-cost tie may legitimately resolve to another route. The geometry functions run with
+// duckdb-spatial, which the page loads from DuckDB's extension repository: the Wasm unittest skips
+// every spatial test, so this is the only place they run in a browser before a release.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -41,4 +43,9 @@ test('pgrouting loads and routes in DuckDB-Wasm', async ({ page }) => {
   expect(result.dijkstra[0]).toMatchObject({ node: 6, agg_cost: 0 });
   expect(result.dijkstra.at(-1)).toMatchObject({ node: 10, edge: -1, agg_cost: 5 });
   expect(result.dijkstraCost).toEqual([{ start_vid: 6, end_vid: 10, agg_cost: 5 }]);
+  expect(result.components).toEqual([{ n: 17, components: 3 }]);
+  expect(result.vertices).toEqual([{ n: 17 }]);
+  expect(result.closeEdges).toHaveLength(1);
+  expect(result.closeEdges[0]).toMatchObject({ edge_id: 5, side: 'l' });
+  expect(result.closeEdges[0].fraction).toBeCloseTo(0.8, 9);
 });

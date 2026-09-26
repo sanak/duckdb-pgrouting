@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Browser side of W2: starts the pinned DuckDB-Wasm from this server, loads pgrouting, and runs
-// the smoke queries on the sample graph. Bundled by esbuild because the package's ESM build
-// imports apache-arrow by bare specifier, which a browser cannot resolve on its own.
+// the smoke queries on the sample graph, the geometry ones with duckdb-spatial loaded. Bundled by
+// esbuild because the package's ESM build imports apache-arrow by bare specifier, which a browser
+// cannot resolve on its own.
 
 import * as duckdb from '@duckdb/duckdb-wasm';
 
@@ -48,12 +49,26 @@ window.runW2 = async function runW2(source) {
     out.pgrVersion = (await rows(conn, 'SELECT pgr_version() AS v'))[0].v;
 
     await db.registerFileText('edges.csv', await (await fetch('/data/edges.csv')).text());
-    await conn.query("CREATE TABLE edges AS SELECT * FROM read_csv_auto('edges.csv')");
+    // geom is WKT in the CSV; GEOMETRY is a core type, so the cast needs no spatial.
+    await conn.query(
+      "CREATE TABLE edges AS SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom) FROM read_csv_auto('edges.csv')",
+    );
     out.dijkstra = await rows(
       conn,
       `SELECT path_seq, node, edge, agg_cost FROM pgr_dijkstra('${EDGES}', 6, 10) ORDER BY path_seq`,
     );
     out.dijkstraCost = await rows(conn, `SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstraCost('${EDGES}', 6, 10)`);
+    out.components = await rows(
+      conn,
+      `SELECT count(*) AS n, count(DISTINCT component) AS components FROM pgr_connectedComponents('${EDGES}')`,
+    );
+    // DuckDB-Wasm installs spatial from extensions.duckdb.org on LOAD.
+    await conn.query('LOAD spatial');
+    out.vertices = await rows(conn, "SELECT count(*) AS n FROM pgr_extractVertices('SELECT id, geom FROM edges')");
+    out.closeEdges = await rows(
+      conn,
+      "SELECT edge_id, fraction, side FROM pgr_findCloseEdges('SELECT id, geom FROM edges', 'POINT(2.9 1.8)'::GEOMETRY, 0.5)",
+    );
   } catch (error) {
     out.error = String(error?.message ?? error);
   }
