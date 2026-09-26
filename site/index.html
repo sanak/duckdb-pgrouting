@@ -14,22 +14,25 @@
       <p id="versions" class="versions">Starting DuckDB…</p>
       <p class="notice">
         Runs the <a href="https://github.com/sanak/duckdb-pgrouting">pgrouting</a> DuckDB extension in your browser on
-        pgRouting's sample graph. This page loads an unsigned build of the extension from this site. Unofficial: not
-        affiliated with or endorsed by the pgRouting project or OSGeo.
+        pgRouting's sample graph or on the Hiroshima road network of the
+        <a href="https://workshop.pgrouting.org/">pgRouting workshop</a>. This page loads an unsigned build of the
+        extension from this site. Unofficial: not affiliated with or endorsed by the pgRouting project or OSGeo.
       </p>
+      <label class="dataset">Dataset <select id="dataset" disabled></select></label>
     </header>
     <div id="banner" class="banner" role="alert" hidden></div>
     <main>
       <section class="editor">
         <div class="toolbar">
-          <label>Preset <select id="preset"></select></label>
+          <label>Preset <select id="preset" disabled></select></label>
           <button id="run" type="button" disabled>Run</button>
           <button id="share" type="button">Share</button>
         </div>
+        <p id="preset-note" class="preset-note" hidden></p>
         <textarea id="sql" spellcheck="false" aria-label="SQL"></textarea>
         <p id="status" class="status" role="status"></p>
       </section>
-      <section id="map" class="map" aria-label="Sample graph"></section>
+      <section id="map" class="map" aria-label="Network map"></section>
       <section class="result">
         <div id="result"></div>
       </section>

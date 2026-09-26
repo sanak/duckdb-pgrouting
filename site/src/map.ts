@@ -103,8 +103,7 @@ function networkLayers(geographic: boolean): LayerSpecification[] {
 export async function createRouteMap(
   container: HTMLElement,
   geometry: NetworkGeometry,
-  // Temporary default: main.ts calls this without options until it is rewritten.
-  options: MapOptions = { mode: 'abstract' },
+  options: MapOptions,
 ): Promise<RouteMap> {
   const geographic = options.mode === 'geographic';
   const bounds = new LngLatBounds(geometry.bounds[0], geometry.bounds[1]);
