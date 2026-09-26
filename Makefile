@@ -74,12 +74,14 @@ wasm_unittest:
 
 # Not depending on wasm_unittest on purpose: CI keeps build and test as separate steps so a
 # failure is attributed to the right one.
+# The Wasm unittest has no network client, so it cannot INSTALL duckdb-spatial: the tests tagged
+# spatial are skipped there (see test/configs/skip_spatial.json).
 test_wasm_unittest:
 	$(W1_REQUIRE_VARIANT)
 	@test -f $(W1_BUILD_DIR)/test/unittest.js || { \
 		echo "error: $(W1_BUILD_DIR)/test/unittest.js not found."; \
 		echo "       Build it first: make wasm_unittest W1_VARIANT=$(W1_VARIANT)"; \
 		exit 1; }
-	node $(W1_BUILD_DIR)/test/unittest.js "test/*"
+	node $(W1_BUILD_DIR)/test/unittest.js --test-config test/configs/skip_spatial.json "test/*"
 
 .PHONY: wasm_unittest test_wasm_unittest

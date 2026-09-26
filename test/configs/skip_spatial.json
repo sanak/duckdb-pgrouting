@@ -1,0 +1,4 @@
+{
+  "description": "Skips every test tagged spatial. Used where no duckdb-spatial binary can be installed: the Wasm unittest, which has no network client, and builds of an unreleased DuckDB version, for which no extension binaries are published.",
+  "skip_tag": "spatial"
+}
