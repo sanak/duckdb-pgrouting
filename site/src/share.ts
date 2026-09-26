@@ -2,7 +2,6 @@
 // A share link carries the dataset and the editor's SQL in the URL fragment, which never reaches the
 // server: #d=<dataset id>&q=<base64url of the UTF-8 text, unpadded>. Links made before datasets
 // existed have no d; they open the default dataset.
-import { DATASET_ID } from './datasets.ts';
 
 export function encodeQuery(sql: string): string {
   let binary = '';
@@ -22,11 +21,14 @@ export function decodeQuery(encoded: string): string | null {
   }
 }
 
+// `dataset` is the raw decoded `d`, whatever its shape: an id the index does not list and one that
+// could never be a dataset id (DATASET_ID) are both simply unknown, and the caller reports either
+// the same way against its own index instead of this module silently dropping the malformed ones.
 export function stateFromHash(hash: string): { dataset: string | null; sql: string | null } {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   const d = params.get('d');
   const q = params.get('q');
-  return { dataset: d !== null && DATASET_ID.test(d) ? d : null, sql: q === null ? null : decodeQuery(q) };
+  return { dataset: d, sql: q === null ? null : decodeQuery(q) };
 }
 
 export function hashFor(dataset: string, sql: string): string {

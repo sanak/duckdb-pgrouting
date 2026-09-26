@@ -10,6 +10,7 @@ import { hashFor, stateFromHash } from './share.ts';
 import { createResultGrid } from './table.ts';
 
 const MAX_TABLE_ROWS = 1000;
+const READY_STATUS = 'Ready. Ctrl+Enter (⌘+Enter) runs the query.';
 // Without the map (no WebGL, or its data failed) queries still run; only the highlighting is lost.
 const NO_MAP: RouteMap = { highlight() {}, select() {}, onEdgeClick() {}, remove() {} };
 
@@ -166,7 +167,7 @@ async function main(): Promise<void> {
       grid.show({ columns: [], rows: [] }, []);
       selected = null;
       await rebuildMap(opened);
-      setStatus('Ready. Ctrl+Enter (⌘+Enter) runs the query.');
+      setStatus(READY_STATUS);
       return true;
     } catch (error) {
       failure = `${notice ? `${notice} ` : ''}Could not load ${title}: ${messageOf(error)}`;
@@ -178,6 +179,7 @@ async function main(): Promise<void> {
           await loader.open(previous.id);
           current = previous;
           datasetSelect.value = previous.id;
+          setStatus(READY_STATUS);
         } catch (reopenError) {
           showBanner(`${failure}. Returning to ${previous.opened.dataset.title} failed too: ${messageOf(reopenError)}`);
           nothingOpen();
