@@ -70,7 +70,7 @@ jobs:
       - name: Build (release)
         run: make release
 
-      # Layer 2. The sample-data CSVs under test/data/pgrouting_sample/ are rebuilt from upstream's
+      # Layer 2. The sample-data CSVs under test/data/sampledata/ are rebuilt from upstream's
       # committed tools/testers/sampledata.pg and docqueries/src/sampledata.result; --check fails
       # when what is committed no longer matches what those two upstream files say. This is how a
       # pgRouting submodule bump that changes the sample data is caught.

@@ -16,26 +16,26 @@ require pgrouting
 
 statement ok
 CREATE TABLE edges AS
-  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/edges.csv');
+  SELECT * FROM read_csv_auto('test/data/sampledata/edges.csv');
 
 statement ok
 CREATE TABLE vertices AS
   SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges,
          CAST(out_edges AS BIGINT[]) AS out_edges, x, y
-  FROM read_csv_auto('test/data/pgrouting_sample/vertices.csv');
+  FROM read_csv_auto('test/data/sampledata/vertices.csv');
 
 statement ok
 CREATE TABLE pointsofinterest AS
-  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/pointsofinterest.csv');
+  SELECT * FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
 
 statement ok
 CREATE TABLE combinations AS
-  SELECT * FROM read_csv_auto('test/data/pgrouting_sample/combinations.csv');
+  SELECT * FROM read_csv_auto('test/data/sampledata/combinations.csv');
 
 statement ok
 CREATE TABLE restrictions AS
   SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
-  FROM read_csv_auto('test/data/pgrouting_sample/restrictions.csv');
+  FROM read_csv_auto('test/data/sampledata/restrictions.csv');
 
 # q1
 query IIR

@@ -3,7 +3,7 @@
 // One description and one example per public function, read back through
 // duckdb_functions().description / .examples. The wording is this project's own: pgRouting's
 // documentation is CC-BY-SA and is never copied here. Every example runs on upstream's sample
-// graph (the tables loaded from test/data/pgrouting_sample/), and
+// graph (the tables loaded from test/data/sampledata/), and
 // scripts/tests/test_catalog_examples.py executes each one.
 
 #include "function_docs.hpp"
