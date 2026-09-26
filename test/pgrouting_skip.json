@@ -8,5 +8,33 @@
     "q1": {
       "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
     }
+  },
+  "utilities/extractVertices.pg": {
+    "q3.3": {
+      "reason": "reads vertices_table, which block q3.2 creates with SELECT ... INTO; the generator runs only blocks that return a result set, so that table never exists here"
+    },
+    "q3.6": {
+      "reason": "reads x1, y1, x2 and y2, which blocks q3.4 and q3.5 fill with UPDATE ... FROM; the sample edges here have no such columns and those blocks are not run"
+    }
+  },
+  "utilities/findCloseEdges.pg": {
+    "o4": {"reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"},
+    "q1": {"reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"},
+    "q2": {"reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"}
+  },
+  "withPoints/withPoints.pg": {
+    "q9": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    }
+  },
+  "withPoints/withPointsCost.pg": {
+    "q9": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    }
+  },
+  "withPoints/withPointsCostMatrix.pg": {
+    "q3": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    }
   }
 }

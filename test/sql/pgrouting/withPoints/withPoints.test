@@ -274,5 +274,5 @@ WHERE node IN (-6, 11);
 5 => 11 at 4th step	 passes in front of	Point	6
 5 => 11 at 6th step	 visits	Vertex	11
 
-# q9: skipped - not implemented: pgr_findCloseEdges
+# q9: skipped - passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)
 

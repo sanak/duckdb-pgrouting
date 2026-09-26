@@ -29,6 +29,8 @@ TYPE_MAP = {
     "integer": "INTEGER",
     "double precision": "DOUBLE",
     "anyarray": "BIGINT[]",
+    "geometry": "GEOMETRY",
+    "geometry[]": "GEOMETRY[]",
 }
 
 SIG_LINE_RE = re.compile(r"^([a-z0-9_]+)\((.*)\)$")

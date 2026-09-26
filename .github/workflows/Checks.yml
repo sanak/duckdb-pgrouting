@@ -34,6 +34,10 @@ jobs:
       # Pinned to duckdb-spatial's vcpkg commit on purpose, not extension-ci-tools' newer default:
       # this is the commit every local build here was validated against. Do not "fix" it.
       VCPKG_COMMIT: 84bab45d415d22042bd0b9081aea57f362da3f35
+      # The next line builds an unreleased DuckDB, for which no duckdb-spatial binary is
+      # published: there the generator keeps the spatial pages unchecked and the catalog-example
+      # test skips the spatial examples. Identical on both lines, like the rest of this file.
+      PGROUTING_NO_SPATIAL: ${{ (github.ref == 'refs/heads/v2.0-cyanoptera' || github.base_ref == 'v2.0-cyanoptera') && '1' || '' }}
     steps:
       - uses: actions/checkout@v7
         with:

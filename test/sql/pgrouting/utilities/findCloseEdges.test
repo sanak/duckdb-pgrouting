@@ -1,0 +1,94 @@
+# name: test/sql/pgrouting/utilities/findCloseEdges.test
+# description: Generated from pgRouting's findCloseEdges documentation queries
+# group: [pgrouting]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
+# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
+#
+# Source: third_party/pgrouting/docqueries/utilities/findCloseEdges.pg and the committed transcript beside it. The queries and their expected rows are
+# upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
+# sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
+# line with its reason, so what this file does not cover is visible here rather than implied.
+
+tags spatial
+
+require pgrouting
+
+statement ok
+INSTALL spatial;
+
+statement ok
+LOAD spatial;
+
+statement ok
+CREATE TABLE edges AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE vertices AS
+  SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges,
+         CAST(out_edges AS BIGINT[]) AS out_edges, x, y
+  FROM read_csv_auto('test/data/sampledata/vertices.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE combinations AS
+  SELECT * FROM read_csv_auto('test/data/sampledata/combinations.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+  SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+  FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+# q1: skipped - passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)
+
+# q2: skipped - passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)
+
+# q3: skipped - no result set
+
+# o0
+query IRTRTT
+SELECT edge_id, fraction, side, distance, ST_AsText(geom) geom, ST_AsText(edge) edge
+FROM pgr_findCloseEdges(
+$$SELECT 1 AS id, ST_MakeLine(ST_makePoint(2,0), ST_MakePoint(2,3)) AS geom$$,
+ST_MakePoint(0,1.5), 5);
+----
+1	0.5	l	2	POINT (0 1.5)	LINESTRING (0 1.5, 2 1.5)
+
+# o4: skipped - passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)
+
+# o5
+query IRTRTT
+SELECT edge_id, fraction, side, distance, ST_AsText(geom) geom, ST_AsText(edge) edge
+FROM pgr_findCloseEdges(
+$$SELECT 1 AS id, ST_MakeLine(ST_makePoint(2,0), ST_MakePoint(2,3)) AS geom$$,
+ST_MakePoint(0,1.5), 5, dryrun => true);
+----
+
+# o6: skipped - no result set
+
+# m0
+query IRTRTT
+SELECT edge_id, fraction, side, distance, ST_AsText(geom) geom, ST_AsText(edge) edge
+FROM pgr_findCloseEdges(
+$$SELECT 1 AS id, ST_MakeLine(ST_makePoint(1,0), ST_MakePoint(1,3)) AS geom$$,
+ARRAY[ST_MakePoint(0,2), ST_MakePoint(3,1)]::GEOMETRY[], 5);
+----
+1	0.666666666667	l	1	POINT (0 2)	LINESTRING (0 2, 1 2)
+1	0.333333333333	r	2	POINT (3 1)	LINESTRING (3 1, 1 1)
+
+# m4
+query IRTRTT
+SELECT edge_id, fraction, side, distance, ST_AsText(geom) geom, ST_AsText(edge) edge
+FROM pgr_findCloseEdges(
+$$SELECT 1 AS id, ST_MakeLine(ST_makePoint(1,0), ST_MakePoint(1,3)) AS geom$$,
+ARRAY[ST_MakePoint(0,2), ST_MakePoint(3,1)]::GEOMETRY[], 5, dryrun=>true);
+----
+

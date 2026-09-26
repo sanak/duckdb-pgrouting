@@ -18,8 +18,10 @@ from typing import List, Optional, Tuple
 
 # Upstream is not consistent about the spaces inside a marker: dijkstra.pg writes both
 # "/* -- q15 */" and "/* -- q151*/". A pattern that requires the trailing space silently merges
-# four blocks into their predecessor.
-MARKER_RE = re.compile(r"/\*\s*--\s*([A-Za-z][\w]*(?:-[\w]+)*)\s*\*/")
+# four blocks into their predecessor. extractVertices.pg/.result additionally number their
+# sub-blocks with a dot ("/* --q1.1 */"), the only docqueries page that does; a name segment may
+# therefore be joined by either a hyphen or a dot.
+MARKER_RE = re.compile(r"/\*\s*--\s*([A-Za-z][\w]*(?:[-.][\w]+)*)\s*\*/")
 
 _SEPARATOR_RE = re.compile(r"^-+(?:\+-+)*$")
 _ROWCOUNT_RE = re.compile(r"^\((\d+) rows?\)$")
