@@ -88,3 +88,27 @@ class DuckDB:
         records = self._run(sql)
         rows = [[record.get(column) for column in columns] for record in records]
         return QueryResult(columns=columns, types=types, rows=rows)
+
+    def script(self, sql: str, timeout: float = TIMEOUT_SECONDS) -> str:
+        """Run a whole script (statements and dot commands) and return what it printed.
+
+        Unlike query(), the output is not parsed: a script may print several results. Pass
+        flags=["-bail"] to stop at the first failing statement; the error then carries the last
+        lines printed before it, so .print markers show where the script was.
+        """
+        script = (self.preamble.rstrip() + "\n" if self.preamble else "") + sql
+        completed = subprocess.run(
+            [self.binary, *self.flags, "-batch", ":memory:"],
+            input=script,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if completed.returncode != 0 or completed.stderr.strip():
+            tail = "\n".join(completed.stdout.splitlines()[-40:])
+            raise DuckDBError(
+                "{} failed:\n{}\n--- last output ---\n{}".format(
+                    self.binary, completed.stderr.strip(), tail
+                )
+            )
+        return completed.stdout
