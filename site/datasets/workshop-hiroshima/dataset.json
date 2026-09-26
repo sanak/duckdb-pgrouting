@@ -1,0 +1,19 @@
+{
+  "title": "Hiroshima road network (pgRouting workshop)",
+  "license": "MIT",
+  "spatial": true,
+  "files": ["ways.parquet", "configuration.parquet"],
+  "tables": [
+    {
+      "name": "ways",
+      "sql": "SELECT * REPLACE (ST_GeomFromWKB(geom) AS geom) FROM read_parquet('workshop-hiroshima/ways.parquet')"
+    },
+    { "name": "configuration", "sql": "SELECT * FROM read_parquet('workshop-hiroshima/configuration.parquet')" }
+  ],
+  "map": {
+    "mode": "geographic",
+    "edges": "SELECT id, ST_AsGeoJSON(geom) AS geojson FROM ways",
+    "nodes": "SELECT source AS id, ST_X(ST_StartPoint(geom)) AS x, ST_Y(ST_StartPoint(geom)) AS y FROM ways UNION SELECT target, ST_X(ST_EndPoint(geom)), ST_Y(ST_EndPoint(geom)) FROM ways",
+    "attribution": "© OpenStreetMap contributors (ODbL)"
+  }
+}

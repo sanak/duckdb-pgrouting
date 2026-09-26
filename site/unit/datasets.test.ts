@@ -94,3 +94,14 @@ test('the dataset index names a default that exists', () => {
   assert.throws(() => parseDatasetIndex({ default: 'c', datasets: [{ id: 'a', title: 'A' }] }), /default/);
   assert.throws(() => parseDatasetIndex({ default: 'a', datasets: [] }), /datasets/);
 });
+
+test('workshop-hiroshima loads spatial and draws a geographic map', () => {
+  const d = parseDataset('workshop-hiroshima', read('workshop-hiroshima', 'dataset.json'));
+  assert.equal(d.spatial, true);
+  assert.equal(d.map.mode, 'geographic');
+  assert.deepEqual(
+    d.tables.map((t) => t.name),
+    ['ways', 'configuration'],
+  );
+  assert.ok(setupStatements(d).indexOf('LOAD spatial') < setupStatements(d).findIndex((s) => s.includes('ways')));
+});

@@ -113,7 +113,7 @@ class TestSitePresets(unittest.TestCase):
         os.chdir(DATA)
 
     def test_both_datasets_are_committed(self):
-        self.assertIn("sampledata", committed_datasets())
+        self.assertEqual(["sampledata", "workshop-hiroshima"], committed_datasets())
 
     def test_every_preset_runs_twice_in_order(self):
         db = duckdbcli.DuckDB(str(BINARY), flags=["-bail"])
