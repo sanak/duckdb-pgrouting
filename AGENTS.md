@@ -191,8 +191,9 @@ their `unittest` suite. The test tools read upstream's committed fixtures and dr
   (`POINT (1 2)`). A driving-distance tie is asserted as each root's reached vertices and their
   costs, since which predecessor reached one is not guaranteed. A `pgr_kruskal*`/`pgr_prim*`
   block is always asserted through a spanning-forest invariant instead of upstream's exact rows,
-  because which minimum spanning forest is built among equal-cost edges depends on the C++
-  standard library's `std::priority_queue` order (libstdc++ vs. libc++).
+  because which minimum spanning forest `pgr_kruskal*` builds among equal-cost edges depends on
+  the C++ standard library's `std::priority_queue` order (libstdc++ vs. libc++); `pgr_prim*` uses
+  Boost's own heap instead, but its blocks are asserted the same way for uniformity.
 - `scripts/check_signatures.py` — compares upstream's `sql/sigs/pgrouting--<ver>.sig` against
   `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
   signature is intentionally registered as several DuckDB variants, one per number of its

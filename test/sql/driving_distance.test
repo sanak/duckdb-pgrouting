@@ -80,7 +80,7 @@ SELECT start_vid, count(*) FROM pgr_drivingDistance(e(), [11, 16], 3.0, directed
 11	13
 16	10
 
-# Review focus 4: an integer or DECIMAL distance; distance 0 keeps the root only.
+# An integer or DECIMAL distance; distance 0 keeps the root only.
 query I
 SELECT count(*) FROM pgr_drivingDistance(e(), 11, 3)
 UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), 11, 3.0::DECIMAL(4, 1))
@@ -90,20 +90,20 @@ UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), 11, 0);
 13
 1
 
-# Review focus 1: roots are read as a set, so none gives no rows.
+# Roots are read as a set, so none gives no rows.
 query I
 SELECT count(*) FROM pgr_drivingDistance(e(), []::BIGINT[], 3.0);
 ----
 0
 
-# Review focus 2: an absent root adds nothing beyond, at most, its own depth-0 row.
+# An absent root adds nothing beyond, at most, its own depth-0 row.
 query II
 SELECT count(*) FILTER (WHERE start_vid = 11), count(*) FILTER (WHERE start_vid = 999 AND node <> 999)
 FROM pgr_drivingDistance(e(), [11, 999], 3.0);
 ----
 13	0
 
-# Review focus 3: no edges, no rows.
+# No edges, no rows.
 query I
 SELECT count(*) FROM pgr_drivingDistance('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0', 11, 3.0);
 ----

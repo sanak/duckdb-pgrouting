@@ -104,9 +104,10 @@ Functions deliberately not ported are listed, each with its reason, in
 - **Equal-cost ties.** The order in which the inner query's rows reach the algorithm is not fixed
   (DuckDB scans in parallel), so where two routes cost exactly the same, the same query may return
   either one between runs. Every answer is still optimal; PostgreSQL's unordered scans give
-  pgRouting the same property. `pgr_kruskal*` and `pgr_prim*` may also return a different, equally
-  minimal spanning forest on macOS or Wasm than on Linux, since the C++ standard library's
-  tie-break among equal-cost edges differs (libstdc++ vs. libc++).
+  pgRouting the same property. `pgr_kruskal*` may also return a different, equally minimal
+  spanning forest on macOS or Wasm than on Linux, since the C++ standard library's tie-break among
+  equal-cost edges differs (libstdc++ vs. libc++); `pgr_prim*` uses Boost's own heap instead, but
+  its ties are asserted the same way for uniformity.
 - **Memory.** pgRouting's own allocations are not counted against DuckDB's `memory_limit`.
 - **Geometry needs the spatial extension.** `pgr_findCloseEdges`, and `pgr_extractVertices` on
   geometry, call [duckdb-spatial](https://duckdb.org/docs/stable/core_extensions/spatial/overview):

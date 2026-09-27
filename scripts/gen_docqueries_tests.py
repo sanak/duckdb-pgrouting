@@ -47,11 +47,12 @@ ROUTE_COLUMNS = ("node", "edge")
 TREE_TIE_FUNCTIONS = frozenset({"pgr_drivingdistance", "pgr_withpointsdd"})
 TREE_TIE_COLUMNS = ("start_vid", "node", "agg_cost")
 
-# Kruskal/Prim results: Boost's kruskal_minimum_spanning_tree pops equal-weight edges from a
-# std::priority_queue whose tie order depends on the C++ standard library, so which minimum
-# spanning forest (or which walk of one) comes back is never guaranteed, unlike a route or a
-# driving-distance tree. Every block calling one of these is a forest companion unconditionally,
-# whether or not this build's raw answer happens to equal upstream's.
+# Kruskal/Prim results: which minimum spanning forest (or which walk of one) comes back among
+# equal-cost edges is never guaranteed, unlike a route or a driving-distance tree. Boost's
+# kruskal_minimum_spanning_tree pops equal-weight edges from a std::priority_queue whose tie order
+# depends on the C++ standard library; boost::prim_minimum_spanning_tree ties on its own heap
+# instead. Every block calling one of these is a forest companion unconditionally, whether or not
+# this build's raw answer happens to equal upstream's.
 FOREST_FUNCTIONS = frozenset({
     "pgr_kruskal", "pgr_kruskalbfs", "pgr_kruskaldfs", "pgr_kruskaldd",
     "pgr_prim", "pgr_primbfs", "pgr_primdfs", "pgr_primdd",
@@ -493,23 +494,24 @@ FOREST_DIRECTIVES = {"edges": "IR", "tree": "IITI", "tree_unlimited": "IITII"}
 
 FOREST_NOTES = {
     "edges": (
-        "which minimum spanning forest is built among equal-cost edges depends on the C++ "
-        "standard library's priority-queue order, so only what every such forest guarantees is "
-        "asserted: edge count and total cost"
+        "which minimum spanning forest is built among equal-cost edges is an implementation "
+        "tie-break (Kruskal's follows the C++ standard library's priority-queue order), so only "
+        "what every such forest guarantees is asserted: edge count and total cost"
     ),
     "tree": (
-        "which minimum spanning forest is built among equal-cost edges depends on the C++ "
-        "standard library's priority-queue order, so only what every such forest guarantees is "
-        "asserted: each root's single depth-0 row, no repeated node, and every other row hanging "
-        "off its predecessor one level up at the predecessor's cost plus its own"
+        "which minimum spanning forest is built among equal-cost edges is an implementation "
+        "tie-break (Kruskal's follows the C++ standard library's priority-queue order), so only "
+        "what every such forest guarantees is asserted: each root's single depth-0 row, no "
+        "repeated node, and every other row hanging off its predecessor one level up at the "
+        "predecessor's cost plus its own"
     ),
     "tree_unlimited": (
-        "which minimum spanning forest is built among equal-cost edges depends on the C++ "
-        "standard library's priority-queue order, so only what every such forest guarantees is "
-        "asserted: each root's single depth-0 row, no repeated node, every other row hanging off "
-        "its predecessor one level up at the predecessor's cost plus its own, and its total row "
-        "count -- an unlimited walk always reaches its whole connected component, whichever "
-        "equal-cost forest was built"
+        "which minimum spanning forest is built among equal-cost edges is an implementation "
+        "tie-break (Kruskal's follows the C++ standard library's priority-queue order), so only "
+        "what every such forest guarantees is asserted: each root's single depth-0 row, no "
+        "repeated node, every other row hanging off its predecessor one level up at the "
+        "predecessor's cost plus its own, and its total row count -- an unlimited walk always "
+        "reaches its whole connected component, whichever equal-cost forest was built"
     ),
 }
 

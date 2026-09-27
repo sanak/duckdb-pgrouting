@@ -39,11 +39,12 @@ CREATE TABLE restrictions AS
   SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
   FROM read_csv_auto('test/data/sampledata/restrictions.csv');
 
-# q1: which minimum spanning forest is built among equal-cost edges depends on the C++ standard
-# library's priority-queue order, so only what every such forest guarantees is asserted: each
-# root's single depth-0 row, no repeated node, every other row hanging off its predecessor one
-# level up at the predecessor's cost plus its own, and its total row count -- an unlimited walk
-# always reaches its whole connected component, whichever equal-cost forest was built
+# q1: which minimum spanning forest is built among equal-cost edges is an implementation tie-break
+# (Kruskal's follows the C++ standard library's priority-queue order), so only what every such
+# forest guarantees is asserted: each root's single depth-0 row, no repeated node, every other row
+# hanging off its predecessor one level up at the predecessor's cost plus its own, and its total
+# row count -- an unlimited walk always reaches its whole connected component, whichever equal-
+# cost forest was built
 query IITII
 WITH q AS (SELECT * FROM pgr_kruskalBFS(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
@@ -62,10 +63,10 @@ ORDER BY start_vid;
 ----
 6	1	true	0	13
 
-# q2: which minimum spanning forest is built among equal-cost edges depends on the C++ standard
-# library's priority-queue order, so only what every such forest guarantees is asserted: each
-# root's single depth-0 row, no repeated node, and every other row hanging off its predecessor one
-# level up at the predecessor's cost plus its own
+# q2: which minimum spanning forest is built among equal-cost edges is an implementation tie-break
+# (Kruskal's follows the C++ standard library's priority-queue order), so only what every such
+# forest guarantees is asserted: each root's single depth-0 row, no repeated node, and every other
+# row hanging off its predecessor one level up at the predecessor's cost plus its own
 query IITI
 WITH q AS (SELECT * FROM pgr_kruskalBFS(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',

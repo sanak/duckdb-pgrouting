@@ -145,7 +145,7 @@ SELECT * FROM _pgr_exec(
 ----
 Unknown Prim function
 
-# Review focus 1: these drivers read roots as a non-empty array.
+# These drivers read roots as a non-empty array.
 statement error
 SELECT * FROM _pgr_exec(
   (SELECT edges, []::BIGINT[] AS roots FROM tree_common),
@@ -154,7 +154,7 @@ SELECT * FROM _pgr_exec(
 ----
 No elements found
 
-# Review focus 3: no edges gives each root its depth-0 row (details::get_no_edge_graph_result), and
+# No edges gives each root its depth-0 row (details::get_no_edge_graph_result), and
 # kruskal's own root 0 none.
 query IIIIIIRR
 SELECT * FROM _pgr_exec(
@@ -239,7 +239,7 @@ SELECT * FROM _pgr_exec(
 ----
 Invalid Input Error: Negative value found on 'max_depth'
 
-# Review focus 1: BFS reads roots as a set, DFS as a non-empty array.
+# BFS reads roots as a set, DFS as a non-empty array.
 query I
 SELECT count(*) FROM _pgr_exec(
   (SELECT edges, []::BIGINT[] AS roots FROM tree_common),
@@ -256,7 +256,7 @@ SELECT * FROM _pgr_exec(
 ----
 No elements found
 
-# Review focus 2: an absent root adds nothing beyond, at most, its own depth-0 row.
+# An absent root adds nothing beyond, at most, its own depth-0 row.
 query II
 SELECT count(*) FILTER (WHERE start_vid = 6), count(*) FILTER (WHERE start_vid = 999 AND node <> 999)
 FROM _pgr_exec(

@@ -79,7 +79,7 @@ SELECT max(depth) <= 3 FROM pgr_kruskalBFS(e(), [9, 6], max_depth := 3);
 ----
 true
 
-# Review focus 4: max_depth 0 keeps the roots; an INTEGER max_depth; distance as INTEGER, DECIMAL
+# Max_depth 0 keeps the roots; an INTEGER max_depth; distance as INTEGER, DECIMAL
 # and 0.
 query I
 SELECT count(*) FROM pgr_kruskalBFS(e(), [6, 9], 0)
@@ -118,7 +118,7 @@ SELECT * FROM pgr_kruskalDD(no_edges(), [6], -1);
 ----
 Negative value found on 'distance'
 
-# Review focus 1: these families read roots as a non-empty array.
+# These families read roots as a non-empty array.
 statement error
 SELECT * FROM pgr_kruskalBFS(e(), []::BIGINT[]);
 ----
@@ -129,7 +129,7 @@ SELECT * FROM pgr_primDD(e(), []::BIGINT[], 3.5);
 ----
 No elements found
 
-# Review focus 3: no edges. pgr_kruskal's root 0 is dropped; the rooted forms return each root.
+# No edges. pgr_kruskal's root 0 is dropped; the rooted forms return each root.
 query I
 SELECT count(*) FROM pgr_kruskal(no_edges());
 ----

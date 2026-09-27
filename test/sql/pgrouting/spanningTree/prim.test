@@ -39,9 +39,9 @@ CREATE TABLE restrictions AS
   SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
   FROM read_csv_auto('test/data/sampledata/restrictions.csv');
 
-# q1: which minimum spanning forest is built among equal-cost edges depends on the C++ standard
-# library's priority-queue order, so only what every such forest guarantees is asserted: edge
-# count and total cost
+# q1: which minimum spanning forest is built among equal-cost edges is an implementation tie-break
+# (Kruskal's follows the C++ standard library's priority-queue order), so only what every such
+# forest guarantees is asserted: edge count and total cost
 query IR
 SELECT count(*), coalesce(sum(cost), 0)
 FROM (SELECT edge, cost FROM pgr_prim(

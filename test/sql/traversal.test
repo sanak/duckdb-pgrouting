@@ -87,7 +87,7 @@ SELECT * FROM pgr_depthFirstSearch(no_edges(), [6], true, -1);
 ----
 Invalid Input Error: Negative value found on 'max_depth'
 
-# Review focus 1: BFS reads roots as a set, DFS as a non-empty array.
+# BFS reads roots as a set, DFS as a non-empty array.
 query I
 SELECT count(*) FROM pgr_breadthFirstSearch(e(), []::BIGINT[]);
 ----
@@ -98,14 +98,14 @@ SELECT * FROM pgr_depthFirstSearch(e(), []::BIGINT[]);
 ----
 No elements found
 
-# Review focus 2: an absent root adds nothing beyond, at most, its own depth-0 row.
+# An absent root adds nothing beyond, at most, its own depth-0 row.
 query II
 SELECT count(*) FILTER (WHERE start_vid = 6), count(*) FILTER (WHERE start_vid = 999 AND node <> 999)
 FROM pgr_breadthFirstSearch(e(), [6, 999]);
 ----
 13	0
 
-# Review focus 3: no edges. BFS returns nothing, DFS each root's depth-0 row.
+# No edges. BFS returns nothing, DFS each root's depth-0 row.
 query I
 SELECT count(*) FROM pgr_breadthFirstSearch(no_edges(), 6);
 ----
