@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
-// Which pgRouting driver an overload runs. Includes neither DuckDB nor the compat postgres.h: the
-// spec table, the exec function and the pg_compat-side adapter all use it.
+// Which pgRouting driver an overload runs, and what that driver returns. Includes neither DuckDB
+// nor the compat postgres.h: the spec tables, the exec function and the pg_compat-side adapter all
+// use it.
 
+#include <cstddef>
 #include <cstdint>
-#include <initializer_list>
 #include <string>
 
 namespace duckdb_pgrouting {
 
 // SHORTEST_PATH is pgRouting's unified do_shortestPath. The others are the per-family drivers that
-// pgRouting v4.0.2 still keeps; old_style_drivers.cpp calls them. CONNECTED_COMPONENTS is the one
-// that returns vertex/component pairs instead of paths (result_kind 'components').
+// pgRouting v4.0.2 still keeps; the pg_compat adapter (src/pg_compat/src/family_drivers.cpp) calls
+// them.
 enum class DriverKind : uint8_t {
 	SHORTEST_PATH,
 	BD_DIJKSTRA,
@@ -23,37 +24,57 @@ enum class DriverKind : uint8_t {
 	CONNECTED_COMPONENTS
 };
 
-// The spelling _pgr_exec's `driver` argument takes.
-inline const char *DriverKindName(DriverKind kind) {
-	switch (kind) {
-	case DriverKind::SHORTEST_PATH:
-		return "shortest_path";
-	case DriverKind::BD_DIJKSTRA:
-		return "bd_dijkstra";
-	case DriverKind::BELLMAN_FORD:
-		return "bellman_ford";
-	case DriverKind::EDWARD_MOORE:
-		return "edward_moore";
-	case DriverKind::DAG_SHORTEST_PATH:
-		return "dag_shortest_path";
-	case DriverKind::BINARY_BFS:
-		return "binary_bfs";
-	case DriverKind::CONNECTED_COMPONENTS:
-		return "connected_components";
-	}
-	return "shortest_path";
-}
+// The upstream result struct a driver fills, one value per struct. It decides _pgr_exec's output
+// columns (src/exec/result_emitters.cpp) and how DriverResult frees the rows.
+enum class ResultShape : uint8_t {
+	PATH, // Path_rt
+	PAIRS // II_t_rt
+};
 
-inline bool ParseDriverKind(const std::string &name, DriverKind &kind) {
-	for (auto candidate : {DriverKind::SHORTEST_PATH, DriverKind::BD_DIJKSTRA, DriverKind::BELLMAN_FORD,
-	                       DriverKind::EDWARD_MOORE, DriverKind::DAG_SHORTEST_PATH, DriverKind::BINARY_BFS,
-	                       DriverKind::CONNECTED_COMPONENTS}) {
-		if (name == DriverKindName(candidate)) {
-			kind = candidate;
-			return true;
+struct DriverInfo {
+	DriverKind kind;
+	const char *name; // the spelling _pgr_exec's `driver` argument takes
+	ResultShape shape;
+};
+
+// One row per DriverKind, in enumerator order: the only list of drivers.
+inline constexpr DriverInfo DRIVERS[] = {
+    {DriverKind::SHORTEST_PATH, "shortest_path", ResultShape::PATH},
+    {DriverKind::BD_DIJKSTRA, "bd_dijkstra", ResultShape::PATH},
+    {DriverKind::BELLMAN_FORD, "bellman_ford", ResultShape::PATH},
+    {DriverKind::EDWARD_MOORE, "edward_moore", ResultShape::PATH},
+    {DriverKind::DAG_SHORTEST_PATH, "dag_shortest_path", ResultShape::PATH},
+    {DriverKind::BINARY_BFS, "binary_bfs", ResultShape::PATH},
+    {DriverKind::CONNECTED_COMPONENTS, "connected_components", ResultShape::PAIRS},
+};
+
+inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
+
+constexpr bool DriversInEnumeratorOrder() {
+	for (std::size_t i = 0; i < DRIVER_COUNT; i++) {
+		if (static_cast<std::size_t>(DRIVERS[i].kind) != i) {
+			return false;
 		}
 	}
-	return false;
+	return true;
+}
+static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
+// Update to the last enumerator whenever one is added.
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::CONNECTED_COMPONENTS) + 1,
+              "DRIVERS must have a row for every DriverKind");
+
+inline const DriverInfo &InfoOf(DriverKind kind) {
+	return DRIVERS[static_cast<std::size_t>(kind)];
+}
+
+// nullptr when no driver has that name.
+inline const DriverInfo *FindDriver(const std::string &name) {
+	for (const auto &info : DRIVERS) {
+		if (name == info.name) {
+			return &info;
+		}
+	}
+	return nullptr;
 }
 
 } // namespace duckdb_pgrouting

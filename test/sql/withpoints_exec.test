@@ -40,7 +40,7 @@ SELECT start_vid, end_vid, round(agg_cost, 6) FROM _pgr_exec(
   points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
   combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := true, which := 1, driving_side := 'r', details := true,
-  null_input := false, result_kind := 'path')
+  null_input := false)
 WHERE edge = -1;
 ----
 -1	10	6.4
@@ -56,7 +56,7 @@ SELECT * FROM _pgr_exec(
   points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
   combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := true, which := 1, driving_side := 'r', details := true,
-  null_input := false, result_kind := 'path');
+  null_input := false);
 ----
 Internal error: no 'edges' input registered for query: WITH  edges AS (SELECT id, source, target, cost, reverse_cost FROM edges),  points AS (SELECT pid, edge_id, fraction, side FROM pois) SELECT DISTINCT edges.* FROM edges JOIN points ON (id = edge_id)
 
@@ -70,7 +70,7 @@ SELECT * FROM _pgr_exec(
   points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
   combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := true, which := 1, driving_side := 'r', details := true,
-  null_input := false, result_kind := 'path');
+  null_input := false);
 ----
 Internal error: no 'edges' input registered for query: WITH  edges AS (SELECT id, source, target, cost, reverse_cost FROM edges),  points AS (SELECT pid, edge_id, fraction, side FROM pois) SELECT edges.* FROM edges WHERE NOT EXISTS (SELECT edge_id FROM points WHERE id = edge_id)
 
@@ -82,7 +82,7 @@ SELECT * FROM _pgr_exec(
   points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
   combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := true, which := 1, driving_side := 'r', details := true,
-  null_input := false, result_kind := 'path');
+  null_input := false);
 ----
 Internal error: no 'points' input registered for query: SELECT pid, edge_id, fraction, side FROM pois
 
@@ -102,7 +102,7 @@ SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
   points_sql := 'SELECT pid, edge_id, fraction, side FROM pois WHERE false',
   combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := true, which := 1, driving_side := 'r', details := true,
-  null_input := false, result_kind := 'path')
+  null_input := false)
 WHERE edge = -1;
 ----
 5	10	6
@@ -115,6 +115,6 @@ SELECT * FROM _pgr_exec(
           'x'::VARCHAR AS points),
   edges_sql := '', points_sql := 'SELECT 1', combinations_sql := '', directed := true,
   only_cost := false, normal := true, n_goals := 0, global := true, which := 1,
-  driving_side := 'r', details := true, null_input := false, result_kind := 'path');
+  driving_side := 'r', details := true, null_input := false);
 ----
 Invalid Input Error: _pgr_exec: column 'points' must be LIST(STRUCT), got VARCHAR

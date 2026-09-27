@@ -44,9 +44,11 @@ Every public function carries a catalog description and an example (`duckdb_func
   only into pg_compat and pgRouting translation units: the stub `postgres.h` defines `ERROR` as
   a macro and DuckDB has an enumerator of that name, so the two must never meet in one
   translation unit. `src/include/pgrouting/input_access.hpp` is the seam between the two worlds
-  and includes neither. `src/pg_compat/src/old_style_drivers.cpp` is the one translation unit
-  that calls pgRouting's per-family drivers, whose headers include `postgres.h`; the DuckDB side
-  reaches it through `src/include/pgrouting/old_style_drivers.hpp`, which includes neither world.
+  and includes neither. `src/pg_compat/src/family_drivers.cpp` and the `drivers_*.cpp` files it
+  dispatches to are the translation units that call pgRouting's per-family drivers, whose headers
+  include `postgres.h`; the DuckDB side reaches them through
+  `src/include/pgrouting/family_drivers.hpp`, which, like `driver_request.hpp` and
+  `driver_kind.hpp`, includes neither world.
 - `src/exec/` — input registry, driver invocation, the internal in-out table function, and the copy
   of upstream's withPoints derived-query key template (`withpoints_keys.cpp`).
 - `src/functions/` — the declarative overload table (`shortest_path_specs.cpp`), the catalog

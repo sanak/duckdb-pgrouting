@@ -411,11 +411,7 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	args.push_back(Named(Constant(Value(driving_side)), "driving_side"));
 	args.push_back(Named(Constant(Value::BOOLEAN(details)), "details"));
 	args.push_back(Named(Constant(Value::BOOLEAN(null_input)), "null_input"));
-	args.push_back(Named(Constant(Value(duckdb_pgrouting::DriverKindName(spec.flags.driver))), "driver"));
-	// The exec function returns the path columns for every path driver, and the public overload's
-	// shape is the outer projection below; the components driver has a shape of its own.
-	const bool components = spec.flags.columns == duckdb_pgrouting::ResultColumns::COMPONENTS;
-	args.push_back(Named(Constant(Value(components ? "components" : "path")), "result_kind"));
+	args.push_back(Named(Constant(Value(duckdb_pgrouting::InfoOf(spec.flags.driver).name)), "driver"));
 
 	auto fref = make_uniq<TableFunctionRef>();
 	fref->function = make_uniq<FunctionExpression>("_pgr_exec", std::move(args));

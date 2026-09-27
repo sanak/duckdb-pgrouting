@@ -152,7 +152,7 @@ SELECT * FROM _pgr_exec(
           [3]::BIGINT[] AS ends),
   edges_sql := '', combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := false, which := 0, driving_side := ' ', details := true,
-  null_input := false, result_kind := 'path');
+  null_input := false);
 ----
 Invalid Input Error: _pgr_exec: column 'starts' must be LIST(BIGINT), got VARCHAR
 
@@ -165,7 +165,7 @@ SELECT * FROM _pgr_exec(
           []::BIGINT[] AS ends),
   edges_sql := '', combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := false, which := 0, driving_side := ' ', details := true,
-  null_input := false, result_kind := 'path');
+  null_input := false);
 ----
 Invalid Input Error: _pgr_exec: column 'edges' must be LIST(STRUCT), got VARCHAR
 
@@ -175,7 +175,7 @@ SELECT * FROM _pgr_exec(
           []::BIGINT[] AS ends),
   edges_sql := '', combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := false, which := 0, driving_side := ' ', details := true,
-  null_input := false, result_kind := 'path');
+  null_input := false);
 ----
 Invalid Input Error: _pgr_exec: column 'edges' must be LIST(STRUCT), got BIGINT[]
 
