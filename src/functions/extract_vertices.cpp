@@ -222,7 +222,7 @@ unique_ptr<TableRef> ExtractVerticesBindReplace(ClientContext &context, TableFun
 void RegisterExtractVertices(ExtensionLoader &loader) {
 	TableFunctionSet set(FUNCTION_NAME);
 	// Upstream's one defaulted parameter, dryrun, may be passed positionally or by name, so the
-	// signature is registered twice (see RegisterShortestPathFunctions).
+	// signature is registered twice (see RegisterSpecFunctions).
 	for (idx_t positional = 0; positional <= 1; positional++) {
 		vector<LogicalType> arguments {LogicalType::VARCHAR};
 		if (positional == 1) {

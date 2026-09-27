@@ -29,13 +29,19 @@ set(DUCKDB_PGROUTING_SOURCES
     src/exec/request_params.cpp
     src/exec/result_emitters.cpp
     src/exec/withpoints_keys.cpp
-    src/functions/function_docs.cpp
+    src/functions/bd_dijkstra_specs.cpp
+    src/functions/bellman_ford_specs.cpp
+    src/functions/breadth_first_search_specs.cpp
+    src/functions/components_specs.cpp
+    src/functions/dag_shortest_path_specs.cpp
+    src/functions/dijkstra_specs.cpp
     src/functions/extract_vertices.cpp
     src/functions/find_close_edges.cpp
+    src/functions/function_docs.cpp
     src/functions/meta_functions.cpp
-    src/functions/shortest_path_functions.cpp
-    src/functions/shortest_path_specs.cpp
+    src/functions/spec_functions.cpp
     src/functions/sql_template.cpp
+    src/functions/withpoints_specs.cpp
     src/pg_compat/src/drivers_graph.cpp
     src/pg_compat/src/drivers_path.cpp
     src/pg_compat/src/family_drivers.cpp

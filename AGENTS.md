@@ -54,8 +54,9 @@ Every public function carries a catalog description and an example (`duckdb_func
   (`request_params.cpp`) and the columns and emitter of each result shape (`result_emitters.cpp`);
   the input registry, driver invocation (`exec_common.cpp`), and the copy of upstream's withPoints
   derived-query key template (`withpoints_keys.cpp`).
-- `src/functions/` — the declarative overload table (`shortest_path_specs.cpp`), the catalog
-  descriptions and examples (`function_docs.cpp`), the public function registration, the two
+- `src/functions/` — the declarative overload tables, one per upstream `sql/` directory
+  (`*_specs.cpp`, declared in `function_spec.hpp`), the catalog descriptions and examples
+  (`function_docs.cpp`), the public function registration (`spec_functions.cpp`), the two
   PL/pgSQL reimplementations (`extract_vertices.cpp`, `find_close_edges.cpp`) and their shared
   template machinery (`sql_template.cpp`).
 - `test/sql/` — sqllogictests. `test/sql/pgrouting/<category>/<name>.test` is generated from
@@ -227,6 +228,13 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
   therefore registered k + 1 times, passing the first 0..k of them positionally, and every
   variant accepts all k by name. The defaulted parameters are data (`OptionalParam` in
   `src/functions/function_spec.hpp`), in upstream's declaration order.
+- A pgRouting family is added as data: its upstream driver file in `cmake/pgrouting_sources.cmake`,
+  a `DRIVERS` row (`src/include/pgrouting/driver_kind.hpp`), a case in one
+  `src/pg_compat/src/drivers_*.cpp`, any new request field with its row in
+  `src/exec/request_params.cpp`, and a `*_specs.cpp` table listed in `spec_functions.cpp`. A new
+  upstream result struct adds a `ResultShape` value with its columns and emitter
+  (`src/exec/result_emitters.cpp`) and, when its rows own arrays, a case in `DriverResult`'s
+  release.
 - The order in which an input query's rows reach pgRouting is not guaranteed stable: DuckDB's
   `list()` does not preserve scan order once the scan runs on several threads, and `ORDER BY` in
   the caller's own SQL does not change that. Boost breaks an equal-cost predecessor tie by

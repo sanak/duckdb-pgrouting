@@ -99,7 +99,7 @@ OperatorResultType ExecFunction(ExecutionContext &context, TableFunctionInput &d
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-// Tags this one internal function the same way TagFunctions (shortest_path_functions.cpp) tags
+// Tags this one internal function the same way TagFunctions (spec_functions.cpp) tags
 // every public overload, so both are found by `WHERE tags['ext'] = 'pgrouting'`.
 void TagExecFunction(ExtensionLoader &loader) {
 	auto &db = loader.GetDatabaseInstance();
