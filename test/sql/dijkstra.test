@@ -78,7 +78,7 @@ SELECT * FROM pgr_dijkstra(
 # upstream's fixture was almost certainly generated against a different Boost release, and Boost's
 # dijkstra_shortest_paths has changed its default priority-queue implementation across releases,
 # which is documented to change only tie-breaking among equal-weight edges. Each case was verified
-# by calling _pgr_shortestpath_exec directly, bypassing bind_replace entirely, which reproduces the
+# by calling _pgr_exec directly, bypassing bind_replace entirely, which reproduces the
 # same route: the tie-break happens inside pgRouting's own unmodified dijkstra_shortest_paths call,
 # not in this extension's argument wiring. That is what the amended rows below record, and it
 # changes only when the Boost dependency moves.

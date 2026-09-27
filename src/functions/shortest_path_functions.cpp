@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // The public shortest-path functions. Each one is a bind_replace-only table function: it rewrites
-// its call into a query over _pgr_shortestpath_exec, so that the user's edge query is executed by
+// its call into a query over _pgr_exec, so that the user's edge query is executed by
 // DuckDB itself and handed to pgRouting already materialized.
 //
 // Every overload is declared as data in SHORTEST_PATH_SPECS (shortest_path_specs.cpp): a spec row's
 // upstream name and positional argument kinds are registered as a DuckDB TableFunction, and
 // ShortestPathBindReplace walks the same spec back at call time to build the row that
-// _pgr_shortestpath_exec expects.
+// _pgr_exec expects.
 
 #include "pgrouting/register.hpp"
 
@@ -257,7 +257,7 @@ Value ResolveOptional(const duckdb_pgrouting::FunctionSpec &spec, TableFunctionB
 }
 
 //===--------------------------------------------------------------------===//
-// <public overload>(...) -> _pgr_shortestpath_exec(...)
+// <public overload>(...) -> _pgr_exec(...)
 //===--------------------------------------------------------------------===//
 unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto &function_info = input.info->Cast<ShortestPathFunctionInfo>();
@@ -318,7 +318,7 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	// and 'edges_no_points'; 'edges' is then NULL). A column this overload does not use gets either
 	// an untyped NULL constant ('edges'/'combinations') or an empty but LIST(BIGINT)-typed id list
 	// ('starts'/'ends' default to EmptyIdList() below, never a bare NULL). That typing is
-	// load-bearing: _pgr_shortestpath_exec's own bind rejects 'starts'/'ends' unless they are
+	// load-bearing: _pgr_exec's own bind rejects 'starts'/'ends' unless they are
 	// SQLNULL or LIST(BIGINT), so emitting an untyped NULL there instead would break every
 	// NULL-input call.
 	auto row = make_uniq<SelectNode>();
@@ -418,7 +418,7 @@ unique_ptr<TableRef> ShortestPathBindReplace(ClientContext &context, TableFuncti
 	args.push_back(Named(Constant(Value(components ? "components" : "path")), "result_kind"));
 
 	auto fref = make_uniq<TableFunctionRef>();
-	fref->function = make_uniq<FunctionExpression>("_pgr_shortestpath_exec", std::move(args));
+	fref->function = make_uniq<FunctionExpression>("_pgr_exec", std::move(args));
 
 	auto outer = make_uniq<SelectNode>();
 	for (const auto *column : OutputColumns(spec.flags.columns)) {

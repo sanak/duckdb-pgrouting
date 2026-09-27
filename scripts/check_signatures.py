@@ -138,7 +138,7 @@ _LIST_SEP = "\x1f"
 def collect_variants(db):
     """Return {upstream function name: [(parameters, parameter_types), ...]} from the catalog.
 
-    tags['ext'] = 'pgrouting' also matches _pgr_shortestpath_exec, the internal in-out table
+    tags['ext'] = 'pgrouting' also matches _pgr_exec, the internal in-out table
     function, which carries no pgrouting_name; the NULL filter drops it.
 
     The key is the tag lowercased. PostgreSQL case-folds unquoted identifiers, so a

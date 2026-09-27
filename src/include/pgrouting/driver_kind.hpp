@@ -23,7 +23,7 @@ enum class DriverKind : uint8_t {
 	CONNECTED_COMPONENTS
 };
 
-// The spelling _pgr_shortestpath_exec's `driver` argument takes.
+// The spelling _pgr_exec's `driver` argument takes.
 inline const char *DriverKindName(DriverKind kind) {
 	switch (kind) {
 	case DriverKind::SHORTEST_PATH:
