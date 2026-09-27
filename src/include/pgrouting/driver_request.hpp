@@ -5,6 +5,7 @@
 // nor the compat postgres.h, so the exec function and the pg_compat adapter both read it.
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -38,8 +39,13 @@ struct DriverRequest {
 	bool has_roots = false;
 	double distance = 0;
 	bool equicost = false;
+	// Upstream's default is BIGINT's maximum: no depth limit.
+	int64_t max_depth = std::numeric_limits<int64_t>::max();
+	// The kruskal and prim families: "" (the whole forest), "BFS", "DFS" or "DD".
+	std::string mst_suffix;
 	// Which driver runs the request. Each driver reads only the fields its upstream C entry passes
-	// it; only SHORTEST_PATH reads points_sql, n_goals, global, driving_side, details and which.
+	// it; only SHORTEST_PATH reads points_sql, n_goals, global, driving_side, details and which,
+	// and WITH_POINTS_DD also reads points_sql, driving_side and details.
 	DriverKind driver = DriverKind::SHORTEST_PATH;
 };
 

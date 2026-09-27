@@ -80,6 +80,19 @@ void CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 		}
 		return;
 	}
+	case duckdb_pgrouting::RequestCheck::SPANNING_TREE:
+		if (request.mst_suffix == "DD" && request.distance < 0) {
+			ThrowCheck("Negative value found on 'distance'", "Must be positive");
+		}
+		if ((request.mst_suffix == "BFS" || request.mst_suffix == "DFS") && request.max_depth < 0) {
+			ThrowCheck("Negative value found on 'max_depth'", "Must be positive");
+		}
+		return;
+	case duckdb_pgrouting::RequestCheck::TRAVERSAL:
+		if (request.max_depth < 0) {
+			ThrowCheck("Negative value found on 'max_depth'", "");
+		}
+		return;
 	}
 }
 

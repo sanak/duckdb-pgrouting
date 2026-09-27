@@ -25,7 +25,11 @@ enum class DriverKind : uint8_t {
 	ASTAR,
 	BD_ASTAR,
 	DRIVING_DISTANCE,
-	WITH_POINTS_DD
+	WITH_POINTS_DD,
+	KRUSKAL,
+	PRIM,
+	BREADTH_FIRST_SEARCH,
+	DEPTH_FIRST_SEARCH
 };
 
 // The upstream result struct a driver fills, one value per struct. It decides _pgr_exec's output
@@ -48,7 +52,12 @@ enum class RequestCheck : uint8_t {
 	DRIVING_DISTANCE,
 	// estimate_drivingSide (r, l or b in either case), then distance >= 0:
 	// src/driving_distance/driving_distance_withPoints.c.
-	WITH_POINTS_DD
+	WITH_POINTS_DD,
+	// src/spanningTree/kruskal.c and prim.c: distance >= 0 with the DD suffix, max_depth >= 0
+	// with BFS or DFS, nothing without a suffix (pgr_kruskal passes -1 for both).
+	SPANNING_TREE,
+	// max_depth >= 0: src/breadthFirstSearch/breadthFirstSearch.c, src/traversal/depthFirstSearch.c.
+	TRAVERSAL
 };
 
 struct DriverInfo {
@@ -73,6 +82,10 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::BD_ASTAR, "bd_astar", ResultShape::PATH, RequestCheck::ASTAR_PARAMETERS},
     {DriverKind::DRIVING_DISTANCE, "driving_distance", ResultShape::MST, RequestCheck::DRIVING_DISTANCE},
     {DriverKind::WITH_POINTS_DD, "with_points_dd", ResultShape::MST, RequestCheck::WITH_POINTS_DD, true},
+    {DriverKind::KRUSKAL, "kruskal", ResultShape::MST, RequestCheck::SPANNING_TREE},
+    {DriverKind::PRIM, "prim", ResultShape::MST, RequestCheck::SPANNING_TREE},
+    {DriverKind::BREADTH_FIRST_SEARCH, "breadth_first_search", ResultShape::MST, RequestCheck::TRAVERSAL},
+    {DriverKind::DEPTH_FIRST_SEARCH, "depth_first_search", ResultShape::MST, RequestCheck::TRAVERSAL},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -87,7 +100,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::WITH_POINTS_DD) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::DEPTH_FIRST_SEARCH) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

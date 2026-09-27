@@ -32,6 +32,7 @@ set(PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/cpp_common/Dmatrix.cpp
     ${PGROUTING_DIR}/src/cpp_common/messages.cpp
     ${PGROUTING_DIR}/src/cpp_common/rule.cpp
+    ${PGROUTING_DIR}/src/spanningTree/details.cpp
     ${PGROUTING_DIR}/src/withPoints/withPoints.cpp)
 
 # Sources that reach PostgreSQL only through symbols this extension replaces
@@ -43,6 +44,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/bellman_ford/bellman_ford_driver.cpp
     ${PGROUTING_DIR}/src/bellman_ford/edwardMoore_driver.cpp
     ${PGROUTING_DIR}/src/breadthFirstSearch/binaryBreadthFirstSearch_driver.cpp
+    ${PGROUTING_DIR}/src/breadthFirstSearch/breadthFirstSearch_driver.cpp
     ${PGROUTING_DIR}/src/components/components.cpp
     ${PGROUTING_DIR}/src/components/connectedComponents_driver.cpp
     ${PGROUTING_DIR}/src/cpp_common/combinations.cpp
@@ -51,4 +53,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/dagShortestPath/dagShortestPath_driver.cpp
     ${PGROUTING_DIR}/src/dijkstra/shortestPath_driver.cpp
     ${PGROUTING_DIR}/src/driving_distance/driving_distance_driver.cpp
-    ${PGROUTING_DIR}/src/driving_distance/driving_distance_withPoints_driver.cpp)
+    ${PGROUTING_DIR}/src/driving_distance/driving_distance_withPoints_driver.cpp
+    ${PGROUTING_DIR}/src/spanningTree/kruskal_driver.cpp
+    ${PGROUTING_DIR}/src/spanningTree/prim_driver.cpp
+    ${PGROUTING_DIR}/src/traversal/depthFirstSearch_driver.cpp)

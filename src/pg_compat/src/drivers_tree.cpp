@@ -8,8 +8,12 @@
 
 #include "driver_groups.hpp"
 
+#include "drivers/breadthFirstSearch/breadthFirstSearch_driver.h"
 #include "drivers/driving_distance/driving_distance_driver.h"
 #include "drivers/driving_distance/driving_distance_withPoints_driver.h"
+#include "drivers/spanningTree/kruskal_driver.h"
+#include "drivers/spanningTree/prim_driver.h"
+#include "drivers/traversal/depthFirstSearch_driver.h"
 #include "pgrouting/withpoints_keys.hpp"
 
 namespace duckdb_pgrouting {
@@ -33,6 +37,23 @@ bool CallTreeDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 		                    request.equicost, &call.mst_rows, &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	}
+	case DriverKind::KRUSKAL:
+		pgr_do_kruskal(edges, arrays.roots, request.mst_suffix.c_str(), request.max_depth, request.distance,
+		               &call.mst_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::PRIM:
+		pgr_do_prim(edges, arrays.roots, request.mst_suffix.c_str(), request.max_depth, request.distance,
+		            &call.mst_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::BREADTH_FIRST_SEARCH:
+		pgr_do_breadthFirstSearch(edges, arrays.roots, request.max_depth, request.directed, &call.mst_rows,
+		                          &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::DEPTH_FIRST_SEARCH:
+		// directed before max_depth, the reverse of breadth-first search's order.
+		pgr_do_depthFirstSearch(edges, arrays.roots, request.directed, request.max_depth, &call.mst_rows,
+		                        &call.count, &call.log, &call.notice, &call.err);
+		return true;
 	default:
 		return false;
 	}

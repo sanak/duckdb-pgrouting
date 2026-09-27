@@ -42,6 +42,8 @@ const RequestParameter REQUEST_PARAMETERS[] = {
     {"epsilon", &DriverRequest::epsilon},
     {"distance", &DriverRequest::distance},
     {"equicost", &DriverRequest::equicost},
+    {"max_depth", &DriverRequest::max_depth},
+    {"mst_suffix", &DriverRequest::mst_suffix},
     {"driver", &DriverRequest::driver},
 };
 
