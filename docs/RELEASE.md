@@ -35,6 +35,11 @@ a person.
    `v2.0-cyanoptera` onto that commit, force-push it, and wait for the same three workflows to be
    green there too. Checks includes both generators in `--check` mode, so
    fixtures and the generated docquery tests are current.
+
+   Also run the Playground presets that read from third-party servers, which CI skips:
+   `PGROUTING_NETWORK_TESTS=1 python3 -m unittest scripts/tests/test_site_presets.py` with a
+   release build of the commit (a few minutes; reads Overture Maps' servers). A failure means
+   Overture changed its data: fix the presets in `site/datasets/overture/` first.
 2. **W2 against the branch build.** Run the W2 workflow in `artifact` mode with the `main`
    distribution run's id:
    `gh workflow run W2.yml --ref main -f mode=artifact -f run_id=<run id>`. It must
