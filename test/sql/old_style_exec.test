@@ -1,5 +1,5 @@
 # name: test/sql/old_style_exec.test
-# description: _pgr_shortestpath_exec with the driver argument: dispatch to each per-family driver
+# description: _pgr_exec with the driver argument: dispatch to each per-family driver
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -20,7 +20,7 @@ INSERT INTO edges VALUES
 # equal-cost tie cannot make this flaky. combinations_sql is '' here, as the public array forms pass
 # it: the adapter must hand the driver NULL, or it would look '' up as a combinations query.
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
@@ -32,7 +32,7 @@ WHERE edge = -1;
 6	10	5
 
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
@@ -44,7 +44,7 @@ WHERE edge = -1;
 6	10	5
 
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
@@ -56,7 +56,7 @@ WHERE edge = -1;
 6	10	5
 
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
@@ -70,7 +70,7 @@ WHERE edge = -1;
 # pgr_dagShortestPath needs an acyclic graph: without reverse_cost only the forward edges exist, and
 # upstream's documented 5 -> 11 (docqueries dagShortestPath q2) costs 3.
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost FROM edges) e) AS edges,
           NULL AS combinations, [5]::BIGINT[] AS starts, [11]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost FROM edges', combinations_sql := '',
@@ -83,7 +83,7 @@ WHERE edge = -1;
 
 # only_cost reaches the driver: bdDijkstra then returns exactly one row per pair.
 query IIIR
-SELECT start_vid, end_vid, edge, agg_cost FROM _pgr_shortestpath_exec(
+SELECT start_vid, end_vid, edge, agg_cost FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
@@ -95,7 +95,7 @@ SELECT start_vid, end_vid, edge, agg_cost FROM _pgr_shortestpath_exec(
 
 # directed reaches the driver: undirected, 6 -> 10 is edge 2 alone.
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
@@ -108,7 +108,7 @@ WHERE edge = -1;
 
 # The combinations form: the combinations query is registered under its own kind and fetched.
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
           (SELECT list(c) FROM (SELECT 6 AS source, 10 AS target) c) AS combinations),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
@@ -123,7 +123,7 @@ WHERE edge = -1;
 # The error mapping is shared: an old-style driver's err/log pair arrives as the unified driver's
 # does (compare dijkstra_errors.test).
 statement error
-SELECT * FROM _pgr_shortestpath_exec(
+SELECT * FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target FROM edges) e) AS edges,
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target FROM edges', combinations_sql := '',
@@ -135,22 +135,22 @@ Invalid Input Error: Column 'cost' not Found
 HINT: SELECT id, source, target FROM edges
 
 statement error
-SELECT * FROM _pgr_shortestpath_exec(
+SELECT * FROM _pgr_exec(
   (SELECT NULL AS edges, NULL AS combinations, []::BIGINT[] AS starts, []::BIGINT[] AS ends),
   edges_sql := '', driver := 'dijkstra');
 ----
-_pgr_shortestpath_exec: unknown driver 'dijkstra'
+_pgr_exec: unknown driver 'dijkstra'
 
 statement error
-SELECT * FROM _pgr_shortestpath_exec(
+SELECT * FROM _pgr_exec(
   (SELECT NULL AS edges, NULL AS combinations, []::BIGINT[] AS starts, []::BIGINT[] AS ends),
   edges_sql := '', points_sql := 'SELECT 1', driver := 'bellman_ford');
 ----
-_pgr_shortestpath_exec: points_sql is only supported by driver 'shortest_path'
+_pgr_exec: points_sql is only supported by driver 'shortest_path'
 
 # Without the argument the exec function keeps using the unified driver.
 query IIR
-SELECT start_vid, end_vid, agg_cost FROM _pgr_shortestpath_exec(
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
@@ -163,7 +163,7 @@ WHERE edge = -1;
 # Connected components (docqueries connectedComponents q1): three components, each named by its
 # smallest vertex, nodes ascending inside a component, seq numbering the rows from 1.
 query III
-SELECT seq, component, node FROM _pgr_shortestpath_exec(
+SELECT seq, component, node FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false,
   result_kind := 'components', driver := 'connected_components');
@@ -188,7 +188,7 @@ SELECT seq, component, node FROM _pgr_shortestpath_exec(
 
 # An edge query with no rows: upstream reports "No edges found" as a notice and returns nothing.
 query I
-SELECT count(*) FROM _pgr_shortestpath_exec(
+SELECT count(*) FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0) e)
      AS edges),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0',
@@ -198,17 +198,23 @@ SELECT count(*) FROM _pgr_shortestpath_exec(
 
 # result_kind and driver must agree, in both directions, as an ordinary input error.
 statement error
-SELECT * FROM _pgr_shortestpath_exec(
+SELECT * FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false,
   result_kind := 'components', driver := 'bellman_ford');
 ----
-Invalid Input Error: _pgr_shortestpath_exec: result_kind 'components' needs driver 'connected_components'
+Invalid Input Error: _pgr_exec: result_kind 'components' needs driver 'connected_components'
 
 statement error
-SELECT * FROM _pgr_shortestpath_exec(
+SELECT * FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false,
   result_kind := 'path', driver := 'connected_components');
 ----
-Invalid Input Error: _pgr_shortestpath_exec: driver 'connected_components' needs result_kind 'components'
+Invalid Input Error: _pgr_exec: driver 'connected_components' needs result_kind 'components'
+
+# The pre-rename spelling is gone rather than kept as an alias.
+statement error
+SELECT * FROM _pgr_shortestpath_exec((SELECT NULL AS edges));
+----
+does not exist

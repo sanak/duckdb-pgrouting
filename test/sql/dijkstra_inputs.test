@@ -142,42 +142,42 @@ EXECUTE q(2);
 ----
 2
 
-# A wrong-typed 'starts' argument reaches _pgr_shortestpath_exec directly (bypassing bind_replace,
+# A wrong-typed 'starts' argument reaches _pgr_exec directly (bypassing bind_replace,
 # which always passes LIST(BIGINT)) as a user-input error, not an internal one: DuckDB invalidates
 # the whole database instance on InternalException, so this path must never raise that class for a
 # condition any caller can trigger from SQL.
 statement error
-SELECT * FROM _pgr_shortestpath_exec(
+SELECT * FROM _pgr_exec(
   (SELECT NULL AS edges, NULL AS combinations, 'bad'::VARCHAR AS starts,
           [3]::BIGINT[] AS ends),
   edges_sql := '', combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := false, which := 0, driving_side := ' ', details := true,
   null_input := false, result_kind := 'path');
 ----
-Invalid Input Error: _pgr_shortestpath_exec: column 'starts' must be LIST(BIGINT), got VARCHAR
+Invalid Input Error: _pgr_exec: column 'starts' must be LIST(BIGINT), got VARCHAR
 
 # Same class of check, same reason, for 'edges'/'combinations': a non-LIST cell reaches
 # ListVector::GetChildMutable, and a LIST-but-not-STRUCT cell clears that check and dies one line
 # later in StructVector::GetEntries. Both are D_ASSERT failures in this build, i.e. InternalException.
 statement error
-SELECT * FROM _pgr_shortestpath_exec(
+SELECT * FROM _pgr_exec(
   (SELECT 'x'::VARCHAR AS edges, NULL AS combinations, []::BIGINT[] AS starts,
           []::BIGINT[] AS ends),
   edges_sql := '', combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := false, which := 0, driving_side := ' ', details := true,
   null_input := false, result_kind := 'path');
 ----
-Invalid Input Error: _pgr_shortestpath_exec: column 'edges' must be LIST(STRUCT), got VARCHAR
+Invalid Input Error: _pgr_exec: column 'edges' must be LIST(STRUCT), got VARCHAR
 
 statement error
-SELECT * FROM _pgr_shortestpath_exec(
+SELECT * FROM _pgr_exec(
   (SELECT [1, 2]::BIGINT[] AS edges, NULL AS combinations, []::BIGINT[] AS starts,
           []::BIGINT[] AS ends),
   edges_sql := '', combinations_sql := '', directed := true, only_cost := false, normal := true,
   n_goals := 0, global := false, which := 0, driving_side := ' ', details := true,
   null_input := false, result_kind := 'path');
 ----
-Invalid Input Error: _pgr_shortestpath_exec: column 'edges' must be LIST(STRUCT), got BIGINT[]
+Invalid Input Error: _pgr_exec: column 'edges' must be LIST(STRUCT), got BIGINT[]
 
 # A NULL element inside an otherwise well-typed id list is reachable from the public API, not only
 # from a direct call: BigIntValue::Get does not assert on a NULL Value (it still carries the BIGINT
@@ -187,7 +187,7 @@ statement error
 SELECT * FROM pgr_dijkstra(
   'SELECT id, source, target, cost, reverse_cost FROM edges', [1, NULL]::BIGINT[], 3);
 ----
-Invalid Input Error: _pgr_shortestpath_exec: column 'starts' contains a NULL id
+Invalid Input Error: _pgr_exec: column 'starts' contains a NULL id
 
 # An edge query may return columns the algorithm never reads, of any type. The sample graph's
 # edges table carries a GEOMETRY column, so every `SELECT * FROM edges` passes one through.

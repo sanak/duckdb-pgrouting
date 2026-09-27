@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// The internal table in-out function every public shortest-path overload is rewritten into.
-// It receives one row whose columns carry the already-materialized inputs, runs pgRouting's
+// _pgr_exec: the internal table in-out function every spec-driven public overload is rewritten
+// into. It receives one row whose columns carry the already-materialized inputs, runs pgRouting's
 // driver once, and streams the driver's tuples out.
 
 #include "pgrouting/register.hpp"
@@ -39,7 +39,7 @@ struct RowSchema {
 	vector<LogicalType> types;
 };
 
-struct ShortestPathExecBindData : public TableFunctionData {
+struct ExecBindData : public TableFunctionData {
 	duckdb_pgrouting::DriverRequest request;
 	bool null_input = false;
 	// result_kind 'components': the driver returned vertex/component pairs, not path rows.
@@ -60,7 +60,7 @@ struct ShortestPathExecBindData : public TableFunctionData {
 	RowSchema edges_no_points_schema;
 };
 
-struct ShortestPathExecState : public LocalTableFunctionState {
+struct ExecState : public LocalTableFunctionState {
 	bool ran = false;
 	duckdb_pgrouting::InputRegistry registry;
 	duckdb_pgrouting::DriverResult result;
@@ -166,7 +166,7 @@ vector<int64_t> ReadIdList(DataChunk &input, idx_t column, const char *name, boo
 			// bytes happen to sit in that union and use them as a vertex id. PostgreSQL and
 			// pgRouting reject a NULL array element outright; match that instead of returning an
 			// answer that depends on uninitialized memory.
-			throw InvalidInputException("_pgr_shortestpath_exec: column '%s' contains a NULL id", name);
+			throw InvalidInputException("_pgr_exec: column '%s' contains a NULL id", name);
 		}
 		ids.push_back(BigIntValue::Get(child));
 	}
@@ -199,7 +199,7 @@ idx_t FindInputColumn(TableFunctionBindInput &input, const char *name) {
 	return DConstants::INVALID_INDEX;
 }
 
-// `_pgr_shortestpath_exec` is catalogued and callable by any user, not only through the public
+// `_pgr_exec` is catalogued and callable by any user, not only through the public
 // overloads' bind_replace. Unpack and ReadIdList reach ListVector::GetChildMutable /
 // StructVector::GetEntries / ListValue::GetChildren / BigIntValue::Get, all of which raise
 // InternalException (via D_ASSERT) on a type mismatch -- a class that invalidates the whole
@@ -225,7 +225,7 @@ void CheckIdListColumn(TableFunctionBindInput &input, idx_t column, const char *
 		return;
 	}
 	if (ClassOf(type) != duckdb_pgrouting::ColumnClass::INTEGER_ARRAY) {
-		throw InvalidInputException("_pgr_shortestpath_exec: column '%s' must be LIST(BIGINT), got %s", name,
+		throw InvalidInputException("_pgr_exec: column '%s' must be LIST(BIGINT), got %s", name,
 		                            type.ToString());
 	}
 }
@@ -239,7 +239,7 @@ void CheckRowListColumn(TableFunctionBindInput &input, idx_t column, const char 
 		return;
 	}
 	if (type.id() != LogicalTypeId::LIST || ListType::GetChildType(type).id() != LogicalTypeId::STRUCT) {
-		throw InvalidInputException("_pgr_shortestpath_exec: column '%s' must be LIST(STRUCT), got %s", name,
+		throw InvalidInputException("_pgr_exec: column '%s' must be LIST(STRUCT), got %s", name,
 		                            type.ToString());
 	}
 }
@@ -263,9 +263,9 @@ void CaptureRowSchema(TableFunctionBindInput &input, idx_t column, RowSchema &sc
 	schema.known = true;
 }
 
-unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBindInput &input,
+unique_ptr<FunctionData> ExecBind(ClientContext &, TableFunctionBindInput &input,
                                               vector<LogicalType> &return_types, vector<Identifier> &names) {
-	auto data = make_uniq<ShortestPathExecBindData>();
+	auto data = make_uniq<ExecBindData>();
 	auto &request = data->request;
 	request.edges_sql = NamedStringOr(input, "edges_sql", "");
 	request.combinations_sql = NamedStringOr(input, "combinations_sql", "");
@@ -282,10 +282,10 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	const auto driver =
 	    NamedStringOr(input, "driver", duckdb_pgrouting::DriverKindName(duckdb_pgrouting::DriverKind::SHORTEST_PATH));
 	if (!duckdb_pgrouting::ParseDriverKind(driver, request.driver)) {
-		throw InvalidInputException("_pgr_shortestpath_exec: unknown driver '%s'", driver);
+		throw InvalidInputException("_pgr_exec: unknown driver '%s'", driver);
 	}
 	if (request.driver != duckdb_pgrouting::DriverKind::SHORTEST_PATH && !request.points_sql.empty()) {
-		throw InvalidInputException("_pgr_shortestpath_exec: points_sql is only supported by driver '%s'",
+		throw InvalidInputException("_pgr_exec: points_sql is only supported by driver '%s'",
 		                            duckdb_pgrouting::DriverKindName(duckdb_pgrouting::DriverKind::SHORTEST_PATH));
 	}
 	data->null_input = NamedOr<bool>(input, "null_input", false);
@@ -296,17 +296,17 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	const bool components_driver = request.driver == duckdb_pgrouting::DriverKind::CONNECTED_COMPONENTS;
 	if (result_kind == "components") {
 		if (!components_driver) {
-			throw InvalidInputException("_pgr_shortestpath_exec: result_kind 'components' needs driver '%s'",
+			throw InvalidInputException("_pgr_exec: result_kind 'components' needs driver '%s'",
 			                            components_name);
 		}
 		data->components = true;
 	} else if (result_kind == "path") {
 		if (components_driver) {
-			throw InvalidInputException("_pgr_shortestpath_exec: driver '%s' needs result_kind 'components'",
+			throw InvalidInputException("_pgr_exec: driver '%s' needs result_kind 'components'",
 			                            components_name);
 		}
 	} else {
-		throw InvalidInputException("_pgr_shortestpath_exec: unsupported result_kind '%s'", result_kind);
+		throw InvalidInputException("_pgr_exec: unsupported result_kind '%s'", result_kind);
 	}
 
 	data->edges_column = FindInputColumn(input, "edges");
@@ -317,7 +317,7 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	data->edges_of_points_column = FindInputColumn(input, "edges_of_points");
 	data->edges_no_points_column = FindInputColumn(input, "edges_no_points");
 	if (data->edges_column == DConstants::INVALID_INDEX) {
-		throw InvalidInputException("_pgr_shortestpath_exec: the input table has no 'edges' column");
+		throw InvalidInputException("_pgr_exec: the input table has no 'edges' column");
 	}
 	CheckRowListColumn(input, data->edges_column, "edges");
 	CheckRowListColumn(input, data->combinations_column, "combinations");
@@ -344,9 +344,9 @@ unique_ptr<FunctionData> ShortestPathExecBind(ClientContext &, TableFunctionBind
 	return std::move(data);
 }
 
-unique_ptr<LocalTableFunctionState> ShortestPathExecInitLocal(ExecutionContext &, TableFunctionInitInput &,
+unique_ptr<LocalTableFunctionState> ExecInitLocal(ExecutionContext &, TableFunctionInitInput &,
                                                               GlobalTableFunctionState *) {
-	return make_uniq<ShortestPathExecState>();
+	return make_uniq<ExecState>();
 }
 
 // Registers one LIST(STRUCT) column of the input row under (sql, kind). An input query that
@@ -367,10 +367,10 @@ void RegisterRowList(ClientContext &context, duckdb_pgrouting::InputRegistry &re
 	}
 }
 
-void RunOnce(ClientContext &context, const ShortestPathExecBindData &bind, ShortestPathExecState &state,
+void RunOnce(ClientContext &context, const ExecBindData &bind, ExecState &state,
              DataChunk &input) {
 	if (input.size() != 1) {
-		throw InvalidInputException("_pgr_shortestpath_exec expects exactly one input row");
+		throw InvalidInputException("_pgr_exec expects exactly one input row");
 	}
 	if (bind.null_input) {
 		return;
@@ -405,7 +405,7 @@ void RunOnce(ClientContext &context, const ShortestPathExecBindData &bind, Short
 
 // Upstream's _pgr_connectedComponents emits (call counter + 1, d2.value, d1.id) per pair; so does
 // this. The driver has already sorted the pairs by component, then by node.
-void EmitComponents(const ShortestPathExecState &state, idx_t n, DataChunk &output) {
+void EmitComponents(const ExecState &state, idx_t n, DataChunk &output) {
 	auto seq = FlatVector::ScatterWriter<int64_t>(output.data[0]);
 	auto component = FlatVector::ScatterWriter<int64_t>(output.data[1]);
 	auto node = FlatVector::ScatterWriter<int64_t>(output.data[2]);
@@ -418,10 +418,10 @@ void EmitComponents(const ShortestPathExecState &state, idx_t n, DataChunk &outp
 	}
 }
 
-OperatorResultType ShortestPathExecFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
+OperatorResultType ExecFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
                                             DataChunk &output) {
-	auto &bind = data_p.bind_data->Cast<ShortestPathExecBindData>();
-	auto &state = data_p.local_state->Cast<ShortestPathExecState>();
+	auto &bind = data_p.bind_data->Cast<ExecBindData>();
+	auto &state = data_p.local_state->Cast<ExecState>();
 
 	if (!state.ran) {
 		state.ran = true;
@@ -482,9 +482,9 @@ void TagExecFunction(ExtensionLoader &loader) {
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
 	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
 	auto entry =
-	    schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier("_pgr_shortestpath_exec"));
+	    schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier("_pgr_exec"));
 	if (!entry) {
-		throw InternalException("pgrouting: _pgr_shortestpath_exec was not registered");
+		throw InternalException("pgrouting: _pgr_exec was not registered");
 	}
 	auto &function_entry = entry->Cast<FunctionEntry>();
 	function_entry.tags.insert("ext", "pgrouting");
@@ -493,10 +493,10 @@ void TagExecFunction(ExtensionLoader &loader) {
 
 } // namespace
 
-void RegisterShortestPathExec(ExtensionLoader &loader) {
-	TableFunction exec("_pgr_shortestpath_exec", {LogicalType::TABLE}, nullptr, ShortestPathExecBind);
-	exec.init_local = ShortestPathExecInitLocal;
-	exec.in_out_function = ShortestPathExecFunction;
+void RegisterExec(ExtensionLoader &loader) {
+	TableFunction exec("_pgr_exec", {LogicalType::TABLE}, nullptr, ExecBind);
+	exec.init_local = ExecInitLocal;
+	exec.in_out_function = ExecFunction;
 	exec.named_parameters["edges_sql"] = LogicalType::VARCHAR;
 	exec.named_parameters["combinations_sql"] = LogicalType::VARCHAR;
 	exec.named_parameters["points_sql"] = LogicalType::VARCHAR;
