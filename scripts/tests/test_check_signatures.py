@@ -52,6 +52,10 @@ class MapUpstreamTypesTest(unittest.TestCase):
         # character type, so the registered argument is VARCHAR.
         self.assertEqual(("VARCHAR",), cs.map_upstream_types(("character",)))
 
+    def test_maps_numeric_to_double(self):
+        # pgr_bdAstar* declare factor and epsilon NUMERIC and cast them to FLOAT for the C call.
+        self.assertEqual(("DOUBLE", "DOUBLE"), cs.map_upstream_types(("numeric", "double precision")))
+
 
 class MapGeometryTypesTest(unittest.TestCase):
     def test_geometry_and_its_array(self):

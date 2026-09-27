@@ -1,0 +1,272 @@
+# name: test/sql/astar.test
+# description: pgr_aStar, pgr_aStarCost, pgr_aStarCostMatrix: variants, checks, STRICT, long output
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE MACRO xy() AS 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges';
+
+statement ok
+CREATE MACRO plain() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+# Four defaulted parameters (directed, heuristic, factor, epsilon): five variants per signature.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name IN ('pgr_aStar', 'pgr_aStarCost', 'pgr_aStarCostMatrix') AND tags['ext'] = 'pgrouting'
+GROUP BY ALL ORDER BY 1;
+----
+pgr_aStar	25
+pgr_aStarCost	25
+pgr_aStarCostMatrix	5
+
+# Upstream's q2: 6 -> 12 costs 3, whichever positional prefix carries the defaulted parameters and
+# whether the rest are named.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12) WHERE edge = -1
+UNION ALL SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12, true) WHERE edge = -1
+UNION ALL SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12, true, 2) WHERE edge = -1
+UNION ALL SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12, true, 2, 1.0) WHERE edge = -1
+UNION ALL SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12, true, 2, 1.0, 1.0) WHERE edge = -1
+UNION ALL SELECT start_vid, end_vid, agg_cost
+  FROM pgr_aStar(xy(), 6, 12, directed := true, heuristic := 2, factor := 1.0, epsilon := 1.0) WHERE edge = -1;
+----
+6	12	3
+6	12	3
+6	12	3
+6	12	3
+6	12	3
+6	12	3
+
+# directed reaches the driver: 6 -> 10 is 5 directed (upstream's q3) and 1 undirected (q4).
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 10) WHERE edge = -1;
+----
+6	10	5
+
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 10, false) WHERE edge = -1;
+----
+6	10	1
+
+# Upstream's q4: many-to-one, undirected; the wrapper passes normal := false.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), [6, 8], 10, false, heuristic := 4)
+WHERE edge = -1 ORDER BY start_vid;
+----
+6	10	1
+8	10	3
+
+# On this graph's connected part every edge is unit-cost, unit-length and axis-parallel, so
+# heuristics 0 (none), 4 (Euclidean) and 5 (Manhattan, the default) never overestimate, and A* must
+# reach Dijkstra's optimum for every pair, directed and undirected.
+query I
+SELECT count(*)
+FROM pgr_aStarCost(xy(), [6, 1, 15], [10, 17, 3], heuristic := 0) a
+FULL JOIN pgr_dijkstraCost(plain(), [6, 1, 15], [10, 17, 3]) d USING (start_vid, end_vid)
+WHERE a.agg_cost IS DISTINCT FROM d.agg_cost;
+----
+0
+
+query I
+SELECT count(*)
+FROM pgr_aStarCost(xy(), [6, 1, 15], [10, 17, 3], heuristic := 4) a
+FULL JOIN pgr_dijkstraCost(plain(), [6, 1, 15], [10, 17, 3]) d USING (start_vid, end_vid)
+WHERE a.agg_cost IS DISTINCT FROM d.agg_cost;
+----
+0
+
+query I
+SELECT count(*)
+FROM pgr_aStarCost(xy(), [6, 1, 15], [10, 17, 3], false) a
+FULL JOIN pgr_dijkstraCost(plain(), [6, 1, 15], [10, 17, 3], false) d USING (start_vid, end_vid)
+WHERE a.agg_cost IS DISTINCT FROM d.agg_cost;
+----
+0
+
+# pgr_aStarCost's wrapper sorts by start_vid, end_vid (sql/astar/astarCost.sql); unsorted inputs
+# come back sorted. Costs from upstream's q7.
+query IIR
+SELECT * FROM pgr_aStarCost(xy(), [15, 7, 10], [15, 10, 7]);
+----
+7	10	4
+7	15	3
+10	7	2
+10	15	3
+15	7	3
+15	10	1
+
+# Upstream's aStarCostMatrix q2, which passes the vertex array as a scalar subquery (skip-listed
+# for the generator); the same array as a literal.
+query IIR
+SELECT * FROM pgr_aStarCostMatrix(xy(), [5, 6, 10, 15], directed := false, heuristic := 2) ORDER BY 1, 2;
+----
+5	6	1
+5	10	2
+5	15	3
+6	5	1
+6	10	1
+6	15	2
+10	5	2
+10	6	1
+10	15	1
+15	5	3
+15	6	2
+15	10	1
+
+# Upstream's parameter checks, through the public functions.
+statement error
+SELECT * FROM pgr_aStar(xy(), 6, 12, heuristic := 6);
+----
+Invalid Input Error: Unknown heuristic
+HINT: Valid values: 0~5
+
+statement error
+SELECT * FROM pgr_aStar(xy(), 6, 12, true, -1);
+----
+Invalid Input Error: Unknown heuristic
+HINT: Valid values: 0~5
+
+statement error
+SELECT * FROM pgr_aStarCost(xy(), 6, 12, factor := 0);
+----
+Invalid Input Error: Factor value out of range
+HINT: Valid values: positive non zero
+
+statement error
+SELECT * FROM pgr_aStarCostMatrix(xy(), [5, 6], epsilon := 0.99);
+----
+Invalid Input Error: Epsilon value out of range
+HINT: Valid values: 1 or greater than 1
+
+# Checked before the edge query is read: no rows still fails.
+statement error
+SELECT * FROM pgr_aStar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges WHERE id < 0',
+                        6, 12, heuristic := 6);
+----
+Unknown heuristic
+
+# The bounds themselves are valid.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12, heuristic := 0) WHERE edge = -1
+UNION ALL SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12, heuristic := 5) WHERE edge = -1
+UNION ALL SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12, factor := 0.001, epsilon := 1) WHERE edge = -1;
+----
+6	12	3
+6	12	3
+6	12	3
+
+# STRICT: a NULL in any argument, positional or named, gives an empty result, before any check.
+query I
+SELECT count(*) FROM pgr_aStar(xy(), NULL::BIGINT, 12);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_aStar(xy(), 6, 12, heuristic := NULL);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_aStar(xy(), 6, 12, true, NULL);
+----
+0
+
+# A NULL positional factor is caught the same way as a NULL positional heuristic above.
+query I
+SELECT count(*) FROM pgr_aStar(xy(), 6, 12, true, 2, NULL);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_aStarCost(xy(), 6, 12, factor := NULL);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_aStar(xy(), NULL::BIGINT, 12, heuristic := 9);
+----
+0
+
+# The coordinates are required columns.
+statement error
+SELECT * FROM pgr_aStar(plain(), 6, 12);
+----
+Invalid Input Error: Column 'x1' not Found
+HINT: SELECT id, source, target, cost, reverse_cost FROM edges
+
+# A NULL coordinate is an input error naming the column.
+statement error
+SELECT * FROM pgr_aStar(
+  'SELECT id, source, target, cost, reverse_cost, CASE WHEN id = 4 THEN NULL ELSE x1 END AS x1, y1, x2, y2 FROM edges',
+  6, 12);
+----
+Unexpected Null value in column x1
+
+# Coordinates of any numeric type.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(
+  'SELECT id, source, target, cost, reverse_cost, x1::INTEGER AS x1, y1::INTEGER AS y1,
+          x2::DECIMAL(16, 12) AS x2, y2::DECIMAL(16, 12) AS y2 FROM edges',
+  6, 12) WHERE edge = -1;
+----
+6	12	3
+
+# A start equal to its end, or a vertex not in the graph, gives no rows.
+query I
+SELECT count(*) FROM pgr_aStar(xy(), 6, 6);
+----
+0
+
+query I
+SELECT count(*) FROM pgr_aStar(xy(), 6, 999);
+----
+0
+
+# Defaulted parameters in other numeric types.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12, heuristic := 2::BIGINT, factor := 1) WHERE edge = -1
+UNION ALL SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12, true, 2, 1, 1) WHERE edge = -1;
+----
+6	12	3
+6	12	3
+
+# Many-to-one in reverse order still comes back sorted.
+query IIR
+SELECT * FROM pgr_aStarCost(xy(), [8, 6], 10);
+----
+6	10	5
+8	10	5
+
+# An output longer than one DuckDB vector: 5001 + 5000 rows. seq keeps counting across every
+# 2048-row chunk; path_seq restarts at 1 where the second path begins and keeps counting across the
+# next chunk boundary.
+statement ok
+CREATE TABLE long_chain AS
+SELECT i AS id, i AS source, i + 1 AS target, 1.0 AS cost,
+       i::DOUBLE AS x1, 0.0 AS y1, (i + 1)::DOUBLE AS x2, 0.0 AS y2
+FROM range(1, 5001) t(i);
+
+query III
+SELECT count(*), count(*) FILTER (WHERE path_seq = 1), max(path_seq)
+FROM pgr_aStar('SELECT * FROM long_chain', [1, 2], [5001]);
+----
+10001	2	5001
+
+query IIII
+SELECT seq, path_seq, start_vid, node
+FROM pgr_aStar('SELECT * FROM long_chain', [1, 2], [5001])
+WHERE seq IN (2048, 2049, 5001, 5002, 6144, 6145)
+ORDER BY seq;
+----
+2048	2048	1	2048
+2049	2049	1	2049
+5001	5001	1	5001
+5002	1	2	2
+6144	1143	2	1144
+6145	1144	2	1145

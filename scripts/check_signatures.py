@@ -28,6 +28,8 @@ TYPE_MAP = {
     "boolean": "BOOLEAN",
     "integer": "INTEGER",
     "double precision": "DOUBLE",
+    # pgr_bdAstar* declare factor and epsilon NUMERIC and cast them to FLOAT for the C call.
+    "numeric": "DOUBLE",
     "anyarray": "BIGINT[]",
     "geometry": "GEOMETRY",
     "geometry[]": "GEOMETRY[]",

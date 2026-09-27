@@ -30,6 +30,12 @@ FROM duckdb_functions()
 WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL
 GROUP BY ALL ORDER BY 1, 2;
 ----
+pgr_aStar	pgr_aStar
+pgr_aStarCost	pgr_aStarCost
+pgr_aStarCostMatrix	pgr_aStarCostMatrix
+pgr_bdAstar	pgr_bdAstar
+pgr_bdAstarCost	pgr_bdAstarCost
+pgr_bdAstarCostMatrix	pgr_bdAstarCostMatrix
 pgr_bdDijkstra	pgr_bdDijkstra
 pgr_bdDijkstraCost	pgr_bdDijkstraCost
 pgr_bdDijkstraCostMatrix	pgr_bdDijkstraCostMatrix
