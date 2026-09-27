@@ -3,7 +3,10 @@
 #include "pgrouting/result_emitters.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 
 #include "c_types/circuits_rt.h"
 #include "c_types/contracted_rt.h"
@@ -31,14 +34,14 @@ using duckdb_pgrouting::ResultShape;
 // rows from 1 and restart path_seq at 1 after a row whose edge is negative, the last row of a path.
 void EmitPath(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<Path_rt>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto path_seq = FlatVector::GetData<int32_t>(output.data[1]);
-	auto start_vid = FlatVector::GetData<int64_t>(output.data[2]);
-	auto end_vid = FlatVector::GetData<int64_t>(output.data[3]);
-	auto node = FlatVector::GetData<int64_t>(output.data[4]);
-	auto edge = FlatVector::GetData<int64_t>(output.data[5]);
-	auto cost = FlatVector::GetData<double>(output.data[6]);
-	auto agg_cost = FlatVector::GetData<double>(output.data[7]);
+	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
+	auto path_seq = FlatVector::ScatterWriter<int32_t>(output.data[1]);
+	auto start_vid = FlatVector::ScatterWriter<int64_t>(output.data[2]);
+	auto end_vid = FlatVector::ScatterWriter<int64_t>(output.data[3]);
+	auto node = FlatVector::ScatterWriter<int64_t>(output.data[4]);
+	auto edge = FlatVector::ScatterWriter<int64_t>(output.data[5]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[6]);
+	auto agg_cost = FlatVector::ScatterWriter<double>(output.data[7]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		const auto &row = rows[k];
@@ -58,9 +61,9 @@ void EmitPath(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 // this. The driver has already sorted the pairs by component, then by node.
 void EmitPairs(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *pairs = result.Rows<II_t_rt>();
-	auto seq = FlatVector::GetData<int64_t>(output.data[0]);
-	auto component = FlatVector::GetData<int64_t>(output.data[1]);
-	auto node = FlatVector::GetData<int64_t>(output.data[2]);
+	auto seq = FlatVector::ScatterWriter<int64_t>(output.data[0]);
+	auto component = FlatVector::ScatterWriter<int64_t>(output.data[1]);
+	auto node = FlatVector::ScatterWriter<int64_t>(output.data[2]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		seq[i] = NumericCast<int64_t>(k + 1);
@@ -75,14 +78,14 @@ void EmitPairs(const DriverResult &result, EmitState &state, idx_t n, DataChunk 
 // order, whatever order its C entry builds the tuple in.
 void EmitMst(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<MST_rt>();
-	auto seq = FlatVector::GetData<int64_t>(output.data[0]);
-	auto depth = FlatVector::GetData<int64_t>(output.data[1]);
-	auto start_vid = FlatVector::GetData<int64_t>(output.data[2]);
-	auto pred = FlatVector::GetData<int64_t>(output.data[3]);
-	auto node = FlatVector::GetData<int64_t>(output.data[4]);
-	auto edge = FlatVector::GetData<int64_t>(output.data[5]);
-	auto cost = FlatVector::GetData<double>(output.data[6]);
-	auto agg_cost = FlatVector::GetData<double>(output.data[7]);
+	auto seq = FlatVector::ScatterWriter<int64_t>(output.data[0]);
+	auto depth = FlatVector::ScatterWriter<int64_t>(output.data[1]);
+	auto start_vid = FlatVector::ScatterWriter<int64_t>(output.data[2]);
+	auto pred = FlatVector::ScatterWriter<int64_t>(output.data[3]);
+	auto node = FlatVector::ScatterWriter<int64_t>(output.data[4]);
+	auto edge = FlatVector::ScatterWriter<int64_t>(output.data[5]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[6]);
+	auto agg_cost = FlatVector::ScatterWriter<double>(output.data[7]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		const auto &row = rows[k];
@@ -105,15 +108,15 @@ void EmitMst(const DriverResult &result, EmitState &state, idx_t n, DataChunk &o
 // among the input restrictions instead.
 void EmitKsp(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<Path_rt>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto path_id = FlatVector::GetData<int32_t>(output.data[1]);
-	auto path_seq = FlatVector::GetData<int32_t>(output.data[2]);
-	auto start_vid = FlatVector::GetData<int64_t>(output.data[3]);
-	auto end_vid = FlatVector::GetData<int64_t>(output.data[4]);
-	auto node = FlatVector::GetData<int64_t>(output.data[5]);
-	auto edge = FlatVector::GetData<int64_t>(output.data[6]);
-	auto cost = FlatVector::GetData<double>(output.data[7]);
-	auto agg_cost = FlatVector::GetData<double>(output.data[8]);
+	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
+	auto path_id = FlatVector::ScatterWriter<int32_t>(output.data[1]);
+	auto path_seq = FlatVector::ScatterWriter<int32_t>(output.data[2]);
+	auto start_vid = FlatVector::ScatterWriter<int64_t>(output.data[3]);
+	auto end_vid = FlatVector::ScatterWriter<int64_t>(output.data[4]);
+	auto node = FlatVector::ScatterWriter<int64_t>(output.data[5]);
+	auto edge = FlatVector::ScatterWriter<int64_t>(output.data[6]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[7]);
+	auto agg_cost = FlatVector::ScatterWriter<double>(output.data[8]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		const auto &row = rows[k];
@@ -137,16 +140,16 @@ void EmitKsp(const DriverResult &result, EmitState &state, idx_t n, DataChunk &o
 // writes it.
 void EmitRoutes(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<Routes_t>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto path_id = FlatVector::GetData<int32_t>(output.data[1]);
-	auto path_seq = FlatVector::GetData<int32_t>(output.data[2]);
-	auto start_vid = FlatVector::GetData<int64_t>(output.data[3]);
-	auto end_vid = FlatVector::GetData<int64_t>(output.data[4]);
-	auto node = FlatVector::GetData<int64_t>(output.data[5]);
-	auto edge = FlatVector::GetData<int64_t>(output.data[6]);
-	auto cost = FlatVector::GetData<double>(output.data[7]);
-	auto agg_cost = FlatVector::GetData<double>(output.data[8]);
-	auto route_agg_cost = FlatVector::GetData<double>(output.data[9]);
+	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
+	auto path_id = FlatVector::ScatterWriter<int32_t>(output.data[1]);
+	auto path_seq = FlatVector::ScatterWriter<int32_t>(output.data[2]);
+	auto start_vid = FlatVector::ScatterWriter<int64_t>(output.data[3]);
+	auto end_vid = FlatVector::ScatterWriter<int64_t>(output.data[4]);
+	auto node = FlatVector::ScatterWriter<int64_t>(output.data[5]);
+	auto edge = FlatVector::ScatterWriter<int64_t>(output.data[6]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[7]);
+	auto agg_cost = FlatVector::ScatterWriter<double>(output.data[8]);
+	auto route_agg_cost = FlatVector::ScatterWriter<double>(output.data[9]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		const auto &row = rows[k];
@@ -167,10 +170,10 @@ void EmitRoutes(const DriverResult &result, EmitState &state, idx_t n, DataChunk
 // node, cost and agg_cost through.
 void EmitTspTour(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<TSP_tour_rt>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto node = FlatVector::GetData<int64_t>(output.data[1]);
-	auto cost = FlatVector::GetData<double>(output.data[2]);
-	auto agg_cost = FlatVector::GetData<double>(output.data[3]);
+	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
+	auto node = FlatVector::ScatterWriter<int64_t>(output.data[1]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[2]);
+	auto agg_cost = FlatVector::ScatterWriter<double>(output.data[3]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		seq[i] = NumericCast<int32_t>(k + 1);
@@ -185,8 +188,8 @@ void EmitTspTour(const DriverResult &result, EmitState &state, idx_t n, DataChun
 // wrappers select only the id.
 void EmitIds(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<int64_t>();
-	auto seq = FlatVector::GetData<int64_t>(output.data[0]);
-	auto id = FlatVector::GetData<int64_t>(output.data[1]);
+	auto seq = FlatVector::ScatterWriter<int64_t>(output.data[0]);
+	auto id = FlatVector::ScatterWriter<int64_t>(output.data[1]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		seq[i] = NumericCast<int64_t>(k + 1);
@@ -200,9 +203,9 @@ void EmitIds(const DriverResult &result, EmitState &state, idx_t n, DataChunk &o
 // an INTEGER seq.
 void EmitIdValue(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<II_t_rt>();
-	auto seq = FlatVector::GetData<int64_t>(output.data[0]);
-	auto id = FlatVector::GetData<int64_t>(output.data[1]);
-	auto value = FlatVector::GetData<int64_t>(output.data[2]);
+	auto seq = FlatVector::ScatterWriter<int64_t>(output.data[0]);
+	auto id = FlatVector::ScatterWriter<int64_t>(output.data[1]);
+	auto value = FlatVector::ScatterWriter<int64_t>(output.data[2]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		seq[i] = NumericCast<int64_t>(k + 1);
@@ -216,9 +219,9 @@ void EmitIdValue(const DriverResult &result, EmitState &state, idx_t n, DataChun
 // its to_vid being 0.
 void EmitTriples(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<IID_t_rt>();
-	auto from_vid = FlatVector::GetData<int64_t>(output.data[0]);
-	auto to_vid = FlatVector::GetData<int64_t>(output.data[1]);
-	auto cost = FlatVector::GetData<double>(output.data[2]);
+	auto from_vid = FlatVector::ScatterWriter<int64_t>(output.data[0]);
+	auto to_vid = FlatVector::ScatterWriter<int64_t>(output.data[1]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[2]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		from_vid[i] = rows[k].from_vid;
@@ -231,11 +234,11 @@ void EmitTriples(const DriverResult &result, EmitState &state, idx_t n, DataChun
 // source, target, cost and reverse_cost through; Edge_rt's id is not emitted.
 void EmitEdge(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<Edge_rt>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto source = FlatVector::GetData<int64_t>(output.data[1]);
-	auto target = FlatVector::GetData<int64_t>(output.data[2]);
-	auto cost = FlatVector::GetData<double>(output.data[3]);
-	auto reverse_cost = FlatVector::GetData<double>(output.data[4]);
+	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
+	auto source = FlatVector::ScatterWriter<int64_t>(output.data[1]);
+	auto target = FlatVector::ScatterWriter<int64_t>(output.data[2]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[3]);
+	auto reverse_cost = FlatVector::ScatterWriter<double>(output.data[4]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		seq[i] = NumericCast<int32_t>(k + 1);
@@ -250,11 +253,11 @@ void EmitEdge(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 // Line_graph_full_rt's id is not emitted.
 void EmitLineGraphFull(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<Line_graph_full_rt>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto source = FlatVector::GetData<int64_t>(output.data[1]);
-	auto target = FlatVector::GetData<int64_t>(output.data[2]);
-	auto cost = FlatVector::GetData<double>(output.data[3]);
-	auto edge = FlatVector::GetData<int64_t>(output.data[4]);
+	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
+	auto source = FlatVector::ScatterWriter<int64_t>(output.data[1]);
+	auto target = FlatVector::ScatterWriter<int64_t>(output.data[2]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[3]);
+	auto edge = FlatVector::ScatterWriter<int64_t>(output.data[4]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		seq[i] = NumericCast<int32_t>(k + 1);
@@ -270,10 +273,10 @@ void EmitLineGraphFull(const DriverResult &result, EmitState &state, idx_t n, Da
 // its targets always leave in the same chunk.
 void EmitTransitiveClosure(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<TransitiveClosure_rt>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto vid = FlatVector::GetData<int64_t>(output.data[1]);
+	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
+	auto vid = FlatVector::ScatterWriter<int64_t>(output.data[1]);
 	auto &targets = output.data[2];
-	auto entries = FlatVector::GetData<list_entry_t>(targets);
+	auto entries = FlatVector::ScatterWriter<list_entry_t>(targets);
 	const idx_t base = ListVector::GetListSize(targets);
 	idx_t size = base;
 	for (idx_t i = 0; i < n; i++) {
@@ -285,7 +288,7 @@ void EmitTransitiveClosure(const DriverResult &result, EmitState &state, idx_t n
 		size += count;
 	}
 	ListVector::Reserve(targets, size);
-	auto child = FlatVector::GetData<int64_t>(ListVector::GetEntry(targets));
+	auto child = FlatVector::ScatterWriter<int64_t>(ListVector::GetChildMutable(targets));
 	for (idx_t i = 0; i < n; i++) {
 		const auto &row = rows[state.offset + i];
 		for (idx_t j = 0; j < entries[i].length; j++) {
@@ -299,10 +302,10 @@ void EmitTransitiveClosure(const DriverResult &result, EmitState &state, idx_t n
 // passes edge, cost and mincut through.
 void EmitStoerWagner(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<StoerWagner_t>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto edge = FlatVector::GetData<int64_t>(output.data[1]);
-	auto cost = FlatVector::GetData<double>(output.data[2]);
-	auto mincut = FlatVector::GetData<double>(output.data[3]);
+	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
+	auto edge = FlatVector::ScatterWriter<int64_t>(output.data[1]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[2]);
+	auto mincut = FlatVector::ScatterWriter<double>(output.data[3]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		seq[i] = NumericCast<int32_t>(k + 1);
@@ -317,15 +320,15 @@ void EmitStoerWagner(const DriverResult &result, EmitState &state, idx_t n, Data
 // circuit with a row of edge -1 back at its start.
 void EmitCircuits(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<circuits_rt>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto path_id = FlatVector::GetData<int32_t>(output.data[1]);
-	auto path_seq = FlatVector::GetData<int32_t>(output.data[2]);
-	auto start_vid = FlatVector::GetData<int64_t>(output.data[3]);
-	auto end_vid = FlatVector::GetData<int64_t>(output.data[4]);
-	auto node = FlatVector::GetData<int64_t>(output.data[5]);
-	auto edge = FlatVector::GetData<int64_t>(output.data[6]);
-	auto cost = FlatVector::GetData<double>(output.data[7]);
-	auto agg_cost = FlatVector::GetData<double>(output.data[8]);
+	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
+	auto path_id = FlatVector::ScatterWriter<int32_t>(output.data[1]);
+	auto path_seq = FlatVector::ScatterWriter<int32_t>(output.data[2]);
+	auto start_vid = FlatVector::ScatterWriter<int64_t>(output.data[3]);
+	auto end_vid = FlatVector::ScatterWriter<int64_t>(output.data[4]);
+	auto node = FlatVector::ScatterWriter<int64_t>(output.data[5]);
+	auto edge = FlatVector::ScatterWriter<int64_t>(output.data[6]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[7]);
+	auto agg_cost = FlatVector::ScatterWriter<double>(output.data[8]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		const auto &row = rows[k];
@@ -346,14 +349,14 @@ void EmitCircuits(const DriverResult &result, EmitState &state, idx_t n, DataChu
 // select.
 void EmitFlow(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<Flow_t>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto edge = FlatVector::GetData<int64_t>(output.data[1]);
-	auto source = FlatVector::GetData<int64_t>(output.data[2]);
-	auto target = FlatVector::GetData<int64_t>(output.data[3]);
-	auto flow = FlatVector::GetData<int64_t>(output.data[4]);
-	auto residual_capacity = FlatVector::GetData<int64_t>(output.data[5]);
-	auto cost = FlatVector::GetData<double>(output.data[6]);
-	auto agg_cost = FlatVector::GetData<double>(output.data[7]);
+	auto seq = FlatVector::ScatterWriter<int32_t>(output.data[0]);
+	auto edge = FlatVector::ScatterWriter<int64_t>(output.data[1]);
+	auto source = FlatVector::ScatterWriter<int64_t>(output.data[2]);
+	auto target = FlatVector::ScatterWriter<int64_t>(output.data[3]);
+	auto flow = FlatVector::ScatterWriter<int64_t>(output.data[4]);
+	auto residual_capacity = FlatVector::ScatterWriter<int64_t>(output.data[5]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[6]);
+	auto agg_cost = FlatVector::ScatterWriter<double>(output.data[7]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
 		const auto &row = rows[k];
@@ -375,17 +378,17 @@ void EmitFlow(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 template <class ROW>
 void EmitContractedColumns(const ROW *rows, EmitState &state, idx_t n, DataChunk &output) {
 	auto &type = output.data[0];
-	auto type_data = FlatVector::GetData<string_t>(type);
-	auto id = FlatVector::GetData<int64_t>(output.data[1]);
+	auto type_data = FlatVector::ScatterWriter<string_t>(type);
+	auto id = FlatVector::ScatterWriter<int64_t>(output.data[1]);
 	auto &lists = output.data[2];
-	auto entries = FlatVector::GetData<list_entry_t>(lists);
-	auto source = FlatVector::GetData<int64_t>(output.data[3]);
-	auto target = FlatVector::GetData<int64_t>(output.data[4]);
-	auto cost = FlatVector::GetData<double>(output.data[5]);
+	auto entries = FlatVector::ScatterWriter<list_entry_t>(lists);
+	auto source = FlatVector::ScatterWriter<int64_t>(output.data[3]);
+	auto target = FlatVector::ScatterWriter<int64_t>(output.data[4]);
+	auto cost = FlatVector::ScatterWriter<double>(output.data[5]);
 	idx_t size = ListVector::GetListSize(lists);
 	for (idx_t i = 0; i < n; i++) {
 		const auto &row = rows[state.offset + i];
-		type_data[i] = StringVector::AddString(type, row.type);
+		type_data[i] = string_t(row.type);
 		id[i] = row.id;
 		source[i] = row.source;
 		target[i] = row.target;
@@ -395,7 +398,7 @@ void EmitContractedColumns(const ROW *rows, EmitState &state, idx_t n, DataChunk
 		size += count;
 	}
 	ListVector::Reserve(lists, size);
-	auto child = FlatVector::GetData<int64_t>(ListVector::GetEntry(lists));
+	auto child = FlatVector::ScatterWriter<int64_t>(ListVector::GetChildMutable(lists));
 	for (idx_t i = 0; i < n; i++) {
 		const auto &row = rows[state.offset + i];
 		for (idx_t j = 0; j < entries[i].length; j++) {
@@ -412,8 +415,8 @@ void EmitContracted(const DriverResult &result, EmitState &state, idx_t n, DataC
 void EmitContractionHierarchies(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<contractionHierarchies_rt>();
 	EmitContractedColumns(rows, state, n, output);
-	auto metric = FlatVector::GetData<int64_t>(output.data[6]);
-	auto vertex_order = FlatVector::GetData<int64_t>(output.data[7]);
+	auto metric = FlatVector::ScatterWriter<int64_t>(output.data[6]);
+	auto vertex_order = FlatVector::ScatterWriter<int64_t>(output.data[7]);
 	for (idx_t i = 0; i < n; i++) {
 		metric[i] = rows[state.offset + i].metric;
 		vertex_order[i] = rows[state.offset + i].vertex_order;
@@ -422,7 +425,7 @@ void EmitContractionHierarchies(const DriverResult &result, EmitState &state, id
 
 } // namespace
 
-void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
+void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<Identifier> &names) {
 	switch (shape) {
 	case ResultShape::PATH:
 		types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT,

@@ -17,6 +17,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
@@ -71,8 +72,8 @@ unique_ptr<SelectStatement> WrapNode(unique_ptr<SelectNode> node) {
 
 unique_ptr<SubqueryExpression> ScalarSubquery(unique_ptr<SelectNode> node) {
 	auto sub = make_uniq<SubqueryExpression>();
-	sub->subquery_type = SubqueryType::SCALAR;
-	sub->subquery = WrapNode(std::move(node));
+	sub->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
+	sub->SubqueryMutable() = WrapNode(std::move(node));
 	return sub;
 }
 
@@ -91,9 +92,9 @@ unique_ptr<ParsedExpression> ListOfRows(unique_ptr<SelectStatement> query) {
 	static constexpr const char *ROW_ALIAS = "_pgr_row";
 	auto node = make_uniq<SelectNode>();
 	vector<unique_ptr<ParsedExpression>> args;
-	args.push_back(make_uniq<ColumnRefExpression>(string(ROW_ALIAS)));
-	node->select_list.push_back(make_uniq<FunctionExpression>("list", std::move(args)));
-	node->from_table = make_uniq<SubqueryRef>(std::move(query), string(ROW_ALIAS));
+	args.push_back(make_uniq<ColumnRefExpression>(Identifier(ROW_ALIAS)));
+	node->select_list.push_back(make_uniq<FunctionExpression>(Identifier("list"), std::move(args)));
+	node->from_table = make_uniq<SubqueryRef>(std::move(query), Identifier(ROW_ALIAS));
 	return ScalarSubquery(std::move(node));
 }
 
@@ -110,20 +111,20 @@ unique_ptr<ParsedExpression> ListOfRows(ClientContext &context, const string &sq
 // parser.
 void AddCTE(ClientContext &context, SelectNode &node, const char *name, const string &sql) {
 	auto info = make_uniq<CommonTableExpressionInfo>();
-	info->query = ParseSingleSelect(context, sql);
-	node.cte_map.map.insert(name, std::move(info));
+	info->query_node = std::move(ParseSingleSelect(context, sql)->node);
+	node.cte_map.map.insert(Identifier(name), std::move(info));
 }
 
 unique_ptr<TableRef> NamedTableRef(const char *name) {
 	auto ref = make_uniq<BaseTableRef>();
-	ref->table_name = name;
+	ref->SetTable(Identifier(name));
 	return std::move(ref);
 }
 
 unique_ptr<ParsedExpression> IdEqualsEdgeId() {
 	return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-	                                       make_uniq<ColumnRefExpression>("id"),
-	                                       make_uniq<ColumnRefExpression>("edge_id"));
+	                                       make_uniq<ColumnRefExpression>(Identifier("id")),
+	                                       make_uniq<ColumnRefExpression>(Identifier("edge_id")));
 }
 
 // WITH edges AS (<edges_sql>), points AS (<points_sql>)
@@ -133,7 +134,7 @@ unique_ptr<SelectStatement> EdgesOfPoints(ClientContext &context, const string &
 	auto node = make_uniq<SelectNode>();
 	AddCTE(context, *node, "edges", edges_sql);
 	AddCTE(context, *node, "points", points_sql);
-	node->select_list.push_back(make_uniq<StarExpression>("edges"));
+	node->select_list.push_back(make_uniq<StarExpression>(Identifier("edges")));
 	auto join = make_uniq<JoinRef>(JoinRefType::REGULAR);
 	join->type = JoinType::INNER;
 	join->left = NamedTableRef("edges");
@@ -149,17 +150,17 @@ unique_ptr<SelectStatement> EdgesOfPoints(ClientContext &context, const string &
 unique_ptr<SelectStatement> EdgesWithoutPoints(ClientContext &context, const string &edges_sql,
                                                const string &points_sql) {
 	auto inner = make_uniq<SelectNode>();
-	inner->select_list.push_back(make_uniq<ColumnRefExpression>("edge_id"));
+	inner->select_list.push_back(make_uniq<ColumnRefExpression>(Identifier("edge_id")));
 	inner->from_table = NamedTableRef("points");
 	inner->where_clause = IdEqualsEdgeId();
 	auto exists = make_uniq<SubqueryExpression>();
-	exists->subquery_type = SubqueryType::EXISTS;
-	exists->subquery = WrapNode(std::move(inner));
+	exists->GetSubqueryTypeMutable() = SubqueryType::EXISTS;
+	exists->SubqueryMutable() = WrapNode(std::move(inner));
 
 	auto node = make_uniq<SelectNode>();
 	AddCTE(context, *node, "edges", edges_sql);
 	AddCTE(context, *node, "points", points_sql);
-	node->select_list.push_back(make_uniq<StarExpression>("edges"));
+	node->select_list.push_back(make_uniq<StarExpression>(Identifier("edges")));
 	node->from_table = NamedTableRef("edges");
 	node->where_clause = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(exists));
 	return WrapNode(std::move(node));
@@ -167,12 +168,12 @@ unique_ptr<SelectStatement> EdgesWithoutPoints(ClientContext &context, const str
 
 // A named table-function argument is encoded as an aliased expression.
 unique_ptr<ParsedExpression> Named(unique_ptr<ParsedExpression> expr, const char *name) {
-	expr->SetAlias(string(name));
+	expr->SetAlias(Identifier(name));
 	return expr;
 }
 
 unique_ptr<ParsedExpression> Constant(Value value) {
-	return make_uniq<ConstantExpression>(std::move(value));
+	return ConstantExpression::FromValue(std::move(value));
 }
 
 unique_ptr<ParsedExpression> IdList(const Value &id) {
@@ -222,7 +223,7 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 
 // The outer SELECT list of a public overload over _pgr_exec's columns.
 vector<unique_ptr<ParsedExpression>> ProjectionList(const duckdb_pgrouting::FunctionSpec &spec) {
-	auto column_refs = [](const vector<string> &names) {
+	auto column_refs = [](const vector<Identifier> &names) {
 		vector<unique_ptr<ParsedExpression>> list;
 		for (auto &name : names) {
 			list.push_back(make_uniq<ColumnRefExpression>(name));
@@ -232,7 +233,7 @@ vector<unique_ptr<ParsedExpression>> ProjectionList(const duckdb_pgrouting::Func
 	switch (spec.flags.projection) {
 	case duckdb_pgrouting::Projection::ALL: {
 		vector<LogicalType> types;
-		vector<string> names;
+		vector<Identifier> names;
 		ShapeColumns(duckdb_pgrouting::InfoOf(spec.flags.driver).shape, types, names);
 		return column_refs(names);
 	}
@@ -351,10 +352,16 @@ vector<string> MacroParameterNames(const duckdb_pgrouting::FunctionSpec &spec) {
 }
 
 // Every column a COLUMNS select list reads must be one of the shape's own, unqualified.
-void CheckColumnRefs(const ParsedExpression &expr, const vector<string> &names, const char *function_name) {
+void CheckColumnRefs(const ParsedExpression &expr, const vector<Identifier> &names, const char *function_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &ref = expr.Cast<ColumnRefExpression>();
-		if (ref.IsQualified() || std::find(names.begin(), names.end(), ref.GetColumnName()) == names.end()) {
+		// Compared as written: Identifier equality ignores case, and a select list must name the
+		// shape's columns exactly.
+		const auto &column = ref.GetColumnName().GetIdentifierName();
+		const bool known = std::any_of(names.begin(), names.end(), [&](const Identifier &name) {
+			return name.GetIdentifierName() == column;
+		});
+		if (ref.IsQualified() || !known) {
 			throw InternalException("pgrouting: %s selects %s, which its driver does not return", function_name,
 			                        ref.ToString());
 		}
@@ -407,7 +414,7 @@ void CheckSpec(const duckdb_pgrouting::FunctionSpec &spec) {
 		break;
 	case duckdb_pgrouting::Projection::COLUMNS: {
 		vector<LogicalType> types;
-		vector<string> names;
+		vector<Identifier> names;
 		ShapeColumns(shape, types, names);
 		auto list = Parser::ParseExpressionList(spec.flags.columns);
 		if (list.empty()) {
@@ -518,8 +525,8 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	// A SELECT without FROM still needs a table reference.
 	row->from_table = make_uniq<EmptyTableRef>();
 
-	unique_ptr<ParsedExpression> edges_expr = Named(make_uniq<ConstantExpression>(Value()), "edges");
-	unique_ptr<ParsedExpression> combinations_expr = Named(make_uniq<ConstantExpression>(Value()), "combinations");
+	unique_ptr<ParsedExpression> edges_expr = Named(ConstantExpression::Null(), "edges");
+	unique_ptr<ParsedExpression> combinations_expr = Named(ConstantExpression::Null(), "combinations");
 	unique_ptr<ParsedExpression> starts_expr = Named(EmptyIdList(), "starts");
 	unique_ptr<ParsedExpression> ends_expr = Named(EmptyIdList(), "ends");
 	unique_ptr<ParsedExpression> roots_expr =
@@ -654,7 +661,7 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	args.push_back(Named(Constant(Value::BOOLEAN(null_input)), "null_input"));
 
 	auto fref = make_uniq<TableFunctionRef>();
-	fref->function = make_uniq<FunctionExpression>("_pgr_exec", std::move(args));
+	fref->function = make_uniq<FunctionExpression>(Identifier("_pgr_exec"), std::move(args));
 
 	auto outer = make_uniq<SelectNode>();
 	outer->select_list = ProjectionList(spec);
@@ -664,13 +671,14 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 		// only each path's closing row, identified the same way pgRouting's own SQL does: edge =
 		// -1.
 		outer->where_clause = make_uniq<ComparisonExpression>(
-		    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>("edge"), Constant(Value::BIGINT(-1)));
+		    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>(Identifier("edge")),
+		    Constant(Value::BIGINT(-1)));
 	}
 	if (spec.flags.projection == duckdb_pgrouting::Projection::COST_SORTED) {
 		auto order = make_uniq<OrderModifier>();
 		for (const char *column : {"start_vid", "end_vid"}) {
 			order->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST,
-			                           make_uniq<ColumnRefExpression>(string(column)));
+			                           make_uniq<ColumnRefExpression>(Identifier(column)));
 		}
 		outer->modifiers.push_back(std::move(order));
 	}
@@ -684,10 +692,11 @@ void TagFunctions(ExtensionLoader &loader) {
 	auto &db = loader.GetDatabaseInstance();
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
+	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
 	for (const auto *table : SpecTables()) {
 		for (const auto &spec : *table) {
-			auto entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, spec.upstream_name);
+			auto entry =
+			    schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier(spec.upstream_name));
 			if (!entry) {
 				throw InternalException("pgrouting: function %s was not registered", spec.upstream_name);
 			}
@@ -737,8 +746,8 @@ void RegisterScalarMacros(ExtensionLoader &loader, const string &name,
 	}
 
 	CreateMacroInfo info(CatalogType::MACRO_ENTRY);
-	info.schema = DEFAULT_SCHEMA;
-	info.name = name;
+	info.SetSchema(Identifier::DefaultSchema());
+	info.SetName(Identifier(name));
 	info.internal = true;
 	info.descriptions.push_back(duckdb_pgrouting::DescriptionOf(name));
 	for (const auto &entry : by_count) {
@@ -750,14 +759,14 @@ void RegisterScalarMacros(ExtensionLoader &loader, const string &name,
 		};
 		for (auto kind : spec.args) {
 			const string parameter = MacroParameterName(kind);
-			macro->parameters.push_back(make_uniq<ColumnRefExpression>(parameter));
+			macro->parameters.push_back(make_uniq<ColumnRefExpression>(Identifier(parameter)));
 			add_argument(parameter);
 		}
 		for (const auto &param : spec.optionals) {
 			const string parameter = param.name;
-			macro->parameters.push_back(make_uniq<ColumnRefExpression>(parameter));
-			macro->default_parameters.insert(
-			    make_pair(parameter, Constant(Value(param.default_value).DefaultCastAs(TypeOf(param.type)))));
+			macro->parameters.push_back(make_uniq<ColumnRefExpression>(Identifier(parameter)));
+			macro->default_parameters.insert(make_pair(
+			    Identifier(parameter), Constant(Value(param.default_value).DefaultCastAs(TypeOf(param.type)))));
 			add_argument(parameter + " := " + parameter);
 		}
 		auto body = Parser::ParseExpressionList("(SELECT " + string(spec.scalar_column) + " FROM " + name + "(" +
@@ -778,7 +787,7 @@ void RegisterSpecFunctions(ExtensionLoader &loader) {
 			const string name = spec.upstream_name;
 			auto entry = sets.find(name);
 			if (entry == sets.end()) {
-				entry = sets.emplace(name, TableFunctionSet(name)).first;
+				entry = sets.emplace(name, TableFunctionSet(Identifier(name))).first;
 			}
 			vector<LogicalType> types;
 			for (auto kind : spec.args) {
@@ -794,8 +803,15 @@ void RegisterSpecFunctions(ExtensionLoader &loader) {
 				}
 				TableFunction fn(variant_types, nullptr, nullptr);
 				fn.bind_replace = SpecBindReplace;
-				for (const auto &param : spec.optionals) {
-					fn.named_parameters[param.name] = TypeOf(param.type);
+				// Every defaulted parameter is also accepted by name. A typed "**kwargs" keeps that out of
+				// overload resolution, as named parameters were before DuckDB v2.0; keyword-only parameters
+				// would let a named argument's cast cost pick a different variant.
+				if (!spec.optionals.empty()) {
+					fn.GetSignature().WithTypedKwargs("options", [&](TypedKwargs &options) {
+						for (const auto &param : spec.optionals) {
+							options.Add(param.name, TypeOf(param.type));
+						}
+					});
 				}
 				// The spec row travels in the function's info so bind_replace knows which overload
 				// it is serving without re-deriving it from the argument types.

@@ -5,6 +5,7 @@
 #include <variant>
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
@@ -122,12 +123,16 @@ LogicalType TypeOf(const FieldPointer &field) {
 } // namespace
 
 void RegisterRequestParameters(TableFunction &exec) {
-	for (const auto &parameter : REQUEST_PARAMETERS) {
-		exec.named_parameters[parameter.name] = TypeOf(parameter.field);
-	}
+	// A typed "**kwargs" rather than keyword-only parameters: its options take no part in overload
+	// resolution and are cast after it, as named parameters were before DuckDB v2.0.
+	exec.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		for (const auto &parameter : REQUEST_PARAMETERS) {
+			options.Add(parameter.name, TypeOf(parameter.field));
+		}
+	});
 }
 
-void ReadRequestParameters(const named_parameter_map_t &named, DriverRequest &request) {
+void ReadRequestParameters(const named_argument_map_t &named, DriverRequest &request) {
 	for (const auto &parameter : REQUEST_PARAMETERS) {
 		auto it = named.find(parameter.name);
 		if (it == named.end() || it->second.IsNull()) {
@@ -141,8 +146,8 @@ vector<unique_ptr<ParsedExpression>> RequestArguments(const DriverRequest &reque
 	vector<unique_ptr<ParsedExpression>> args;
 	for (const auto &parameter : REQUEST_PARAMETERS) {
 		auto value = std::visit([&](auto member) { return ToValue(request.*member); }, parameter.field);
-		auto expr = make_uniq<ConstantExpression>(std::move(value));
-		expr->SetAlias(string(parameter.name));
+		auto expr = ConstantExpression::FromValue(value);
+		expr->SetAlias(Identifier(parameter.name));
 		args.push_back(std::move(expr));
 	}
 	return args;

@@ -191,10 +191,12 @@ void CheckForInterrupts() {
 	if (!state.context) {
 		return;
 	}
-	if (state.context->IsInterrupted()) {
+	try {
+		state.context->InterruptCheck();
+	} catch (...) {
 		// pgRouting's drivers catch everything, so record the reason before unwinding.
 		state.interrupted = true;
-		throw duckdb::InterruptException();
+		throw;
 	}
 }
 

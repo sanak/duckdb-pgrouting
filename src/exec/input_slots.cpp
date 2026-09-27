@@ -5,7 +5,10 @@
 #include <vector>
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "pgrouting/withpoints_keys.hpp"
@@ -112,16 +115,15 @@ duckdb_pgrouting::ColumnClass ClassOf(const LogicalType &type) {
 }
 
 // Unpacks one LIST(STRUCT) cell into per-child vectors. Returns false when the cell is NULL.
-bool Unpack(ClientContext &context, Vector &list_column, idx_t count, idx_t row,
-            duckdb_pgrouting::MaterializedInput &out) {
+bool Unpack(ClientContext &context, Vector &list_column, idx_t row, duckdb_pgrouting::MaterializedInput &out) {
 	UnifiedVectorFormat list_format;
-	list_column.ToUnifiedFormat(count, list_format);
+	list_column.ToUnifiedFormat(list_format);
 	const auto list_idx = list_format.sel->get_index(row);
 	if (!list_format.validity.RowIsValid(list_idx)) {
 		return false; // NULL input
 	}
 	const auto entry = UnifiedVectorFormat::GetData<list_entry_t>(list_format)[list_idx];
-	auto &child = ListVector::GetEntry(list_column);
+	auto &child = ListVector::GetChildMutable(list_column);
 	const auto child_count = ListVector::GetListSize(list_column);
 	auto &struct_children = StructVector::GetEntries(child);
 	auto &struct_type = ListType::GetChildType(list_column.GetType());
@@ -131,8 +133,8 @@ bool Unpack(ClientContext &context, Vector &list_column, idx_t count, idx_t row,
 	out.columns.resize(struct_children.size());
 	out.list_children.resize(struct_children.size());
 	for (idx_t c = 0; c < struct_children.size(); c++) {
-		out.names.push_back(StructType::GetChildName(struct_type, c));
-		auto *source = struct_children[c].get();
+		out.names.push_back(StructType::GetChildName(struct_type, c).GetIdentifierName());
+		auto *source = &struct_children[c];
 		if (source->GetType().id() == LogicalTypeId::DECIMAL) {
 			// pgRouting's ANY-NUMERICAL includes DECIMAL, but reading a DECIMAL cell means
 			// knowing its scale and physical width. Cast the whole column once instead.
@@ -150,12 +152,12 @@ bool Unpack(ClientContext &context, Vector &list_column, idx_t count, idx_t row,
 				out.owned.push_back(std::move(casted));
 				source = out.owned.back().get();
 			}
-			auto &elements = ListVector::GetEntry(*source);
-			elements.ToUnifiedFormat(ListVector::GetListSize(*source), out.list_children[c]);
+			const auto &elements = ListVector::GetChild(*source);
+			elements.ToUnifiedFormat(out.list_children[c]);
 		}
 		out.types.push_back(source->GetType());
 		out.classes.push_back(ClassOf(source->GetType()));
-		source->ToUnifiedFormat(child_count, out.columns[c]);
+		source->ToUnifiedFormat(out.columns[c]);
 	}
 	return true;
 }
@@ -214,7 +216,7 @@ idx_t FindInputColumn(TableFunctionBindInput &input, const char *name) {
 void CaptureRowSchema(const LogicalType &type, RowSchema &schema) {
 	auto &struct_type = ListType::GetChildType(type);
 	for (idx_t c = 0; c < StructType::GetChildCount(struct_type); c++) {
-		schema.names.push_back(StructType::GetChildName(struct_type, c));
+		schema.names.push_back(StructType::GetChildName(struct_type, c).GetIdentifierName());
 		schema.types.push_back(StructType::GetChildType(struct_type, c));
 	}
 	schema.known = true;
@@ -232,7 +234,7 @@ bool IsIdListSlot(const string &column) {
 }
 
 // _pgr_exec is catalogued and callable by any user, not only through the public overloads' bind_replace. Unpack
-// and ReadIdList reach ListVector::GetEntry / StructVector::GetEntries /
+// and ReadIdList reach ListVector::GetChildMutable / StructVector::GetEntries /
 // ListValue::GetChildren / BigIntValue::Get, all of which raise InternalException (via D_ASSERT) on
 // a type mismatch -- a class that invalidates the whole database instance. Checking each column's
 // shape once, here at bind time, turns a wrong-typed argument into an ordinary user-input error
@@ -291,7 +293,7 @@ void MaterializeInputSlots(ClientContext &context, const BoundSlots &slots, Data
 			continue;
 		}
 		duckdb_pgrouting::MaterializedInput rows;
-		if (Unpack(context, input.data[bound.column], input.size(), 0, rows)) {
+		if (Unpack(context, input.data[bound.column], 0, rows)) {
 			registry.Register(slot.registry_key(request), slot.registry_kind, std::move(rows));
 		} else if (bound.schema.known) {
 			registry.Register(slot.registry_key(request), slot.registry_kind, EmptyInput(bound.schema));

@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -34,11 +35,11 @@ unique_ptr<SelectStatement> ParseSingleSelect(ClientContext &context, const stri
 
 void ReplaceCTE(SelectStatement &statement, const char *name, unique_ptr<SelectStatement> query) {
 	auto &ctes = statement.node->cte_map.map;
-	auto entry = ctes.find(string(name));
+	auto entry = ctes.find(Identifier(name));
 	if (entry == ctes.end()) {
 		throw InternalException("pgrouting: SQL template has no CTE named %s", name);
 	}
-	entry->second->query = std::move(query);
+	entry->second->query_node = std::move(query->node);
 }
 
 vector<QueryColumn> BindColumns(ClientContext &context, const string &sql) {
@@ -48,7 +49,7 @@ vector<QueryColumn> BindColumns(ClientContext &context, const string &sql) {
 	auto bound = binder->Bind(static_cast<SQLStatement &>(*statement));
 	vector<QueryColumn> columns;
 	for (idx_t i = 0; i < bound.names.size(); i++) {
-		columns.push_back(QueryColumn {bound.names[i], bound.types[i]});
+		columns.push_back(QueryColumn {bound.names[i].GetIdentifierName(), bound.types[i]});
 	}
 	return columns;
 }
@@ -113,13 +114,13 @@ namespace {
 // ST_StartPoint stands for the whole extension: every geometry template calls it.
 bool SpatialIsLoaded(ClientContext &context) {
 	return Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY,
-	                                                   DEFAULT_SCHEMA, "st_startpoint",
+	                                                   Identifier::DefaultSchema(), Identifier("st_startpoint"),
 	                                                   OnEntryNotFound::RETURN_NULL) != nullptr;
 }
 
 bool AutoloadEnabled(ClientContext &context) {
 	Value value;
-	return context.TryGetCurrentSetting("autoload_known_extensions", value) && !value.IsNull() &&
+	return context.TryGetCurrentSetting(Identifier("autoload_known_extensions"), value) && !value.IsNull() &&
 	       BooleanValue::Get(value);
 }
 
@@ -146,7 +147,7 @@ void LogDryrun(ClientContext &context, const SelectStatement &statement) {
 }
 
 void RegisterTemplateFunction(ExtensionLoader &loader, TableFunctionSet set, bool needs_spatial) {
-	const string name = set.name;
+	const string name = set.name.GetIdentifierName();
 	CreateTableFunctionInfo info(std::move(set));
 	info.descriptions.push_back(DescriptionOf(name));
 	// What ExtensionLoader::RegisterFunction(TableFunctionSet) sets before delegating here.
@@ -156,8 +157,8 @@ void RegisterTemplateFunction(ExtensionLoader &loader, TableFunctionSet set, boo
 	auto &db = loader.GetDatabaseInstance();
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
-	auto entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, name);
+	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
+	auto entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier(name));
 	if (!entry) {
 		throw InternalException("pgrouting: function %s was not registered", name);
 	}

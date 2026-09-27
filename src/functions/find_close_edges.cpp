@@ -24,6 +24,7 @@
 #include "pgrouting/register.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -83,9 +84,9 @@ constexpr const char *EMPTY_RESULT =
     "CAST(NULL AS GEOMETRY) AS edge WHERE false";
 
 unique_ptr<ParsedExpression> Aliased(Value value, const char *alias) {
-	auto expression = make_uniq<ConstantExpression>(std::move(value));
-	expression->SetAlias(string(alias));
-	return std::move(expression);
+	auto expression = ConstantExpression::FromValue(value);
+	expression->SetAlias(Identifier(alias));
+	return expression;
 }
 
 // SELECT <points> AS points, <tolerance> AS tolerance, <cap> AS cap
@@ -193,8 +194,9 @@ void RegisterFindCloseEdges(ExtensionLoader &loader) {
 			}
 			TableFunction function(arguments, nullptr, nullptr);
 			function.bind_replace = FindCloseEdgesBindReplace;
-			function.named_parameters["cap"] = LogicalType::INTEGER;
-			function.named_parameters["dryrun"] = LogicalType::BOOLEAN;
+			function.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+				options.Add("cap", LogicalType::INTEGER).Add("dryrun", LogicalType::BOOLEAN);
+			});
 			set.AddFunction(function);
 		}
 	}
