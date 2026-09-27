@@ -29,18 +29,26 @@ class ExportSampledataTest(unittest.TestCase):
         header, rows = self.tables["edges"]
         self.assertEqual(
             ["id", "source", "target", "cost", "reverse_cost", "capacity", "reverse_capacity",
-             "geom"],
+             "x1", "y1", "x2", "y2", "geom"],
             header)
         self.assertEqual(18, len(rows))
-        self.assertEqual(["1", "5", "6", "1.0", "1.0", "80", "130", "LINESTRING(2 0,2 1)"], rows[0])
-        self.assertEqual(["2", "6", "10", "-1.0", "1.0", "-1", "100", "LINESTRING(2 1,3 1)"], rows[1])
+        self.assertEqual(["1", "5", "6", "1.0", "1.0", "80", "130", "2.0", "0.0", "2.0", "1.0",
+                          "LINESTRING(2 0,2 1)"], rows[0])
+        self.assertEqual(["2", "6", "10", "-1.0", "1.0", "-1", "100", "2.0", "1.0", "3.0", "1.0",
+                          "LINESTRING(2 1,3 1)"], rows[1])
         self.assertEqual([str(n) for n in range(1, 19)], [row[0] for row in rows])
 
     def test_edge_geometry_keeps_the_literal_digits(self):
         _, rows = self.tables["edges"]
         # Edge 17 ends a hair short of x = 2 upstream; the digits are copied, never re-formatted.
-        self.assertEqual("LINESTRING(0.5 3.5,1.999999999999 3.5)", rows[16][7])
-        self.assertEqual("LINESTRING(3.5 2.3,3.5 4)", rows[17][7])
+        self.assertEqual("LINESTRING(0.5 3.5,1.999999999999 3.5)", rows[16][11])
+        self.assertEqual("LINESTRING(3.5 2.3,3.5 4)", rows[17][11])
+
+    def test_edge_coordinates_are_the_geometry_end_points(self):
+        _, rows = self.tables["edges"]
+        # Upstream fills x1..y2 from the vertices, which are these same end points.
+        self.assertEqual(["0.5", "3.5", "1.999999999999", "3.5"], rows[16][7:11])
+        self.assertEqual(["3.5", "2.3", "3.5", "4.0"], rows[17][7:11])
 
     def test_vertices_arrays_and_nulls(self):
         header, rows = self.tables["vertices"]
