@@ -8,6 +8,11 @@ EXT_CONFIG=${PROJ_DIR}extension_config.cmake
 # Include the Makefile from extension-ci-tools
 include extension-ci-tools/makefiles/duckdb_extension.Makefile
 
+# No duckdb-spatial binary is published for an unreleased DuckDB, so on this line every unittest
+# run, native or Wasm, skips the tests tagged spatial. Drop this when the branch builds against
+# a released DuckDB.
+export DUCKDB_TEST_CONFIG := $(CURDIR)/test/configs/skip_spatial.json
+
 HOOKS_SRC ?= $(PROJ_DIR)scripts/git-hooks
 
 # Installs the local commit guards. Patterns live in .git/info/forbidden-patterns (untracked).
@@ -55,6 +60,11 @@ W1_LINK_FLAGS_wasm_threads = -fwasm-exceptions -pthread -sPTHREAD_POOL_SIZE=8 -s
 W1_C_FLAGS_wasm_threads = -pthread
 W1_COMMON_LINK_FLAGS = -sNODERAWFS=1 -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB -sSTACK_SIZE=8MB -sEXIT_RUNTIME=1 --pre-js $(CURDIR)/scripts/wasm_unittest_pre.js
 
+# DUCKDB_CAPABILITIES leaves out local_extension_repository: DuckDB v2.0 links that archive into
+# the duckdb target without adding it to the DuckDBExports export set, which fails CMake's
+# generate step wherever duckdb is a static library, as under Emscripten. Automatic installs are
+# off in this build, so nothing uses it. cmake/wasm_unittest_autoregister.cmake makes the unittest
+# register the extensions it links; see that file.
 wasm_unittest:
 	$(W1_REQUIRE_VARIANT)
 	$(W1_REQUIRE_CMAKE)
@@ -62,6 +72,8 @@ wasm_unittest:
 	mkdir -p $(W1_BUILD_DIR)
 	emcmake cmake $(GENERATOR) $(BUILD_FLAGS) $(VCPKG_MANIFEST_FLAGS) $(VCPKG_EMSDK_FLAGS) \
 		-DVCPKG_TARGET_TRIPLET=wasm32-emscripten -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_SHELL=FALSE \
+		-DDUCKDB_CAPABILITIES="httplib loadable_extensions" \
+		-DCMAKE_PROJECT_INCLUDE=$(CURDIR)/cmake/wasm_unittest_autoregister.cmake \
 		-DDUCKDB_EXPLICIT_PLATFORM=$(W1_VARIANT) -DCMAKE_BUILD_TYPE=Release \
 		-DCMAKE_CXX_FLAGS="$(W1_CXX_FLAGS_$(W1_VARIANT))" -DCMAKE_C_FLAGS="$(W1_C_FLAGS_$(W1_VARIANT))" \
 		-DCMAKE_EXE_LINKER_FLAGS="$(W1_LINK_FLAGS_$(W1_VARIANT)) $(W1_COMMON_LINK_FLAGS)" \
