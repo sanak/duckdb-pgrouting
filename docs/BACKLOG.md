@@ -45,9 +45,10 @@ decision rather than an oversight.
   the same rows as `cap := 2` (the positional value), not `cap := 1` (the named one); PostgreSQL
   rejects such a call outright. DuckDB resolves named and positional arguments independently and
   this extension does not add its own check for the overlap.
-- **`pgr_bdDijkstra*`, `pgr_bdAstar*` and `pgr_binaryBreadthFirstSearch` cannot be cancelled once the algorithm is
-  running.** Upstream's `include/bdDijkstra/bdDijkstra.hpp`, `include/bdAstar/bdAstar.hpp`, `include/cpp_common/bidirectional.hpp`
-  and `include/breadthFirstSearch/binaryBreadthFirstSearch.hpp` never call `CHECK_FOR_INTERRUPTS`,
+- **`pgr_bdDijkstra*`, `pgr_bdAstar*` and `pgr_binaryBreadthFirstSearch` cannot be cancelled once
+  the algorithm is running.** Upstream's `include/bdDijkstra/bdDijkstra.hpp`,
+  `include/bdAstar/bdAstar.hpp`, `include/cpp_common/bidirectional.hpp` and
+  `include/breadthFirstSearch/binaryBreadthFirstSearch.hpp` never call `CHECK_FOR_INTERRUPTS`,
   unlike `pgr_bellmanFord`, `pgr_edwardMoore` and `pgr_dagShortestPath`, whose headers do poll it
   inside their main loop. PostgreSQL runs the same unmodified algorithm bodies and is equally
   uncancellable there, so this is not a regression introduced by the shared interrupt path.
@@ -91,7 +92,7 @@ decision rather than an oversight.
   and its `differing_rows: 2` matches q93/q133's own two differing cells exactly). A future
   contributor who wants an exact-row regression signal for one of these three specifically, rather
   than relying on q96's coverage of the same tie, should add a hand-written block for it to
-  `test/sql/dijkstra.test` the way q4/q5/q6/q7/q96 already have one. The old-style families' own
+  `test/sql/dijkstra.test` the way q4/q5/q6/q7/q96 already have one. Those per-family functions' own
   tie-downgraded blocks (18 in `test/pgrouting_ties.json` across pgr_bdDijkstra, pgr_bellmanFord,
   pgr_edwardMoore, pgr_dagShortestPath and pgr_binaryBreadthFirstSearch) are pinned the same way: by
   `start_vid`/`end_vid`, row count and `agg_cost` only, never the specific node/edge route on the

@@ -63,8 +63,10 @@ WHERE edge = -1 ORDER BY start_vid;
 8	10	3
 
 # On this graph's connected part every edge is unit-cost, unit-length and axis-parallel, so
-# heuristics 0 (none), 4 (Euclidean) and 5 (Manhattan, the default) never overestimate, and A* must
-# reach Dijkstra's optimum for every pair, directed and undirected.
+# heuristics 0 (none), 4 (Euclidean) and 5 (Manhattan, the default) never overestimate here, and A*
+# reaches Dijkstra's optimum for every pair, directed and undirected, on this unit axis-parallel
+# grid. This does not hold in general for a source with several targets; see the many-target
+# heuristic caveat in docs/BACKLOG.md.
 query I
 SELECT count(*)
 FROM pgr_aStarCost(xy(), [6, 1, 15], [10, 17, 3], heuristic := 0) a
@@ -89,8 +91,9 @@ WHERE a.agg_cost IS DISTINCT FROM d.agg_cost;
 ----
 0
 
-# pgr_aStarCost's wrapper sorts by start_vid, end_vid (sql/astar/astarCost.sql); unsorted inputs
-# come back sorted. Costs from upstream's q7.
+# The driver already returns start_vid, end_vid order for these inputs, so this alone would not
+# catch a missing ORDER BY; the wrapper keeps one (sql/astar/astarCost.sql) to guarantee that order
+# in general. Costs from upstream's q7.
 query IIR
 SELECT * FROM pgr_aStarCost(xy(), [15, 7, 10], [15, 10, 7]);
 ----
@@ -236,7 +239,8 @@ UNION ALL SELECT start_vid, end_vid, agg_cost FROM pgr_aStar(xy(), 6, 12, true, 
 6	12	3
 6	12	3
 
-# Many-to-one in reverse order still comes back sorted.
+# Many-to-one in reverse order: the driver already returns this order too, so this does not exercise
+# the wrapper's ORDER BY either; it is kept to guarantee the order in general.
 query IIR
 SELECT * FROM pgr_aStarCost(xy(), [8, 6], 10);
 ----

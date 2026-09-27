@@ -13,21 +13,22 @@ replaced. License: GPL-2.0-or-later.
 Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`,
 `pgr_dijkstraNear`, `pgr_dijkstraNearCost`, `pgr_withPoints`, `pgr_withPointsCost`,
 `pgr_withPointsCostMatrix`, `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`,
-`pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix`, `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix`,
-`pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch`,
-`pgr_connectedComponents`, `pgr_extractVertices` and `pgr_findCloseEdges` — pgRouting's
-ninety-eight corresponding signatures, each registered once per number of its defaulted parameters
-passed positionally — and `pgr_version()`. The `pgr_dijkstra` and `pgr_withPoints` families call
-pgRouting's unified `do_shortestPath` driver; with points given, DuckDB also materializes the two
-edge queries that driver derives from the edge and points SQL. The other seven families call their
-own per-family `pgr_do_*` drivers through one adapter on the pg_compat side; the two A* families also
-read each edge's end-point coordinates (`x1`, `y1`, `x2`, `y2`).
-`pgr_connectedComponents` goes through the same adapter and exec function (`_pgr_exec`), which returns its
-vertex/component pairs instead of path rows. `pgr_extractVertices` and `pgr_findCloseEdges`, which
-upstream writes in PL/pgSQL, are reimplemented as bind_replace functions. Each binds the caller's
-edge query, picks one of upstream's modes, and rewrites the call into a fixed DuckDB query
-(`src/functions/sql_template.cpp`). Their geometry work calls duckdb-spatial's `ST_*` functions at
-run time.
+`pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix`, `pgr_bdAstar`, `pgr_bdAstarCost`,
+`pgr_bdAstarCostMatrix`, `pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`,
+`pgr_binaryBreadthFirstSearch`, `pgr_connectedComponents`, `pgr_extractVertices` and
+`pgr_findCloseEdges` — pgRouting's ninety-eight corresponding signatures, each registered once per
+number of its defaulted parameters passed positionally — and `pgr_version()`. The `pgr_dijkstra` and
+`pgr_withPoints` families call pgRouting's unified `do_shortestPath` driver; with points given,
+DuckDB also materializes the two edge queries that driver derives from the edge and points SQL. The
+other seven families call their own per-family `pgr_do_*` drivers through one adapter on the
+pg_compat side; the two A* families also read each edge's end-point coordinates (`x1`, `y1`, `x2`,
+`y2`).
+`pgr_connectedComponents` goes through the same adapter and exec function (`_pgr_exec`), which
+returns its vertex/component pairs instead of path rows. `pgr_extractVertices` and
+`pgr_findCloseEdges`, which upstream writes in PL/pgSQL, are reimplemented as bind_replace
+functions. Each binds the caller's edge query, picks one of upstream's modes, and rewrites the call
+into a fixed DuckDB query (`src/functions/sql_template.cpp`). Their geometry work calls
+duckdb-spatial's `ST_*` functions at run time.
 Every public function carries a catalog description and an example (`duckdb_functions().description`
 / `.examples`), registered from `src/functions/function_docs.cpp`.
 
@@ -234,9 +235,13 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
   a `DRIVERS` row (`src/include/pgrouting/driver_kind.hpp`), a case in one
   `src/pg_compat/src/drivers_*.cpp`, any new request field with its row in
   `src/exec/request_params.cpp`, and a `*_specs.cpp` table listed in `spec_functions.cpp`. A new
+  `*_specs.cpp` file (and any new `drivers_*.cpp` file) also needs its own
+  `DUCKDB_PGROUTING_SOURCES` entry in `CMakeLists.txt` and an `extern` declaration in
+  `src/functions/function_spec.hpp`. A new
   upstream result struct adds a `ResultShape` value with its columns and emitter
   (`src/exec/result_emitters.cpp`) and, when its rows own arrays, a case in `DriverResult`'s
-  release.
+  release. Every public function the family adds also needs its row in
+  `src/functions/function_docs.cpp`; registration throws without it.
 - The order in which an input query's rows reach pgRouting is not guaranteed stable: DuckDB's
   `list()` does not preserve scan order once the scan runs on several threads, and `ORDER BY` in
   the caller's own SQL does not change that. Boost breaks an equal-cost predecessor tie by
