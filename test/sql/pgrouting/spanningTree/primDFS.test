@@ -1,0 +1,84 @@
+# name: test/sql/pgrouting/spanningTree/primDFS.test
+# description: Generated from pgRouting's primDFS documentation queries
+# group: [pgrouting]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
+# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
+#
+# Source: third_party/pgrouting/docqueries/spanningTree/primDFS.pg and the committed transcript beside it. The queries and their expected rows are
+# upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
+# sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
+# line with its reason, so what this file does not cover is visible here rather than implied.
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE vertices AS
+  SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges,
+         CAST(out_edges AS BIGINT[]) AS out_edges, x, y
+  FROM read_csv_auto('test/data/sampledata/vertices.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE combinations AS
+  SELECT * FROM read_csv_auto('test/data/sampledata/combinations.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+  SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+  FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+# q1: which minimum spanning forest is built among equal-cost edges depends on the C++ standard
+# library's priority-queue order, so only what every such forest guarantees is asserted: each
+# root's single depth-0 row, no repeated node, and every other row hanging off its predecessor one
+# level up at the predecessor's cost plus its own
+query IITI
+WITH q AS (SELECT * FROM pgr_primDFS(
+  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  6))
+SELECT start_vid,
+       count(*) FILTER (WHERE depth = 0),
+       count(*) = count(DISTINCT node),
+       count(*) FILTER (WHERE depth > 0 AND NOT EXISTS (
+         SELECT 1 FROM q AS p
+         WHERE p.start_vid = q.start_vid AND p.node = q.pred AND p.depth = q.depth - 1
+           AND abs(p.agg_cost + q.cost - q.agg_cost) < 1e-9))
+FROM q
+GROUP BY start_vid
+ORDER BY start_vid;
+----
+6	1	true	0
+
+# q2: which minimum spanning forest is built among equal-cost edges depends on the C++ standard
+# library's priority-queue order, so only what every such forest guarantees is asserted: each
+# root's single depth-0 row, no repeated node, and every other row hanging off its predecessor one
+# level up at the predecessor's cost plus its own
+query IITI
+WITH q AS (SELECT * FROM pgr_primDFS(
+  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  ARRAY[9, 6], max_depth => 3))
+SELECT start_vid,
+       count(*) FILTER (WHERE depth = 0),
+       count(*) = count(DISTINCT node),
+       count(*) FILTER (WHERE depth > 0 AND NOT EXISTS (
+         SELECT 1 FROM q AS p
+         WHERE p.start_vid = q.start_vid AND p.node = q.pred AND p.depth = q.depth - 1
+           AND abs(p.agg_cost + q.cost - q.agg_cost) < 1e-9))
+FROM q
+GROUP BY start_vid
+ORDER BY start_vid;
+----
+6	1	true	0
+9	1	true	0
+

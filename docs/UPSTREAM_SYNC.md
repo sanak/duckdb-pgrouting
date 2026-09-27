@@ -11,11 +11,12 @@ the following checklist, in order. Every step either passes or tells you exactly
    `cmake/pgrouting_sources.cmake`.
 
    If upstream moved one of the per-family drivers (pgr_aStar, pgr_bdAstar, pgr_bdDijkstra,
-   pgr_bellmanFord, pgr_edwardMoore, pgr_dagShortestPath, pgr_binaryBreadthFirstSearch) onto
-   `do_shortestPath`, delete its case in its `src/pg_compat/src/drivers_*.cpp` file, switch that
-   family's rows in its `src/functions/*_specs.cpp` table to `DriverKind::SHORTEST_PATH` with the
-   flags its new SQL wrapper passes, and drop its driver file from
-   `cmake/pgrouting_sources.cmake`.
+   pgr_bellmanFord, pgr_edwardMoore, pgr_dagShortestPath, pgr_binaryBreadthFirstSearch,
+   pgr_drivingDistance, pgr_withPointsDD, pgr_kruskal, pgr_prim, pgr_breadthFirstSearch,
+   pgr_depthFirstSearch) onto `do_shortestPath`, delete its case in its
+   `src/pg_compat/src/drivers_*.cpp` file, switch that family's rows in its
+   `src/functions/*_specs.cpp` table to `DriverKind::SHORTEST_PATH` with the flags its new SQL
+   wrapper passes, and drop its driver file from `cmake/pgrouting_sources.cmake`.
 2. Update `cmake/pgrouting_sources.cmake` for added or removed upstream files, one entry at a
    time. Never glob: the list is deliberately explicit so that a new upstream file is a decision
    rather than an accident. Do not list a `*_process.cpp` (those talk to PostgreSQL and this
@@ -56,8 +57,9 @@ the following checklist, in order. Every step either passes or tells you exactly
    strings are the keys the driver looks the pgr_withPoints inputs up by. A drift shows up as every
    pgr_withPoints query failing with "no 'edges' input registered for query". Upstream keeps a
    second copy of the same template in `third_party/pgrouting/src/withPoints/get_new_queries.cpp`,
-   used by the pgr_withPoints drivers not ported yet (Via, DD, KSP); a port of those must use the
-   same keys.
+   which pgr_withPointsDD's C entry calls; `src/pg_compat/src/drivers_tree.cpp` passes the driver
+   the same `WithPointsDerivedKeys` strings, so diff that copy too. The pgr_withPoints drivers not
+   ported yet (Via, KSP) call it as well; a port of those must use the same keys.
 7. Run the full suite: `make test_debug`, then push and let CI cover the remaining eight native
    platforms and the three Wasm variants.
 8. The bump lands on `main` only. The `v2.0-cyanoptera` next line picks it up at its next

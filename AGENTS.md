@@ -15,14 +15,19 @@ Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_
 `pgr_withPointsCostMatrix`, `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`,
 `pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix`, `pgr_bdAstar`, `pgr_bdAstarCost`,
 `pgr_bdAstarCostMatrix`, `pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`,
-`pgr_binaryBreadthFirstSearch`, `pgr_connectedComponents`, `pgr_extractVertices` and
-`pgr_findCloseEdges` — pgRouting's ninety-eight corresponding signatures, each registered once per
-number of its defaulted parameters passed positionally — and `pgr_version()`. The `pgr_dijkstra` and
-`pgr_withPoints` families call pgRouting's unified `do_shortestPath` driver; with points given,
-DuckDB also materializes the two edge queries that driver derives from the edge and points SQL. The
-other seven families call their own per-family `pgr_do_*` drivers through one adapter on the
-pg_compat side; the two A* families also read each edge's end-point coordinates (`x1`, `y1`, `x2`,
-`y2`).
+`pgr_binaryBreadthFirstSearch`, `pgr_drivingDistance`, `pgr_withPointsDD`, `pgr_kruskal`,
+`pgr_kruskalBFS`, `pgr_kruskalDFS`, `pgr_kruskalDD`, `pgr_prim`, `pgr_primBFS`, `pgr_primDFS`,
+`pgr_primDD`, `pgr_breadthFirstSearch`, `pgr_depthFirstSearch`, `pgr_connectedComponents`,
+`pgr_extractVertices` and `pgr_findCloseEdges` — pgRouting's one hundred and twenty-six
+corresponding signatures, each registered once per number of its defaulted parameters passed
+positionally — and `pgr_version()`. The `pgr_dijkstra` and `pgr_withPoints` families call
+pgRouting's unified `do_shortestPath` driver; with points given, DuckDB also materializes the two
+edge queries that driver derives from the edge and points SQL. The other thirteen families call
+their own per-family `pgr_do_*` drivers through one adapter on the pg_compat side; the two A*
+families also read each edge's end-point coordinates (`x1`, `y1`, `x2`, `y2`), and
+`pgr_withPointsDD` reads the same two derived edge queries as `pgr_withPoints`. The root-based
+families (driving distance, spanning trees, breadth- and depth-first search) take a `roots` list and
+return tree rows (`seq, depth, start_vid, pred, node, edge, cost, agg_cost`).
 `pgr_connectedComponents` goes through the same adapter and exec function (`_pgr_exec`), which
 returns its vertex/component pairs instead of path rows. `pgr_extractVertices` and
 `pgr_findCloseEdges`, which upstream writes in PL/pgSQL, are reimplemented as bind_replace

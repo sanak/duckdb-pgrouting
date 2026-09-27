@@ -146,6 +146,90 @@
       "upstream_rows": 10
     }
   },
+  "driving_distance/drivingDistance.pg": {
+    "q10": {
+      "differing_rows": 3,
+      "reason": "equal-cost tie",
+      "upstream_rows": 23
+    },
+    "q5": {
+      "differing_rows": 1,
+      "reason": "equal-cost tie",
+      "upstream_rows": 13
+    }
+  },
+  "spanningTree/kruskal.pg": {
+    "q1": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 14
+    }
+  },
+  "spanningTree/kruskalBFS.pg": {
+    "q1": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 13
+    },
+    "q2": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 12
+    }
+  },
+  "spanningTree/kruskalDD.pg": {
+    "q1": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 5
+    },
+    "q2": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 12
+    }
+  },
+  "spanningTree/kruskalDFS.pg": {
+    "q1": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 13
+    },
+    "q2": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 12
+    }
+  },
+  "spanningTree/prim.pg": {
+    "q1": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 11
+    }
+  },
+  "spanningTree/primBFS.pg": {
+    "q1": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 13
+    },
+    "q2": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 17
+    }
+  },
+  "spanningTree/primDD.pg": {
+    "q1": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 12
+    },
+    "q2": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 17
+    }
+  },
+  "spanningTree/primDFS.pg": {
+    "q1": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 13
+    },
+    "q2": {
+      "reason": "equal-cost spanning forest",
+      "upstream_rows": 17
+    }
+  },
   "traversal/binaryBreadthFirstSearch.pg": {
     "q2": {
       "differing_rows": 2,

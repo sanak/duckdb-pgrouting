@@ -1,0 +1,117 @@
+# name: test/sql/pgrouting/driving_distance/drivingDistance.test
+# description: Generated from pgRouting's drivingDistance documentation queries
+# group: [pgrouting]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
+# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
+#
+# Source: third_party/pgrouting/docqueries/driving_distance/drivingDistance.pg and the committed transcript beside it. The queries and their expected rows are
+# upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
+# sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
+# line with its reason, so what this file does not cover is visible here rather than implied.
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE vertices AS
+  SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges,
+         CAST(out_edges AS BIGINT[]) AS out_edges, x, y
+  FROM read_csv_auto('test/data/sampledata/vertices.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE combinations AS
+  SELECT * FROM read_csv_auto('test/data/sampledata/combinations.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+  SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+  FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+# q5: this build reaches the same vertices at the same costs through different equal-cost
+# predecessors, so only what upstream guarantees is asserted: each root's vertices and their costs
+query IIR
+SELECT start_vid, node, agg_cost
+FROM (SELECT * FROM pgr_drivingDistance(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  11, 3.0))
+ORDER BY 1, 2, 3;
+----
+11	1	3
+11	3	2
+11	5	3
+11	6	2
+11	7	1
+11	8	2
+11	9	3
+11	10	3
+11	11	0
+11	12	1
+11	15	2
+11	16	1
+11	17	2
+
+# q6
+query IIIIIIRR
+SELECT * FROM pgr_drivingDistance(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  array[11, 16], 3.0, equicost => true);
+----
+1	0	11	11	11	-1	0	0
+2	1	11	11	7	8	1	1
+3	1	11	11	12	11	1	1
+4	2	11	7	3	7	1	2
+5	2	11	7	6	4	1	2
+6	2	11	7	8	10	1	2
+7	3	11	3	1	6	1	3
+8	3	11	6	5	1	1	3
+9	3	11	8	9	14	1	3
+10	0	16	16	16	-1	0	0
+11	1	16	16	15	16	1	1
+12	1	16	16	17	15	1	1
+13	2	16	15	10	3	1	2
+
+# q10: this build reaches the same vertices at the same costs through different equal-cost
+# predecessors, so only what upstream guarantees is asserted: each root's vertices and their costs
+query IIR
+SELECT start_vid, node, agg_cost
+FROM (SELECT * FROM pgr_drivingDistance(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  array[11, 16], 3.0, directed => false))
+ORDER BY 1, 2, 3;
+----
+11	1	3
+11	3	2
+11	5	3
+11	6	2
+11	7	1
+11	8	2
+11	9	3
+11	10	1
+11	11	0
+11	12	1
+11	15	2
+11	16	1
+11	17	2
+16	3	3
+16	6	3
+16	7	2
+16	8	3
+16	10	2
+16	11	1
+16	12	2
+16	15	1
+16	16	0
+16	17	1
+

@@ -159,6 +159,10 @@ Each of these would be a change no test could observe, so none of them is made:
   either**, for the same reason: q2 passes a scalar subquery and is skipped in
   `test/pgrouting_skip.json`, and q3 calls `pgr_TSP`. `test/sql/astar.test` and
   `test/sql/bd_astar.test` pin both q2 results.
+- **`driving_distance/dijksraDD-issue729.pg` and `spanningTree/randomSpanTree.pg` produce no
+  generated test file.** The first is a regression script with no named blocks; the second
+  documents `pgr_randomSpanTree`, which pgRouting 4.0 does not publish (it is absent from
+  `sql/sigs/pgrouting--4.0.sig`).
 
 ## Open decision
 
