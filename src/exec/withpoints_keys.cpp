@@ -11,6 +11,9 @@ namespace duckdb_pgrouting {
 // built by DuckDB from an equivalent parsed query (spec_functions.cpp). If upstream
 // changes its template, every withPoints query fails with "no 'edges' input registered for query"
 // naming upstream's new string; docs/UPSTREAM_SYNC.md makes diffing the two a step of every bump.
+// The same template is `get_new_queries` in third_party/pgrouting/src/withPoints/get_new_queries.cpp,
+// which the C entry of pgr_withPointsDD (src/driving_distance/driving_distance_withPoints.c) calls;
+// that driver's inputs are registered under these keys too.
 WithPointsKeys WithPointsDerivedKeys(const std::string &edges_sql, const std::string &points_sql) {
 	WithPointsKeys keys;
 	// clang-format off

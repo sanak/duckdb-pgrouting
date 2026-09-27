@@ -50,4 +50,5 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/cpp_common/pgdata_getters.cpp
     ${PGROUTING_DIR}/src/dagShortestPath/dagShortestPath_driver.cpp
     ${PGROUTING_DIR}/src/dijkstra/shortestPath_driver.cpp
-    ${PGROUTING_DIR}/src/driving_distance/driving_distance_driver.cpp)
+    ${PGROUTING_DIR}/src/driving_distance/driving_distance_driver.cpp
+    ${PGROUTING_DIR}/src/driving_distance/driving_distance_withPoints_driver.cpp)

@@ -24,7 +24,8 @@ enum class DriverKind : uint8_t {
 	CONNECTED_COMPONENTS,
 	ASTAR,
 	BD_ASTAR,
-	DRIVING_DISTANCE
+	DRIVING_DISTANCE,
+	WITH_POINTS_DD
 };
 
 // The upstream result struct a driver fills, one value per struct. It decides _pgr_exec's output
@@ -44,7 +45,10 @@ enum class RequestCheck : uint8_t {
 	// src/astar/astar.c and src/bdAstar/bdAstar.c.
 	ASTAR_PARAMETERS,
 	// distance >= 0: src/driving_distance/driving_distance.c.
-	DRIVING_DISTANCE
+	DRIVING_DISTANCE,
+	// estimate_drivingSide (r, l or b in either case), then distance >= 0:
+	// src/driving_distance/driving_distance_withPoints.c.
+	WITH_POINTS_DD
 };
 
 struct DriverInfo {
@@ -52,11 +56,13 @@ struct DriverInfo {
 	const char *name; // the spelling _pgr_exec's `driver` argument takes
 	ResultShape shape;
 	RequestCheck check;
+	// Whether the driver reads points_sql and the two edge queries derived from it.
+	bool takes_points = false;
 };
 
 // One row per DriverKind, in enumerator order: the only list of drivers.
 inline constexpr DriverInfo DRIVERS[] = {
-    {DriverKind::SHORTEST_PATH, "shortest_path", ResultShape::PATH, RequestCheck::NONE},
+    {DriverKind::SHORTEST_PATH, "shortest_path", ResultShape::PATH, RequestCheck::NONE, true},
     {DriverKind::BD_DIJKSTRA, "bd_dijkstra", ResultShape::PATH, RequestCheck::NONE},
     {DriverKind::BELLMAN_FORD, "bellman_ford", ResultShape::PATH, RequestCheck::NONE},
     {DriverKind::EDWARD_MOORE, "edward_moore", ResultShape::PATH, RequestCheck::NONE},
@@ -66,6 +72,7 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::ASTAR, "astar", ResultShape::PATH, RequestCheck::ASTAR_PARAMETERS},
     {DriverKind::BD_ASTAR, "bd_astar", ResultShape::PATH, RequestCheck::ASTAR_PARAMETERS},
     {DriverKind::DRIVING_DISTANCE, "driving_distance", ResultShape::MST, RequestCheck::DRIVING_DISTANCE},
+    {DriverKind::WITH_POINTS_DD, "with_points_dd", ResultShape::MST, RequestCheck::WITH_POINTS_DD, true},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -80,7 +87,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::DRIVING_DISTANCE) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::WITH_POINTS_DD) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

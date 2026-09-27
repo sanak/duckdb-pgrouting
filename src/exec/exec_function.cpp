@@ -7,6 +7,8 @@
 
 #include "pgrouting/register.hpp"
 
+#include <cctype>
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/function_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -68,6 +70,16 @@ void CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 			ThrowCheck("Negative value found on 'distance'", "Must be positive");
 		}
 		return;
+	case duckdb_pgrouting::RequestCheck::WITH_POINTS_DD: {
+		const auto side = std::tolower(static_cast<unsigned char>(request.driving_side));
+		if (side != 'r' && side != 'l' && side != 'b') {
+			ThrowCheck("Invalid value of 'driving side'", "Valid value are 'r', 'l', 'b'");
+		}
+		if (request.distance < 0) {
+			ThrowCheck("Negative value found on 'distance'", "Must be positive");
+		}
+		return;
+	}
 	}
 }
 
@@ -76,8 +88,9 @@ unique_ptr<FunctionData> ExecBind(ClientContext &, TableFunctionBindInput &input
 	auto data = make_uniq<ExecBindData>();
 	ReadRequestParameters(input.named_parameters, data->request);
 	const auto &request = data->request;
-	if (request.driver != duckdb_pgrouting::DriverKind::SHORTEST_PATH && !request.points_sql.empty()) {
-		throw InvalidInputException("_pgr_exec: points_sql is only supported by driver 'shortest_path'");
+	if (!duckdb_pgrouting::InfoOf(request.driver).takes_points && !request.points_sql.empty()) {
+		throw InvalidInputException("_pgr_exec: driver '%s' takes no points_sql",
+		                            duckdb_pgrouting::InfoOf(request.driver).name);
 	}
 	auto null_input = input.named_parameters.find("null_input");
 	data->null_input = null_input != input.named_parameters.end() && !null_input->second.IsNull() &&

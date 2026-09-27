@@ -4,9 +4,13 @@
 // more roots, with its predecessor, depth and cost. Each case passes exactly the arguments its
 // upstream C entry (src/<family>/*.c) passes.
 
+#include <cctype>
+
 #include "driver_groups.hpp"
 
 #include "drivers/driving_distance/driving_distance_driver.h"
+#include "drivers/driving_distance/driving_distance_withPoints_driver.h"
+#include "pgrouting/withpoints_keys.hpp"
 
 namespace duckdb_pgrouting {
 
@@ -17,6 +21,18 @@ bool CallTreeDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 		pgr_do_drivingDistance(edges, arrays.roots, request.distance, request.directed, request.equicost,
 		                       &call.mst_rows, &call.count, &call.log, &call.notice, &call.err);
 		return true;
+	case DriverKind::WITH_POINTS_DD: {
+		// The C entry lowercases the side (estimate_drivingSide; _pgr_exec has already rejected
+		// anything but r, l, b) and derives the two edge queries with get_new_queries
+		// (src/withPoints/get_new_queries.cpp), whose template WithPointsDerivedKeys reproduces:
+		// those strings are the keys the derived inputs are registered under.
+		const auto keys = WithPointsDerivedKeys(request.edges_sql, request.points_sql);
+		const auto side = static_cast<char>(std::tolower(static_cast<unsigned char>(request.driving_side)));
+		pgr_do_withPointsDD(keys.no_points.c_str(), request.points_sql.c_str(), keys.of_points.c_str(),
+		                    arrays.roots, request.distance, side, request.directed, request.details,
+		                    request.equicost, &call.mst_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	}
 	default:
 		return false;
 	}

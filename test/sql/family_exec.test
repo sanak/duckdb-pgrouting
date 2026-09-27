@@ -146,7 +146,7 @@ SELECT * FROM _pgr_exec(
   (SELECT NULL AS edges, NULL AS combinations, []::BIGINT[] AS starts, []::BIGINT[] AS ends),
   edges_sql := '', points_sql := 'SELECT 1', driver := 'bellman_ford');
 ----
-_pgr_exec: points_sql is only supported by driver 'shortest_path'
+_pgr_exec: driver 'bellman_ford' takes no points_sql
 
 # Without the argument the exec function keeps using the unified driver.
 query IIR

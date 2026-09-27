@@ -1,0 +1,136 @@
+# name: test/sql/withpoints_dd_exec.test
+# description: _pgr_exec with the withPoints driving-distance driver: points, driving side, checks
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE pois AS SELECT pid, edge_id, side, fraction FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+# DuckDB passes a table macro's parameters to the wrapped table function's named arguments as
+# unresolved names, not as constants, so _pgr_exec(..., distance := m_distance, ...) cannot be
+# behind a macro here (see driving_distance_exec.test); every query below inlines the _pgr_exec
+# call with literal values instead. The points row and the two derived-query rows do not depend on
+# those literals, so they are factored into a plain table instead of being repeated verbatim.
+statement ok
+CREATE TABLE wpdd_common AS
+SELECT (SELECT list(p) FROM (SELECT pid, edge_id, fraction, side FROM pois) p) AS points,
+       (SELECT list(e) FROM (SELECT DISTINCT edges.* FROM edges JOIN pois ON (id = edge_id)) e)
+         AS edges_of_points,
+       (SELECT list(e) FROM (SELECT * FROM edges
+                             WHERE NOT EXISTS (SELECT 1 FROM pois WHERE id = edge_id)) e)
+         AS edges_no_points;
+
+# Upstream's q2: from point 1 within 3.3, right-hand driving, with details. One route each.
+query IR
+SELECT node, round(agg_cost, 6) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS roots, points, edges_of_points, edges_no_points
+     FROM wpdd_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_dd', distance := 3.3, driving_side := 'r',
+  directed := true, details := true, equicost := false)
+ORDER BY agg_cost, node;
+----
+-1	0
+5	0.4
+6	1.4
+-6	2.1
+7	2.4
+
+# The driving side is lowercased first, as upstream's estimate_drivingSide does.
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS roots, points, edges_of_points, edges_no_points
+     FROM wpdd_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_dd', distance := 3.3, driving_side := 'R',
+  directed := true, details := true, equicost := false);
+----
+5
+
+# Upstream's q3: left-hand driving, two roots, equicost.
+query II
+SELECT start_vid, count(*) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1, 16]::BIGINT[] AS roots, points, edges_of_points, edges_no_points
+     FROM wpdd_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_dd', distance := 3.3, driving_side := 'l',
+  directed := true, details := false, equicost := true)
+GROUP BY 1 ORDER BY 1;
+----
+-1	8
+16	6
+
+# Upstream's q4: both sides, undirected, with details.
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS roots, points, edges_of_points, edges_no_points
+     FROM wpdd_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_dd', distance := 3.3, driving_side := 'b',
+  directed := false, details := true, equicost := false);
+----
+13
+
+# The .c layer's checks (src/driving_distance/driving_distance_withPoints.c), side first, verbatim.
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS roots, points, edges_of_points, edges_no_points
+     FROM wpdd_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_dd', distance := 3.3, driving_side := 'x',
+  directed := true, details := true, equicost := false);
+----
+Invalid Input Error: Invalid value of 'driving side'
+HINT: Valid value are 'r', 'l', 'b'
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS roots, points, edges_of_points, edges_no_points
+     FROM wpdd_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_dd', distance := -1.0, driving_side := 'x',
+  directed := true, details := true, equicost := false);
+----
+Invalid value of 'driving side'
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS roots, points, edges_of_points, edges_no_points
+     FROM wpdd_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_dd', distance := 3.3, driving_side := '',
+  directed := true, details := true, equicost := false);
+----
+Invalid value of 'driving side'
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS roots, points, edges_of_points, edges_no_points
+     FROM wpdd_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_dd', distance := -1.0, driving_side := 'r',
+  directed := true, details := true, equicost := false);
+----
+Invalid Input Error: Negative value found on 'distance'
+HINT: Must be positive
+
+# STRICT: nothing is checked when an argument is NULL.
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), edges_sql := '', points_sql := 'SELECT 1',
+  driver := 'with_points_dd', driving_side := 'x', null_input := true);
+----
+0
