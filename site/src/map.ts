@@ -32,6 +32,9 @@ setWorkerUrl(mapWorkerUrl);
 
 const BASEMAP_STYLE = 'https://tiles.openfreemap.org/styles/positron';
 
+// The padding a geographic map fits its view or network inside (the abstract map uses 48).
+export const GEOGRAPHIC_PADDING = 24;
+
 export interface MapOptions {
   mode: 'abstract' | 'geographic';
   // Shown in the attribution control for the network's own data (geographic mode).
@@ -55,6 +58,9 @@ export interface RouteMap {
   // Called with an input and its new value: an extent on its button, a point on the click after it.
   onInput(handler: (input: MapInput, value: Box | LonLat) => void): void;
   setInputsEnabled(enabled: boolean): void;
+  // What the map shows, as "Use this view" reads it, at the container's current size (the
+  // resize observer has not caught up with a layout change yet); null for an abstract map.
+  view(): Box | null;
   remove(): void;
 }
 
@@ -178,7 +184,7 @@ export async function createRouteMap(
           ],
         },
     bounds: new LngLatBounds(box[0], box[1]),
-    fitBoundsOptions: { padding: geographic ? 24 : 48 },
+    fitBoundsOptions: { padding: geographic ? GEOGRAPHIC_PADDING : 48 },
     ...(options.dynamic
       ? {}
       : {
@@ -244,6 +250,11 @@ export async function createRouteMap(
     if (event.key === 'Escape') stopPicking();
   }
 
+  function shownBox(): Box {
+    const b = map.getBounds();
+    return { xmin: b.getWest(), ymin: b.getSouth(), xmax: b.getEast(), ymax: b.getNorth() };
+  }
+
   function stopPicking(): void {
     if (!picking) return;
     buttons.get(picking)?.setAttribute('aria-pressed', 'false');
@@ -280,8 +291,7 @@ export async function createRouteMap(
     button.addEventListener('click', () => {
       if (input.kind === 'extent') {
         stopPicking();
-        const b = map.getBounds();
-        inputHandler?.(input, { xmin: b.getWest(), ymin: b.getSouth(), xmax: b.getEast(), ymax: b.getNorth() });
+        inputHandler?.(input, shownBox());
       } else if (picking === input) {
         stopPicking();
       } else {
@@ -341,7 +351,8 @@ export async function createRouteMap(
       map.getSource<GeoJSONSource>('nodes')?.setData(next.nodes);
       // The view stays put unless the new network lies wholly outside it (an area typed by hand).
       const shown = map.getBounds().toArray() as Bounds;
-      if (next.bounds && !boundsOverlap(next.bounds, shown)) map.fitBounds(next.bounds, { padding: 24 });
+      if (next.bounds && !boundsOverlap(next.bounds, shown))
+        map.fitBounds(next.bounds, { padding: GEOGRAPHIC_PADDING });
       highlight({ edges: new Map(), nodes: new Map() });
       select(null);
     },
@@ -372,6 +383,11 @@ export async function createRouteMap(
     setInputsEnabled(enabled: boolean) {
       if (!enabled) stopPicking();
       for (const button of buttons.values()) button.disabled = !enabled;
+    },
+    view() {
+      if (!geographic) return null;
+      map.resize();
+      return shownBox();
     },
     remove() {
       stopPicking();

@@ -123,10 +123,61 @@ export function applyInput(
   return { sql: next };
 }
 
-// Where a map opens while its network is empty: on the area the SQL holds (a share link's, or one
-// typed by hand), so the reader sees the outline and builds the network on screen; otherwise on
-// the dataset's view.
-export function openingView(sql: string, inputs: readonly MapInput[], view: View | undefined): View | undefined {
+// What "Use this view" would make of an area preset that is still as committed, done for the
+// reader when the preset reaches the editor (the dataset opens, or the preset is chosen again):
+// the preset's own box is fitted to the frame, so its outline would not match the map. Edited SQL
+// (a share link's included), a view past the limit and no map at all leave the SQL alone (null).
+export function presetExtent(
+  sql: string,
+  inputs: readonly MapInput[],
+  presets: readonly { sql: string }[],
+  view: Box | null,
+): string | null {
+  const input = inputs.find((i) => i.kind === 'extent');
+  if (!input || !view || !presets.some((p) => p.sql === sql)) return null;
+  if (extentRefusal(view, input.maxAreaKm2 ?? Number.POSITIVE_INFINITY)) return null;
+  return writeInput(sql, input, view);
+}
+
+// The map's size in CSS pixels and the padding it fits a view inside.
+export interface Frame {
+  width: number;
+  height: number;
+  padding: number;
+}
+
+// Where a map opens while its network is empty: on the area the SQL holds (the preset's own, a
+// share link's, or one typed by hand), so the reader sees the outline and builds the network on
+// screen; otherwise on the dataset's view. Fitting a box into a frame of another shape shows more
+// than the box; when that would pass the extent's limit, so that "Use this view" would be refused
+// straight away, the box is reshaped to the frame around the same centre and the map shows the
+// box's own area (at most the limit) instead, at any window size.
+export function openingView(
+  sql: string,
+  inputs: readonly MapInput[],
+  view: View | undefined,
+  frame?: Frame,
+): View | undefined {
   const box = readInputs(sql, inputs).extent;
-  return box ? [box.xmin, box.ymin, box.xmax, box.ymax] : view;
+  const opening: View | undefined = box ? [box.xmin, box.ymin, box.xmax, box.ymax] : view;
+  const limit = inputs.find((i) => i.kind === 'extent')?.maxAreaKm2;
+  if (!opening || !frame || limit === undefined) return opening;
+  const inner = { width: frame.width - 2 * frame.padding, height: frame.height - 2 * frame.padding };
+  if (inner.width <= 0 || inner.height <= 0) return opening;
+  const [xmin, ymin, xmax, ymax] = opening;
+  const area = areaKm2({ xmin, ymin, xmax, ymax });
+  const y = (ymin + ymax) / 2;
+  // On screen a degree of longitude is cos φ of a degree of latitude (Mercator, locally).
+  const cos = Math.cos((y * Math.PI) / 180);
+  const boxAspect = ((xmax - xmin) * cos) / (ymax - ymin);
+  const frameAspect = inner.width / inner.height;
+  // What the whole map shows: the fitted box, the frame's spare side and the padding.
+  const grow = (frame.width * frame.height) / (inner.width * inner.height);
+  const shown = area * Math.max(boxAspect / frameAspect, frameAspect / boxAspect) * grow;
+  if (shown <= limit) return opening;
+  const innerArea = Math.min(area, limit) / grow;
+  const dy = Math.sqrt(innerArea / (frameAspect * KM_PER_DEGREE_LONGITUDE_AT_EQUATOR * KM_PER_DEGREE_LATITUDE));
+  const dx = (frameAspect * dy) / cos;
+  const x = (xmin + xmax) / 2;
+  return [x - dx / 2, y - dy / 2, x + dx / 2, y + dy / 2];
 }

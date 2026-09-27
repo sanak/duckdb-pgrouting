@@ -2,9 +2,9 @@
 import './style.css';
 import { type Dataset, type MapInput, networkHint } from './datasets.ts';
 import { ExtensionLoadError, type Session, startSession } from './duckdb.ts';
-import { applyInput, type Box, type LonLat, openingView, readInputs } from './inputs.ts';
+import { applyInput, type Box, type LonLat, openingView, presetExtent, readInputs } from './inputs.ts';
 import { createDatasetLoader, fetchIndex, type OpenDataset } from './loader.ts';
-import { createRouteMap, type RouteMap } from './map.ts';
+import { createRouteMap, GEOGRAPHIC_PADDING, type RouteMap } from './map.ts';
 import { createdNames, type Preset, type PresetFile, prerequisiteHint, presetGroups } from './presets.ts';
 import { highlightOf, summarize } from './result.ts';
 import { nextSelection, type PickSource } from './selection.ts';
@@ -22,6 +22,7 @@ const NO_MAP: RouteMap = {
   showInputs() {},
   onInput() {},
   setInputsEnabled() {},
+  view: () => null,
   remove() {},
 };
 
@@ -143,6 +144,18 @@ async function main(): Promise<void> {
     if (current) routeMap.showInputs(readInputs(sql.value, mapInputs(current.opened.dataset)));
   }
 
+  // An area preset that reaches the editor unedited takes the map's view, as "Use this view" would.
+  function takeViewIntoPreset(): void {
+    if (!current) return;
+    const next = presetExtent(
+      sql.value,
+      mapInputs(current.opened.dataset),
+      current.opened.presets.presets,
+      routeMap.view(),
+    );
+    if (next !== null) sql.value = next;
+  }
+
   function onMapInput(input: MapInput, value: Box | LonLat): void {
     if (!current) return;
     const outcome = applyInput(sql.value, input, value, current.opened.presets.presets);
@@ -176,7 +189,13 @@ async function main(): Promise<void> {
       routeMap = await createRouteMap(mapSection, geometry, {
         mode: map.mode,
         attribution: geographic?.attribution,
-        view: geographic ? openingView(sql.value, mapInputs(opened.dataset), geographic.view) : undefined,
+        view: geographic
+          ? openingView(sql.value, mapInputs(opened.dataset), geographic.view, {
+              width: mapSection.clientWidth,
+              height: mapSection.clientHeight,
+              padding: GEOGRAPHIC_PADDING,
+            })
+          : undefined,
         dynamic: dependsOn(opened.dataset).length > 0,
         inputs: mapInputs(opened.dataset),
       });
@@ -231,6 +250,9 @@ async function main(): Promise<void> {
       selected = null;
       await rebuildMap(opened);
       setStatus(readyStatus());
+      // After the status: its lines set the map's height, and so the view.
+      takeViewIntoPreset();
+      showInputValues();
       return true;
     } catch (error) {
       failure = `${notice ? `${notice} ` : ''}Could not load ${title}: ${messageOf(error)}`;
@@ -303,6 +325,7 @@ async function main(): Promise<void> {
     const chosen = current.opened.presets.presets.find((p) => p.id === preset.value);
     if (chosen) sql.value = chosen.sql;
     showPresetNote(current.opened.presets, chosen);
+    takeViewIntoPreset();
     showInputValues();
   });
   datasetSelect.addEventListener('change', () => {
