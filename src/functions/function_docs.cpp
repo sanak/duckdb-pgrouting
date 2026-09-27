@@ -124,6 +124,46 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "point within a cost limit of the roots; a point is addressed by the negative of its id.",
      "SELECT * FROM pgr_withPointsDD('SELECT id, source, target, cost, reverse_cost FROM edges', "
      "'SELECT pid, edge_id, fraction, side FROM pointsofinterest', -1, 3.3, 'r')"},
+    {"pgr_kruskal",
+     "The edges of a minimum spanning forest by Kruskal's algorithm: the cheapest edge set that "
+     "connects every vertex of each connected component.",
+     "SELECT * FROM pgr_kruskal('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_kruskalBFS",
+     "Walks Kruskal's minimum spanning forest breadth-first from the given roots, optionally only to a "
+     "maximum depth.",
+     "SELECT * FROM pgr_kruskalBFS('SELECT id, source, target, cost, reverse_cost FROM edges', 6)"},
+    {"pgr_kruskalDFS",
+     "Walks Kruskal's minimum spanning forest depth-first from the given roots, optionally only to a "
+     "maximum depth.",
+     "SELECT * FROM pgr_kruskalDFS('SELECT id, source, target, cost, reverse_cost FROM edges', 6)"},
+    {"pgr_kruskalDD",
+     "The part of Kruskal's minimum spanning forest within a cost limit of the given roots, measured "
+     "along the tree.",
+     "SELECT * FROM pgr_kruskalDD('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 3.5)"},
+    {"pgr_prim",
+     "The edges of a minimum spanning forest grown by Prim's algorithm, one tree per connected "
+     "component.",
+     "SELECT * FROM pgr_prim('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_primBFS",
+     "Walks Prim's minimum spanning forest breadth-first from the given roots, optionally only to a "
+     "maximum depth.",
+     "SELECT * FROM pgr_primBFS('SELECT id, source, target, cost, reverse_cost FROM edges', 6)"},
+    {"pgr_primDFS",
+     "Walks Prim's minimum spanning forest depth-first from the given roots, optionally only to a "
+     "maximum depth.",
+     "SELECT * FROM pgr_primDFS('SELECT id, source, target, cost, reverse_cost FROM edges', 6)"},
+    {"pgr_primDD",
+     "The part of Prim's minimum spanning forest within a cost limit of the given roots, measured "
+     "along the tree.",
+     "SELECT * FROM pgr_primDD('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 3.5)"},
+    {"pgr_breadthFirstSearch",
+     "Visits the graph breadth-first from the given roots, one row per vertex reached with its "
+     "predecessor and depth, optionally only to a maximum depth.",
+     "SELECT * FROM pgr_breadthFirstSearch('SELECT id, source, target, cost, reverse_cost FROM edges', 6)"},
+    {"pgr_depthFirstSearch",
+     "Visits the graph depth-first from the given roots, one row per vertex reached with its "
+     "predecessor and depth, optionally only to a maximum depth.",
+     "SELECT * FROM pgr_depthFirstSearch('SELECT id, source, target, cost, reverse_cost FROM edges', 6)"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "

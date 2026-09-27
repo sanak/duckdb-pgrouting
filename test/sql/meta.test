@@ -41,8 +41,10 @@ pgr_bdDijkstraCost	pgr_bdDijkstraCost
 pgr_bdDijkstraCostMatrix	pgr_bdDijkstraCostMatrix
 pgr_bellmanFord	pgr_bellmanFord
 pgr_binaryBreadthFirstSearch	pgr_binaryBreadthFirstSearch
+pgr_breadthFirstSearch	pgr_breadthFirstSearch
 pgr_connectedComponents	pgr_connectedComponents
 pgr_dagShortestPath	pgr_dagShortestPath
+pgr_depthFirstSearch	pgr_depthFirstSearch
 pgr_dijkstra	pgr_dijkstra
 pgr_dijkstraCost	pgr_dijkstraCost
 pgr_dijkstraCostMatrix	pgr_dijkstraCostMatrix
@@ -52,6 +54,14 @@ pgr_drivingDistance	pgr_drivingDistance
 pgr_edwardMoore	pgr_edwardMoore
 pgr_extractVertices	pgr_extractVertices
 pgr_findCloseEdges	pgr_findCloseEdges
+pgr_kruskal	pgr_kruskal
+pgr_kruskalBFS	pgr_kruskalBFS
+pgr_kruskalDD	pgr_kruskalDD
+pgr_kruskalDFS	pgr_kruskalDFS
+pgr_prim	pgr_prim
+pgr_primBFS	pgr_primBFS
+pgr_primDD	pgr_primDD
+pgr_primDFS	pgr_primDFS
 pgr_version	pgr_version
 pgr_withPoints	pgr_withPoints
 pgr_withPointsCost	pgr_withPointsCost

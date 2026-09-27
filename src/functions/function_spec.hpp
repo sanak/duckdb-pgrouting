@@ -40,19 +40,21 @@ enum class OptionalType : uint8_t { BOOLEAN, BIGINT, INTEGER, DOUBLE };
 struct OptionalParam {
 	const char *name; // upstream's parameter name, which callers also pass by name
 	OptionalType type;
-	double default_value;      // upstream's DEFAULT; 0 or 1 for BOOLEAN. Every default upstream
-	                            // declares (0, 1, 5, 1.0) is exact in a double.
+	// Upstream's DEFAULT, spelled as the SQL literal it declares and cast to `type` at bind. Text,
+	// not a number: max_depth's default is BIGINT's maximum, which a double cannot hold exactly.
+	const char *default_value;
 	const char *request_field; // the _pgr_exec request parameter it sets (src/exec/request_params.cpp)
 };
 
-constexpr OptionalParam DIRECTED {"directed", OptionalType::BOOLEAN, 1, "directed"};
-constexpr OptionalParam CAP {"cap", OptionalType::BIGINT, 1, "n_goals"};
-constexpr OptionalParam GLOBAL {"global", OptionalType::BOOLEAN, 1, "global"};
-constexpr OptionalParam DETAILS {"details", OptionalType::BOOLEAN, 0, "details"};
-constexpr OptionalParam HEURISTIC {"heuristic", OptionalType::INTEGER, 5, "heuristic"};
-constexpr OptionalParam FACTOR {"factor", OptionalType::DOUBLE, 1.0, "factor"};
-constexpr OptionalParam EPSILON {"epsilon", OptionalType::DOUBLE, 1.0, "epsilon"};
-constexpr OptionalParam EQUICOST {"equicost", OptionalType::BOOLEAN, 0, "equicost"};
+constexpr OptionalParam DIRECTED {"directed", OptionalType::BOOLEAN, "true", "directed"};
+constexpr OptionalParam CAP {"cap", OptionalType::BIGINT, "1", "n_goals"};
+constexpr OptionalParam GLOBAL {"global", OptionalType::BOOLEAN, "true", "global"};
+constexpr OptionalParam DETAILS {"details", OptionalType::BOOLEAN, "false", "details"};
+constexpr OptionalParam HEURISTIC {"heuristic", OptionalType::INTEGER, "5", "heuristic"};
+constexpr OptionalParam FACTOR {"factor", OptionalType::DOUBLE, "1.0", "factor"};
+constexpr OptionalParam EPSILON {"epsilon", OptionalType::DOUBLE, "1.0", "epsilon"};
+constexpr OptionalParam EQUICOST {"equicost", OptionalType::BOOLEAN, "false", "equicost"};
+constexpr OptionalParam MAX_DEPTH {"max_depth", OptionalType::BIGINT, "9223372036854775807", "max_depth"};
 
 // Where an overload's driving side comes from. NONE: the overload has none (which = 0 ignores it).
 // ARGUMENT: the CHAR signatures of the withPoints family take it as a required argument.
@@ -75,7 +77,9 @@ enum class Projection : uint8_t {
 	// overloads can go back to only_cost = true with plain COST.
 	COST_OF_PATH,
 	// COST, ORDER BY start_vid, end_vid: pgr_aStarCost's wrapper sorts (sql/astar/astarCost.sql).
-	COST_SORTED
+	COST_SORTED,
+	// edge, cost of the MST shape: pgr_kruskal and pgr_prim (sql/spanningTree/kruskal.sql, prim.sql).
+	EDGE_COST
 };
 
 // The request fields that are fixed per overload rather than chosen by the caller. n_goals, global
@@ -90,6 +94,11 @@ struct DriverFlags {
 	DrivingSideSource driving_side = DrivingSideSource::NONE;
 	bool details = true;
 	int32_t which = 0;
+	// The kruskal and prim families' suffix ("", "BFS", "DFS", "DD").
+	const char *mst_suffix = "";
+	// pgr_kruskal and pgr_prim pass ARRAY[0]::BIGINT[] as roots: their drivers read roots as a
+	// non-empty array before anything else, and drop 0 from the answer.
+	bool root_zero = false;
 	Projection projection = Projection::ALL;
 	DriverKind driver = DriverKind::SHORTEST_PATH;
 };
@@ -124,5 +133,7 @@ extern const duckdb::vector<FunctionSpec> COMPONENTS_SPECS;           // compone
 extern const duckdb::vector<FunctionSpec> ASTAR_SPECS;                // astar_specs.cpp
 extern const duckdb::vector<FunctionSpec> BD_ASTAR_SPECS;             // bd_astar_specs.cpp
 extern const duckdb::vector<FunctionSpec> DRIVING_DISTANCE_SPECS;     // driving_distance_specs.cpp
+extern const duckdb::vector<FunctionSpec> SPANNING_TREE_SPECS;        // spanning_tree_specs.cpp
+extern const duckdb::vector<FunctionSpec> TRAVERSAL_SPECS;            // traversal_specs.cpp
 
 } // namespace duckdb_pgrouting

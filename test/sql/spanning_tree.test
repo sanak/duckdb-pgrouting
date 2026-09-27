@@ -1,0 +1,155 @@
+# name: test/sql/spanning_tree.test
+# description: pgr_kruskal* and pgr_prim*: variants, suffix checks, STRICT, edge cases
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id';
+
+statement ok
+CREATE MACRO no_edges() AS 'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0';
+
+# BFS/DFS forms have one defaulted parameter (max_depth); pgr_kruskalDD's NUMERIC and FLOAT
+# distances are both DOUBLE here, so its four upstream signatures are two variants.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE (function_name LIKE 'pgr_kruskal%' OR function_name LIKE 'pgr_prim%') AND tags['ext'] = 'pgrouting'
+GROUP BY ALL ORDER BY 1;
+----
+pgr_kruskal	1
+pgr_kruskalBFS	4
+pgr_kruskalDD	2
+pgr_kruskalDFS	4
+pgr_prim	1
+pgr_primBFS	4
+pgr_primDD	2
+pgr_primDFS	4
+
+query T
+SELECT column_name FROM (DESCRIBE SELECT * FROM pgr_kruskal(e()));
+----
+edge
+cost
+
+# The whole forest: 17 vertices in 3 components, so 14 edges, whichever equal-cost tree is picked.
+query IR
+SELECT count(*), sum(cost) FROM pgr_kruskal(e());
+----
+14	14
+
+# Upstream's prim q1.
+query I
+SELECT count(*) FROM pgr_prim('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 14');
+----
+11
+
+# Every variant of a BFS/DFS signature: the tree from 6 spans its 13-vertex component.
+query I
+SELECT count(*) FROM pgr_kruskalBFS(e(), 6)
+UNION ALL SELECT count(*) FROM pgr_kruskalBFS(e(), 6, 9223372036854775807)
+UNION ALL SELECT count(*) FROM pgr_kruskalBFS(e(), 6, max_depth := 100)
+UNION ALL SELECT count(*) FROM pgr_kruskalBFS(e(), [6])
+UNION ALL SELECT count(*) FROM pgr_kruskalBFS(e(), [6], 100)
+UNION ALL SELECT count(*) FROM pgr_primDFS(e(), 6)
+UNION ALL SELECT count(*) FROM pgr_primDFS(e(), [6], max_depth := 100);
+----
+13
+13
+13
+13
+13
+13
+13
+
+# Upstream's kruskalBFS q2: max_depth 3 from 9 and 6, each root opening with its depth-0 row.
+query III
+SELECT start_vid, pred, node FROM pgr_kruskalBFS(e(), [9, 6], max_depth := 3) WHERE depth = 0 ORDER BY 1;
+----
+6	6	6
+9	9	9
+
+query T
+SELECT max(depth) <= 3 FROM pgr_kruskalBFS(e(), [9, 6], max_depth := 3);
+----
+true
+
+# Review focus 4: max_depth 0 keeps the roots; an INTEGER max_depth; distance as INTEGER, DECIMAL
+# and 0.
+query I
+SELECT count(*) FROM pgr_kruskalBFS(e(), [6, 9], 0)
+UNION ALL SELECT count(*) FROM pgr_primDD(e(), 6, 0);
+----
+2
+1
+
+query TTT
+SELECT (SELECT max(depth) <= 2 FROM pgr_primBFS(e(), 6, max_depth := 2::INTEGER)),
+       (SELECT max(agg_cost) <= 3 FROM pgr_kruskalDD(e(), 6, 3)),
+       (SELECT max(agg_cost) <= 3.5 FROM pgr_kruskalDD(e(), [9, 6], 3.5));
+----
+true	true	true
+
+# The C entries' checks, verbatim; which bound applies depends on the form.
+statement error
+SELECT * FROM pgr_kruskalBFS(e(), 6, -1);
+----
+Invalid Input Error: Negative value found on 'max_depth'
+HINT: Must be positive
+
+statement error
+SELECT * FROM pgr_primDFS(e(), [6], max_depth := -2);
+----
+Negative value found on 'max_depth'
+
+statement error
+SELECT * FROM pgr_primDD(e(), 6, -1.0);
+----
+Invalid Input Error: Negative value found on 'distance'
+HINT: Must be positive
+
+statement error
+SELECT * FROM pgr_kruskalDD(no_edges(), [6], -1);
+----
+Negative value found on 'distance'
+
+# Review focus 1: these families read roots as a non-empty array.
+statement error
+SELECT * FROM pgr_kruskalBFS(e(), []::BIGINT[]);
+----
+No elements found
+
+statement error
+SELECT * FROM pgr_primDD(e(), []::BIGINT[], 3.5);
+----
+No elements found
+
+# Review focus 3: no edges. pgr_kruskal's root 0 is dropped; the rooted forms return each root.
+query I
+SELECT count(*) FROM pgr_kruskal(no_edges());
+----
+0
+
+query IIIIIIRR
+SELECT * FROM pgr_primBFS(no_edges(), 6);
+----
+1	0	6	6	6	-1	0	0
+
+# STRICT.
+query I
+SELECT count(*) FROM pgr_kruskalBFS(e(), NULL::BIGINT)
+UNION ALL SELECT count(*) FROM pgr_kruskalDFS(e(), 6, max_depth := NULL)
+UNION ALL SELECT count(*) FROM pgr_primDD(e(), 6, NULL::DOUBLE)
+UNION ALL SELECT count(*) FROM pgr_prim(NULL::VARCHAR)
+UNION ALL SELECT count(*) FROM pgr_kruskalBFS(e(), NULL::BIGINT, -1);
+----
+0
+0
+0
+0
+0

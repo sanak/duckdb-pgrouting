@@ -42,8 +42,10 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/find_close_edges.cpp
     src/functions/function_docs.cpp
     src/functions/meta_functions.cpp
+    src/functions/spanning_tree_specs.cpp
     src/functions/spec_functions.cpp
     src/functions/sql_template.cpp
+    src/functions/traversal_specs.cpp
     src/functions/withpoints_specs.cpp
     src/pg_compat/src/drivers_graph.cpp
     src/pg_compat/src/drivers_path.cpp

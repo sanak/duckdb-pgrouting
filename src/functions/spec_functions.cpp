@@ -200,7 +200,8 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::BD_DIJKSTRA_SPECS,       &duckdb_pgrouting::BELLMAN_FORD_SPECS,
 	    &duckdb_pgrouting::DAG_SHORTEST_PATH_SPECS, &duckdb_pgrouting::BREADTH_FIRST_SEARCH_SPECS,
 	    &duckdb_pgrouting::COMPONENTS_SPECS,        &duckdb_pgrouting::ASTAR_SPECS,
-	    &duckdb_pgrouting::BD_ASTAR_SPECS,          &duckdb_pgrouting::DRIVING_DISTANCE_SPECS};
+	    &duckdb_pgrouting::BD_ASTAR_SPECS,          &duckdb_pgrouting::DRIVING_DISTANCE_SPECS,
+	    &duckdb_pgrouting::SPANNING_TREE_SPECS,     &duckdb_pgrouting::TRAVERSAL_SPECS};
 	return TABLES;
 }
 
@@ -216,6 +217,8 @@ vector<string> ProjectionColumns(const duckdb_pgrouting::FunctionSpec &spec) {
 	case duckdb_pgrouting::Projection::COST_OF_PATH:
 	case duckdb_pgrouting::Projection::COST_SORTED:
 		return {"start_vid", "end_vid", "agg_cost"};
+	case duckdb_pgrouting::Projection::EDGE_COST:
+		return {"edge", "cost"};
 	}
 	throw InternalException("Unhandled Projection");
 }
@@ -269,17 +272,7 @@ Value ResolveOptional(const duckdb_pgrouting::FunctionSpec &spec, TableFunctionB
 	if (it != input.named_parameters.end()) {
 		return it->second;
 	}
-	switch (param.type) {
-	case duckdb_pgrouting::OptionalType::BOOLEAN:
-		return Value::BOOLEAN(param.default_value != 0);
-	case duckdb_pgrouting::OptionalType::BIGINT:
-		return Value::BIGINT(static_cast<int64_t>(param.default_value));
-	case duckdb_pgrouting::OptionalType::INTEGER:
-		return Value::INTEGER(static_cast<int32_t>(param.default_value));
-	case duckdb_pgrouting::OptionalType::DOUBLE:
-		return Value::DOUBLE(param.default_value);
-	}
-	throw InternalException("Unhandled OptionalType");
+	return Value(param.default_value).DefaultCastAs(TypeOf(param.type));
 }
 
 // A spec row is data. These are the ways it can disagree with the rest of the extension; checked
@@ -291,10 +284,31 @@ void CheckSpec(const duckdb_pgrouting::FunctionSpec &spec) {
 			                        param.name, param.request_field);
 		}
 	}
-	if (spec.flags.projection != duckdb_pgrouting::Projection::ALL &&
-	    duckdb_pgrouting::InfoOf(spec.flags.driver).shape != duckdb_pgrouting::ResultShape::PATH) {
-		throw InternalException("pgrouting: %s projects path columns out of a driver that returns no paths",
-		                        spec.upstream_name);
+	for (const auto &param : spec.optionals) {
+		Value default_value(param.default_value);
+		if (!default_value.DefaultTryCastAs(TypeOf(param.type))) {
+			throw InternalException("pgrouting: %s's parameter %s has default '%s', not a %s", spec.upstream_name,
+			                        param.name, param.default_value, TypeOf(param.type).ToString());
+		}
+	}
+	const auto shape = duckdb_pgrouting::InfoOf(spec.flags.driver).shape;
+	switch (spec.flags.projection) {
+	case duckdb_pgrouting::Projection::ALL:
+		break;
+	case duckdb_pgrouting::Projection::COST:
+	case duckdb_pgrouting::Projection::COST_OF_PATH:
+	case duckdb_pgrouting::Projection::COST_SORTED:
+		if (shape != duckdb_pgrouting::ResultShape::PATH) {
+			throw InternalException("pgrouting: %s projects path columns out of a driver that returns no paths",
+			                        spec.upstream_name);
+		}
+		break;
+	case duckdb_pgrouting::Projection::EDGE_COST:
+		if (shape != duckdb_pgrouting::ResultShape::MST) {
+			throw InternalException("pgrouting: %s projects tree columns out of a driver that returns no trees",
+			                        spec.upstream_name);
+		}
+		break;
 	}
 }
 
@@ -330,6 +344,7 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	request.details = spec.flags.details;
 	request.which = spec.flags.which;
 	request.driver = spec.flags.driver;
+	request.mst_suffix = spec.flags.mst_suffix;
 	if (!null_input) {
 		for (idx_t i = 0; i < spec.optionals.size(); i++) {
 			// CheckSpec established at load that request_field names a request parameter.
@@ -361,7 +376,8 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	unique_ptr<ParsedExpression> combinations_expr = Named(make_uniq<ConstantExpression>(Value()), "combinations");
 	unique_ptr<ParsedExpression> starts_expr = Named(EmptyIdList(), "starts");
 	unique_ptr<ParsedExpression> ends_expr = Named(EmptyIdList(), "ends");
-	unique_ptr<ParsedExpression> roots_expr = Named(EmptyIdList(), "roots");
+	unique_ptr<ParsedExpression> roots_expr =
+	    Named(spec.flags.root_zero ? IdList(Value::BIGINT(0)) : EmptyIdList(), "roots");
 	// Only an overload with a points argument emits these three; see the loop below.
 	unique_ptr<ParsedExpression> points_expr;
 	unique_ptr<ParsedExpression> edges_of_points_expr;
