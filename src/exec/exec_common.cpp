@@ -122,7 +122,7 @@ DriverResult RunDriver(duckdb::ClientContext &context, InputRegistry &registry, 
 		// std::bad_alloc raised anywhere inside pgRouting is instead caught by the driver's
 		// catch (std::exception &), whose whole body is `err << except.what();` -- nothing before
 		// it, nothing after it, into the stream this function just created -- so err is exactly
-		// what(). The old-style drivers copy what() into their err message the same way. That
+		// what(). The per-family drivers copy what() into their err message the same way. That
 		// text is spelled by the standard library rather than by pgRouting; it is
 		// "std::bad_alloc" on the libc++ toolchain this was verified against. A standard library
 		// that spells it differently falls through to the InvalidInputException below, which is

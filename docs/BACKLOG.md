@@ -38,8 +38,8 @@ decision rather than an oversight.
   `include/cpp_common/path.hpp` leaves `m_tot_cost` uninitialized, which `post_process` then sorts
   and truncates by. Fixed upstream on `develop` by commit `b27576bd58`. Cost: `pgr_dijkstraNearCost`
   materializes full paths instead of just their costs. Revert (switch the NearCost overloads back
-  to `only_cost = true` and `ResultColumns::COST`) once the pinned release initializes
-  `m_tot_cost`; see the `ResultColumns::COST_OF_PATH` comment in `src/functions/function_spec.hpp`.
+  to `only_cost = true` and `Projection::COST`) once the pinned release initializes
+  `m_tot_cost`; see the `Projection::COST_OF_PATH` comment in `src/functions/function_spec.hpp`.
 - **A defaulted parameter given both positionally and by name silently prefers the positional
   value.** For example `pgr_dijkstraNearCost(edges_sql, 6, [10, 11, 1], true, 2, cap := 1)` returns
   the same rows as `cap := 2` (the positional value), not `cap := 1` (the named one); PostgreSQL
@@ -95,7 +95,7 @@ Each of these would be a change no test could observe, so none of them is made:
   owner. Unreachable on the pgr_dijkstra path, which fetches no TEXT column.
 - `seq[i] = NumericCast<int32_t>(k + 1)` in `src/exec/result_emitters.cpp` throws past 2^31
   result rows. Upstream uses `int` for `seq` too, so matching it is the deliberate choice.
-- `TagFunctions` in `src/functions/shortest_path_functions.cpp` resolves the same catalog entry
+- `TagFunctions` in `src/functions/spec_functions.cpp` resolves the same catalog entry
   once per spec, so two specs disagreeing on `pgrouting_name` for one public name would resolve
   silently to the first.
 - The "No elements found" text in `get_pgarray` (`src/pg_compat/src/get_check_data.cpp`) has no
@@ -143,7 +143,7 @@ Each of these would be a change no test could observe, so none of them is made:
 ## Open decision
 
 - **`ListOfRows` and `ORDER BY`: performance against run-to-run reproducibility.** `ListOfRows` in
-  `src/functions/shortest_path_functions.cpp` emits `(SELECT list(_pgr_row) FROM (<sql>)
+  `src/functions/spec_functions.cpp` emits `(SELECT list(_pgr_row) FROM (<sql>)
   _pgr_row)`. DuckDB's `list()` does not preserve scan order once the scan runs on several threads,
   and Boost breaks an equal-cost predecessor tie by adjacency-list insertion order, so on a large
   enough edge set the same query on the same data can return different — equally optimal — routes

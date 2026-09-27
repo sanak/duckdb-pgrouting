@@ -14,7 +14,7 @@ namespace duckdb_pgrouting {
 
 namespace {
 
-// Plain data, so the table needs no dynamic initialization (as in shortest_path_specs.cpp).
+// Plain data, so the table needs no dynamic initialization (as in the *_specs.cpp tables).
 struct FunctionDoc {
 	const char *name;
 	const char *description;

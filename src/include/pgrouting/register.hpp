@@ -8,7 +8,7 @@ class ExtensionLoader;
 
 void RegisterMetaFunctions(ExtensionLoader &loader);
 void RegisterExec(ExtensionLoader &loader);
-void RegisterShortestPathFunctions(ExtensionLoader &loader);
+void RegisterSpecFunctions(ExtensionLoader &loader);
 void RegisterExtractVertices(ExtensionLoader &loader);
 void RegisterFindCloseEdges(ExtensionLoader &loader);
 } // namespace duckdb

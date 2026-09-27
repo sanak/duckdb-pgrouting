@@ -182,7 +182,7 @@ void RegisterFindCloseEdges(ExtensionLoader &loader) {
 	TableFunctionSet set(FUNCTION_NAME);
 	// Upstream's two signatures differ in the point argument: one GEOMETRY or a GEOMETRY[]. Each
 	// has two defaulted parameters (cap, dryrun), so each is registered three times, taking the
-	// first 0, 1 or 2 of them positionally (see RegisterShortestPathFunctions).
+	// first 0, 1 or 2 of them positionally (see RegisterSpecFunctions).
 	const vector<LogicalType> point_types {LogicalType::GEOMETRY(), LogicalType::LIST(LogicalType::GEOMETRY())};
 	const vector<LogicalType> optional_types {LogicalType::INTEGER, LogicalType::BOOLEAN};
 	for (const auto &point_type : point_types) {

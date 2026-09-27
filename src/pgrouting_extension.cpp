@@ -11,7 +11,7 @@ namespace duckdb {
 static void LoadInternal(ExtensionLoader &loader) {
 	RegisterMetaFunctions(loader);
 	RegisterExec(loader);
-	RegisterShortestPathFunctions(loader);
+	RegisterSpecFunctions(loader);
 	RegisterExtractVertices(loader);
 	RegisterFindCloseEdges(loader);
 }

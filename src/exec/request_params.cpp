@@ -5,6 +5,7 @@
 #include <variant>
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -111,8 +112,38 @@ void ReadRequestParameters(const named_parameter_map_t &named, DriverRequest &re
 		if (it == named.end() || it->second.IsNull()) {
 			continue;
 		}
-		std::visit([&](auto member) { FromValue(it->second, request.*member); }, parameter.field);
+		SetRequestParameter(request, parameter.name, it->second);
 	}
+}
+
+vector<unique_ptr<ParsedExpression>> RequestArguments(const DriverRequest &request) {
+	vector<unique_ptr<ParsedExpression>> args;
+	for (const auto &parameter : REQUEST_PARAMETERS) {
+		auto value = std::visit([&](auto member) { return ToValue(request.*member); }, parameter.field);
+		auto expr = make_uniq<ConstantExpression>(std::move(value));
+		expr->SetAlias(string(parameter.name));
+		args.push_back(std::move(expr));
+	}
+	return args;
+}
+
+bool SetRequestParameter(DriverRequest &request, const string &name, const Value &value) {
+	for (const auto &parameter : REQUEST_PARAMETERS) {
+		if (name == parameter.name) {
+			std::visit([&](auto member) { FromValue(value, request.*member); }, parameter.field);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool IsRequestParameter(const string &name) {
+	for (const auto &parameter : REQUEST_PARAMETERS) {
+		if (name == parameter.name) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb
