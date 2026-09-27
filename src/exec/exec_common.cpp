@@ -46,6 +46,7 @@ void DriverResult::Release() {
 	switch (shape) {
 	case ResultShape::PATH:
 	case ResultShape::PAIRS:
+	case ResultShape::MST:
 		break; // flat rows
 	}
 	std::free(rows);
@@ -62,9 +63,11 @@ DriverResult RunDriver(duckdb::ClientContext &context, InputRegistry &registry, 
 
 	ScopedIntArray starts(request.starts);
 	ScopedIntArray ends(request.ends);
+	ScopedIntArray roots(request.roots);
 	DriverArrays arrays;
 	arrays.starts = request.has_starts ? starts.get() : nullptr;
 	arrays.ends = request.has_ends ? ends.get() : nullptr;
+	arrays.roots = request.has_roots ? roots.get() : nullptr;
 
 	{
 		ScopedRoutingContext scope(context, registry);
@@ -86,7 +89,8 @@ DriverResult RunDriver(duckdb::ClientContext &context, InputRegistry &registry, 
 			// RunFamilyDriver itself checks the driver's rows against InfoOf(request.driver).shape
 			// and reports a mismatch through out.err, handled by the err_text branch below; the
 			// ownership of out.rows passes to `result` here either way, so an error still frees the
-			// malloc'd rows (via ~DriverResult, on unwind) instead of leaking them.
+			// malloc'd rows (the err_text branch below resets `result`, whose destructor frees them)
+			// instead of leaking them.
 			auto out = RunFamilyDriver(request, arrays);
 			result.rows = out.rows;
 			result.count = out.count;

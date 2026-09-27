@@ -10,6 +10,7 @@
 #include "pgrouting/family_drivers.hpp"
 
 struct II_t_rt;
+struct MST_rt;
 struct Path_rt;
 
 namespace duckdb_pgrouting {
@@ -19,6 +20,7 @@ namespace duckdb_pgrouting {
 struct DriverCall {
 	Path_rt *path_rows = nullptr;
 	II_t_rt *pair_rows = nullptr;
+	MST_rt *mst_rows = nullptr;
 	std::size_t count = 0;
 	char *log = nullptr;
 	char *notice = nullptr;
@@ -34,5 +36,6 @@ inline const char *CombinationsOrNull(const DriverRequest &request) {
 // Each calls request.driver if it belongs to the group and returns false otherwise.
 bool CallPathDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallGraphDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
+bool CallTreeDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 
 } // namespace duckdb_pgrouting

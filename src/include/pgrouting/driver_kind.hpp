@@ -23,14 +23,16 @@ enum class DriverKind : uint8_t {
 	BINARY_BFS,
 	CONNECTED_COMPONENTS,
 	ASTAR,
-	BD_ASTAR
+	BD_ASTAR,
+	DRIVING_DISTANCE
 };
 
 // The upstream result struct a driver fills, one value per struct. It decides _pgr_exec's output
 // columns (src/exec/result_emitters.cpp) and how DriverResult frees the rows.
 enum class ResultShape : uint8_t {
-	PATH, // Path_rt
-	PAIRS // II_t_rt
+	PATH,  // Path_rt
+	PAIRS, // II_t_rt
+	MST    // MST_rt
 };
 
 // A check upstream's C entry runs on the parameters before it calls the driver, even when the
@@ -40,7 +42,9 @@ enum class RequestCheck : uint8_t {
 	NONE,
 	// check_parameters(heuristic, factor, epsilon): src/common/check_parameters.c, called by
 	// src/astar/astar.c and src/bdAstar/bdAstar.c.
-	ASTAR_PARAMETERS
+	ASTAR_PARAMETERS,
+	// distance >= 0: src/driving_distance/driving_distance.c.
+	DRIVING_DISTANCE
 };
 
 struct DriverInfo {
@@ -61,6 +65,7 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::CONNECTED_COMPONENTS, "connected_components", ResultShape::PAIRS, RequestCheck::NONE},
     {DriverKind::ASTAR, "astar", ResultShape::PATH, RequestCheck::ASTAR_PARAMETERS},
     {DriverKind::BD_ASTAR, "bd_astar", ResultShape::PATH, RequestCheck::ASTAR_PARAMETERS},
+    {DriverKind::DRIVING_DISTANCE, "driving_distance", ResultShape::MST, RequestCheck::DRIVING_DISTANCE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -75,7 +80,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::BD_ASTAR) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::DRIVING_DISTANCE) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

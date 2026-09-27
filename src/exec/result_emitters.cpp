@@ -6,6 +6,7 @@
 #include "duckdb/common/types/vector.hpp"
 
 #include "c_types/ii_t_rt.h"
+#include "c_types/mst_rt.h"
 #include "c_types/path_rt.h"
 
 namespace duckdb {
@@ -57,6 +58,34 @@ void EmitPairs(const DriverResult &result, EmitState &state, idx_t n, DataChunk 
 	}
 }
 
+// Upstream's root-based C entries (src/driving_distance/*.c, src/spanningTree/*.c,
+// src/breadthFirstSearch/breadthFirstSearch.c, src/traversal/depthFirstSearch.c) number the rows
+// from 1 and pass the rest of MST_rt through; every public wrapper selects the columns in this
+// order, whatever order its C entry builds the tuple in.
+void EmitMst(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<MST_rt>();
+	auto seq = FlatVector::GetData<int64_t>(output.data[0]);
+	auto depth = FlatVector::GetData<int64_t>(output.data[1]);
+	auto start_vid = FlatVector::GetData<int64_t>(output.data[2]);
+	auto pred = FlatVector::GetData<int64_t>(output.data[3]);
+	auto node = FlatVector::GetData<int64_t>(output.data[4]);
+	auto edge = FlatVector::GetData<int64_t>(output.data[5]);
+	auto cost = FlatVector::GetData<double>(output.data[6]);
+	auto agg_cost = FlatVector::GetData<double>(output.data[7]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		const auto &row = rows[k];
+		seq[i] = NumericCast<int64_t>(k + 1);
+		depth[i] = row.depth;
+		start_vid[i] = row.from_v;
+		pred[i] = row.pred;
+		node[i] = row.node;
+		edge[i] = row.edge;
+		cost[i] = row.cost;
+		agg_cost[i] = row.agg_cost;
+	}
+}
+
 } // namespace
 
 void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
@@ -70,6 +99,12 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		// Upstream's pgr_connectedComponents: all three BIGINT, seq included.
 		types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
 		names = {"seq", "component", "node"};
+		return;
+	case ResultShape::MST:
+		// Upstream's public wrappers: seq BIGINT, even where the C entry writes an int32.
+		types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+		         LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
+		names = {"seq", "depth", "start_vid", "pred", "node", "edge", "cost", "agg_cost"};
 		return;
 	}
 	throw InternalException("pgrouting: unhandled ResultShape");
@@ -85,6 +120,9 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::PAIRS:
 		EmitPairs(result, state, n, output);
+		break;
+	case ResultShape::MST:
+		EmitMst(result, state, n, output);
 		break;
 	}
 	state.offset += n;

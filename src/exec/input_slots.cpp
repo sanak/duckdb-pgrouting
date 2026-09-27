@@ -63,6 +63,7 @@ const InputSlot INPUT_SLOTS[] = {
      nullptr},
     {"starts", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::starts, &DriverRequest::has_starts},
     {"ends", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::ends, &DriverRequest::has_ends},
+    {"roots", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::roots, &DriverRequest::has_roots},
 };
 
 duckdb_pgrouting::ColumnClass ClassOf(const LogicalType &type) {

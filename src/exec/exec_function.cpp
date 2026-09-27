@@ -40,6 +40,12 @@ struct ExecState : public LocalTableFunctionState {
 	EmitState emit;
 };
 
+// pgr_throw_error(msg, hint) (src/common/e_report.c) as this extension raises it. An empty hint adds
+// no HINT line, as RunDriver does for a driver error whose log is empty.
+[[noreturn]] void ThrowCheck(const string &msg, const string &hint) {
+	throw InvalidInputException(hint.empty() ? msg : msg + "\nHINT: " + hint);
+}
+
 // Upstream's C entries check some parameters before they call the driver (RequestCheck), with
 // these messages and hints, verbatim.
 void CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
@@ -48,15 +54,18 @@ void CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 		return;
 	case duckdb_pgrouting::RequestCheck::ASTAR_PARAMETERS:
 		if (request.heuristic > 5 || request.heuristic < 0) {
-			throw InvalidInputException(string("Unknown heuristic") + "\nHINT: " + "Valid values: 0~5");
+			ThrowCheck("Unknown heuristic", "Valid values: 0~5");
 		}
 		if (request.factor <= 0) {
-			throw InvalidInputException(string("Factor value out of range") + "\nHINT: " +
-			                            "Valid values: positive non zero");
+			ThrowCheck("Factor value out of range", "Valid values: positive non zero");
 		}
 		if (request.epsilon < 1) {
-			throw InvalidInputException(string("Epsilon value out of range") + "\nHINT: " +
-			                            "Valid values: 1 or greater than 1");
+			ThrowCheck("Epsilon value out of range", "Valid values: 1 or greater than 1");
+		}
+		return;
+	case duckdb_pgrouting::RequestCheck::DRIVING_DISTANCE:
+		if (request.distance < 0) {
+			ThrowCheck("Negative value found on 'distance'", "Must be positive");
 		}
 		return;
 	}

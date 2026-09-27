@@ -35,21 +35,28 @@ void *RowsOf(const DriverCall &call, ResultShape shape) {
 		return call.path_rows;
 	case ResultShape::PAIRS:
 		return call.pair_rows;
+	case ResultShape::MST:
+		return call.mst_rows;
 	}
 	return nullptr;
 }
 
-// The field a driver of this shape should never have written: path_rows for a PAIRS driver, or
-// pair_rows for a PATH one. A driver that writes there anyway has the wrong shape for its
-// DriverKind, which InfoOf() -- not the driver's own choice -- declares.
-void *WrongShapeRows(const DriverCall &call, ResultShape shape) {
-	switch (shape) {
-	case ResultShape::PATH:
-		return call.pair_rows;
-	case ResultShape::PAIRS:
-		return call.path_rows;
-	}
-	return nullptr;
+// Frees every row pointer a driver of this shape should never have written, and reports whether
+// there was one. A driver that writes one anyway has the wrong shape for its DriverKind, which
+// InfoOf() -- not the driver's own choice -- declares.
+bool DropWrongShapeRows(DriverCall &call, ResultShape shape) {
+	bool wrong = false;
+	auto drop = [&](auto *&rows, ResultShape own) {
+		if (own != shape && rows != nullptr) {
+			std::free(rows);
+			rows = nullptr;
+			wrong = true;
+		}
+	};
+	drop(call.path_rows, ResultShape::PATH);
+	drop(call.pair_rows, ResultShape::PAIRS);
+	drop(call.mst_rows, ResultShape::MST);
+	return wrong;
 }
 
 std::string WrongShapeErr(const char *driver_name) {
@@ -63,7 +70,8 @@ DriverOutput RunFamilyDriver(const DriverRequest &request, const DriverArrays &a
 	auto shape = InfoOf(request.driver).shape;
 	DriverCall call;
 	try {
-		if (!CallPathDriver(request, arrays, call) && !CallGraphDriver(request, arrays, call)) {
+		if (!CallPathDriver(request, arrays, call) && !CallGraphDriver(request, arrays, call) &&
+		    !CallTreeDriver(request, arrays, call)) {
 			out.err = std::string("Internal error: no family driver for '") + InfoOf(request.driver).name + "'";
 		}
 	} catch (const std::string &message) {
@@ -78,15 +86,12 @@ DriverOutput RunFamilyDriver(const DriverRequest &request, const DriverArrays &a
 	out.rows = RowsOf(call, shape);
 	out.count = call.count;
 	// A meaningful shape check, unlike comparing InfoOf(request.driver).shape against itself: a
-	// driver that populated the other DriverCall field, or reported rows without populating either,
-	// wrote something RunDriver's caller cannot safely interpret as this shape.
-	if (out.err.empty()) {
-		if (void *wrong_rows = WrongShapeRows(call, shape)) {
-			std::free(wrong_rows);
-			out.err = WrongShapeErr(InfoOf(request.driver).name);
-		} else if (call.count > 0 && out.rows == nullptr) {
-			out.err = WrongShapeErr(InfoOf(request.driver).name);
-		}
+	// driver that populated another DriverCall field, or reported rows without populating its own,
+	// wrote something RunDriver's caller cannot safely interpret as this shape. The stray rows are
+	// freed whatever else went wrong.
+	const bool wrong_shape = DropWrongShapeRows(call, shape) || (call.count > 0 && out.rows == nullptr);
+	if (out.err.empty() && wrong_shape) {
+		out.err = WrongShapeErr(InfoOf(request.driver).name);
 	}
 	out.log = TakeMessage(call.log);
 	out.notice = TakeMessage(call.notice);

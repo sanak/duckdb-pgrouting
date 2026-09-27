@@ -20,6 +20,7 @@ namespace duckdb_pgrouting {
 struct DriverArrays {
 	ArrayType *starts = nullptr;
 	ArrayType *ends = nullptr;
+	ArrayType *roots = nullptr;
 };
 
 struct DriverOutput {
