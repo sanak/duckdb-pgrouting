@@ -23,8 +23,10 @@ struct DriverArrays {
 };
 
 struct DriverOutput {
-	ResultShape shape = ResultShape::PATH; // what `rows` points to: InfoOf(request.driver).shape
-	void *rows = nullptr;                  // allocated by the driver with malloc; the caller owns it
+	// Allocated by the driver with malloc; the caller owns it. Shaped as InfoOf(request.driver).shape
+	// declares -- RunFamilyDriver itself checks that against what the driver actually wrote and
+	// reports a mismatch through err, so nothing further down needs to re-check it.
+	void *rows = nullptr;
 	std::size_t count = 0;
 	std::string log;
 	std::string notice;
@@ -32,7 +34,8 @@ struct DriverOutput {
 };
 
 // Runs one per-family driver. request.driver must not be SHORTEST_PATH. An empty combinations_sql
-// means "array form".
+// means "array form". err is set if the driver's own per-family case does not exist, or if it wrote
+// rows that do not match InfoOf(request.driver).shape; the caller (RunDriver) drops such a result.
 DriverOutput RunFamilyDriver(const DriverRequest &request, const DriverArrays &arrays);
 
 } // namespace duckdb_pgrouting
