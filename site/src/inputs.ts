@@ -100,3 +100,25 @@ export function extentRefusal(box: Box, maxAreaKm2: number): string | null {
   const area = areaKm2(box);
   return area > maxAreaKm2 ? `This view is ${area.toFixed(1)} km²; the limit is ${maxAreaKm2} km². Zoom in.` : null;
 }
+
+// What a map button does to the editor's SQL: the rewritten SQL, or why it was left alone. A
+// missing line is reported first — zooming in would not help a query that has no line to hold the
+// view — and names the preset that has one.
+export function applyInput(
+  sql: string,
+  input: MapInput,
+  value: Box | LonLat,
+  presets: readonly { label: string; sql: string }[],
+): { sql: string } | { error: string } {
+  const next = writeInput(sql, input, value);
+  if (next === null) {
+    const holder = presets.find((p) => hasInputLine(p.sql, input));
+    const where = holder ? ` — it is in the preset “${holder.label}”` : '';
+    return { error: `This query has no SET VARIABLE ${input.variable} line${where}.` };
+  }
+  if (input.kind === 'extent' && !Array.isArray(value)) {
+    const refusal = extentRefusal(value, input.maxAreaKm2 ?? Number.POSITIVE_INFINITY);
+    if (refusal) return { error: refusal };
+  }
+  return { sql: next };
+}

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import type { MapInput } from '../src/datasets.ts';
 import { parseDataset } from '../src/datasets.ts';
-import { areaKm2, extentRefusal, hasInputLine, readInputs, writeInput } from '../src/inputs.ts';
+import { applyInput, areaKm2, extentRefusal, hasInputLine, readInputs, writeInput } from '../src/inputs.ts';
 import { parsePresetFile } from '../src/presets.ts';
 
 const BBOX: MapInput = { variable: 'bbox', kind: 'extent', label: 'Use this view', maxAreaKm2: 25 };
@@ -129,4 +129,24 @@ test("overture's view is the area its first preset sets", () => {
   const first = parsePresetFile('overture', read('overture', 'presets.json')).presets[0];
   const [xmin, ymin, xmax, ymax] = d.map.view;
   assert.deepEqual(readInputs(first?.sql ?? '', d.map.inputs).extent, { xmin, ymin, xmax, ymax });
+});
+
+test('applyInput names the preset holding the line before it looks at the area', () => {
+  const route = 'SET VARIABLE pt0 = ST_Point(1, 2);';
+  const presets = [
+    { label: 'Choose the area', sql: 'SET VARIABLE bbox = {xmin: 0, ymin: 0, xmax: 1, ymax: 1};' },
+    { label: 'Route', sql: route },
+  ];
+  const huge = { xmin: 132.0, ymin: 34.0, xmax: 133.0, ymax: 35.0 };
+  assert.deepEqual(applyInput(route, BBOX, huge, presets), {
+    error: 'This query has no SET VARIABLE bbox line — it is in the preset “Choose the area”.',
+  });
+  assert.deepEqual(applyInput('SELECT 1;', PT0, [1, 2], []), { error: 'This query has no SET VARIABLE pt0 line.' });
+});
+
+test('applyInput refuses too large an extent and otherwise returns the rewritten SQL', () => {
+  assert.deepEqual(applyInput(PRESET, BBOX, { xmin: 132.4, ymin: 34.3, xmax: 132.5, ymax: 34.4 }, []), {
+    error: 'This view is 101.6 km²; the limit is 25 km². Zoom in.',
+  });
+  assert.deepEqual(applyInput(PRESET, PT0, [5, 6], []), { sql: writeInput(PRESET, PT0, [5, 6]) });
 });

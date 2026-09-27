@@ -2,7 +2,7 @@
 import './style.css';
 import { type Dataset, type MapInput, networkHint } from './datasets.ts';
 import { ExtensionLoadError, type Session, startSession } from './duckdb.ts';
-import { type Box, extentRefusal, hasInputLine, type LonLat, readInputs, writeInput } from './inputs.ts';
+import { applyInput, type Box, type LonLat, readInputs } from './inputs.ts';
 import { createDatasetLoader, fetchIndex, type OpenDataset } from './loader.ts';
 import { createRouteMap, type RouteMap } from './map.ts';
 import { createdNames, type Preset, type PresetFile, prerequisiteHint, presetGroups } from './presets.ts';
@@ -145,21 +145,12 @@ async function main(): Promise<void> {
 
   function onMapInput(input: MapInput, value: Box | LonLat): void {
     if (!current) return;
-    if (input.kind === 'extent' && !Array.isArray(value)) {
-      const refusal = extentRefusal(value, input.maxAreaKm2 ?? Number.POSITIVE_INFINITY);
-      if (refusal) {
-        setStatus(refusal, true);
-        return;
-      }
-    }
-    const next = writeInput(sql.value, input, value);
-    if (next === null) {
-      const holder = current.opened.presets.presets.find((p) => hasInputLine(p.sql, input));
-      const where = holder ? ` — it is in the preset “${holder.label}”` : '';
-      setStatus(`This query has no SET VARIABLE ${input.variable} line${where}.`, true);
+    const outcome = applyInput(sql.value, input, value, current.opened.presets.presets);
+    if ('error' in outcome) {
+      setStatus(outcome.error, true);
       return;
     }
-    sql.value = next;
+    sql.value = outcome.sql;
     showInputValues();
     setStatus(`${input.label}: the SET VARIABLE ${input.variable} line now holds it. Run the query to use it.`);
   }
