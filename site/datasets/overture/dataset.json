@@ -1,0 +1,21 @@
+{
+  "title": "Overture Maps roads, any area (network)",
+  "license": "MIT",
+  "spatial": true,
+  "network": true,
+  "files": [],
+  "tables": [],
+  "map": {
+    "mode": "geographic",
+    "edges": "SELECT edge_id AS id, ST_AsGeoJSON(geometry) AS geojson FROM pgr_edges",
+    "nodes": "SELECT vertex_id AS id, ST_X(geometry) AS x, ST_Y(geometry) AS y FROM pgr_connectors",
+    "attribution": "© OpenStreetMap contributors, Overture Maps Foundation (ODbL)",
+    "view": [132.44, 34.37, 132.48, 34.41],
+    "dependsOn": ["pgr_connectors", "pgr_edges"],
+    "inputs": [
+      { "variable": "bbox", "kind": "extent", "label": "Use this view", "maxAreaKm2": 25 },
+      { "variable": "pt0", "kind": "point", "label": "Pick start" },
+      { "variable": "pt1", "kind": "point", "label": "Pick goal" }
+    ]
+  }
+}

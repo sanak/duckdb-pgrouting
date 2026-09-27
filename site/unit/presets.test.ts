@@ -147,17 +147,22 @@ test('workshop presets carry the licence, the attribution and a chapter link eac
   }
 });
 
-test('every workshop preset that uses a view or macro comes after the one creating it', () => {
-  const presets = presetFile('workshop-hiroshima').presets;
-  const created = new Map<string, number>();
-  presets.forEach((p, i) => {
-    for (const name of createdNames(p.sql)) if (!created.has(name)) created.set(name, i);
-  });
-  presets.forEach((p, i) => {
-    for (const [name, at] of created) {
-      if (at > i && new RegExp(`\\b${name}\\b`, 'i').test(p.sql)) assert.fail(`${p.id} uses ${name}, created later`);
-    }
-  });
+test('every preset that uses a table, view or macro comes after the one creating it', () => {
+  // Comments may name what a later preset creates ("Next: …"); only the code counts.
+  const code = (sql: string) => sql.replace(/--[^\n]*/g, '');
+  for (const id of datasetIds()) {
+    const presets = presetFile(id).presets;
+    const created = new Map<string, number>();
+    presets.forEach((p, i) => {
+      for (const name of createdNames(p.sql)) if (!created.has(name)) created.set(name, i);
+    });
+    presets.forEach((p, i) => {
+      for (const [name, at] of created) {
+        if (at > i && new RegExp(`\\b${name}\\b`, 'i').test(code(p.sql)))
+          assert.fail(`${id}: ${p.id} uses ${name}, created later`);
+      }
+    });
+  }
 });
 
 test('sourceLabel is the text of the link to a preset source', () => {
@@ -168,4 +173,45 @@ test('sourceLabel is the text of the link to a preset source', () => {
   );
   assert.equal(parsePresetFile('t', { license: 'MIT', presets: [one] }).sourceLabel, undefined);
   assert.throws(() => parsePresetFile('t', { license: 'MIT', sourceLabel: '', presets: [one] }), /t\.sourceLabel/);
+});
+
+const OVERTURE_SQL =
+  'https://github.com/CrunchyData/crunchy-bridge-for-analytics-examples/blob/fa3b6545e5cba0a44afdcd92d7995535ca20d979/overture/overture.sql';
+
+test('overture presets carry the MIT notice, the attribution and pinned links', () => {
+  const file = presetFile('overture');
+  assert.equal(file.license, 'MIT');
+  assert.equal(
+    file.licenseUrl,
+    'https://github.com/CrunchyData/crunchy-bridge-for-analytics-examples/blob/d09d90681a7eed3a9f49c3318d3181cdd17aff9f/LICENSE.md',
+  );
+  assert.match(file.attribution ?? '', /\(MIT, © 2024 Crunchy Data\)/);
+  assert.match(file.attribution ?? '', /Changed for DuckDB:/);
+  assert.equal(file.source, OVERTURE_SQL);
+  assert.equal(file.sourceLabel, 'overture.sql');
+  assert.deepEqual(
+    file.presets.map((p) => p.id),
+    [
+      'area-bbox',
+      'files-release',
+      'files-find',
+      'load-segments',
+      'load-look',
+      'prepare-macros',
+      'prepare-segments',
+      'prepare-connectors',
+      'prepare-edges',
+      'explore-components',
+      'route-dijkstra',
+      'route-geojson',
+    ],
+  );
+  for (const p of file.presets) {
+    assert.match(p.group, /^[1-6] /, p.id);
+    if (p.source) assert.ok(p.source.startsWith(`${OVERTURE_SQL}#L`) && /#L\d+-L\d+$/.test(p.source), p.id);
+  }
+  assert.match(
+    file.presets[0]?.sql.split('\n')[0] ?? '',
+    /^-- Adapted from overture\.sql.*https:\/\/crunchydata\.com\/blog\/vehicle-routing-with-postgis-and-overture-data$/,
+  );
 });

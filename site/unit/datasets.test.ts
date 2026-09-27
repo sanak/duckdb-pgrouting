@@ -203,3 +203,20 @@ test('networkHint speaks only for a network dataset and a connection error', () 
   assert.equal(networkHint('Catalog Error: Table with name ov_segments does not exist!', network), null);
   assert.equal(networkHint('IO Error: Could not establish connection', local), null);
 });
+
+test('overture is a network dataset with no files or tables and three map inputs', () => {
+  const d = parseDataset('overture', read('overture', 'dataset.json'));
+  assert.equal(d.network, true);
+  assert.equal(d.spatial, true);
+  assert.deepEqual([d.files, d.tables], [[], []]);
+  assert.ok(d.map.mode === 'geographic');
+  assert.deepEqual(d.map.dependsOn, ['pgr_connectors', 'pgr_edges']);
+  assert.deepEqual(
+    d.map.inputs?.map((i) => [i.variable, i.kind]),
+    [
+      ['bbox', 'extent'],
+      ['pt0', 'point'],
+      ['pt1', 'point'],
+    ],
+  );
+});

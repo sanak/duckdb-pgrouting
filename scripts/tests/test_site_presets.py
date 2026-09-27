@@ -15,7 +15,9 @@ with PGROUTING_NETWORK_TESTS=1.
 import json
 import os
 import pathlib
+import re
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -204,8 +206,8 @@ class TestSitePresets(unittest.TestCase):
         self.addCleanup(os.chdir, os.getcwd())
         os.chdir(DATA)
 
-    def test_both_datasets_are_committed(self):
-        self.assertEqual(["sampledata", "workshop-hiroshima"], committed_datasets())
+    def test_every_dataset_is_committed(self):
+        self.assertEqual(["overture", "sampledata", "workshop-hiroshima"], committed_datasets())
 
     def test_every_preset_runs_twice_in_order(self):
         db = duckdbcli.DuckDB(str(BINARY), flags=["-bail"])
@@ -223,6 +225,143 @@ class TestSitePresets(unittest.TestCase):
                 except duckdbcli.DuckDBError as error:
                     self.fail("{}: the last 'preset'/'again' line names the failing preset\n{}".format(
                         dataset_id, error))
+
+
+class TestOvertureFiles(unittest.TestCase):
+    """The overture files agree with each other; needs no binary."""
+
+    def test_the_sql_limit_is_the_extent_buttons_limit(self):
+        dataset = read_json("overture", "dataset.json")
+        area = next(p for p in read_json("overture", "presets.json")["presets"] if p["id"] == "area-bbox")
+        match = re.search(r"^SET VARIABLE max_area_km2 = (\d+(?:\.\d+)?);$", preset_sql(area), re.M)
+        self.assertIsNotNone(match)
+        extents = [i["maxAreaKm2"] for i in dataset["map"]["inputs"] if i["kind"] == "extent"]
+        self.assertEqual([float(match.group(1))], [float(x) for x in extents])
+
+
+# Three made-up segments well inside the default area: a one-way residential street (30 mph) whose
+# connectors repeat an `at`, a primary road without a speed limit, and a footway, which the seven
+# classes leave out of the graph. Written as Overture stores them: WKB geometry and a DOUBLE bbox.
+FAKE_SEGMENTS = """
+COPY (
+  SELECT id, ST_AsWKB(ST_GeomFromText(wkt)) AS geometry,
+    {'xmin': CAST(ST_XMin(ST_GeomFromText(wkt)) AS DOUBLE), 'ymin': CAST(ST_YMin(ST_GeomFromText(wkt)) AS DOUBLE),
+     'xmax': CAST(ST_XMax(ST_GeomFromText(wkt)) AS DOUBLE), 'ymax': CAST(ST_YMax(ST_GeomFromText(wkt)) AS DOUBLE)} AS bbox,
+    class, CAST(NULL AS VARCHAR) AS subclass, {'primary': name} AS names, connectors,
+    road_surface, speed_limits, access_restrictions
+  FROM (VALUES
+    ('a', 'LINESTRING(132.45 34.38, 132.45 34.39)', 'residential', 'A street',
+     [{'connector_id': 'c1', 'at': 0.0::DOUBLE}, {'connector_id': 'c2', 'at': 0.5::DOUBLE},
+      {'connector_id': 'c3', 'at': 0.5::DOUBLE}, {'connector_id': 'c4', 'at': 1.0::DOUBLE}],
+     [{'value': 'paved'}], [{'max_speed': {'value': 30, 'unit': 'mph'}}],
+     [{'access_type': 'denied', 'when': {'heading': 'backward'}}]),
+    ('b', 'LINESTRING(132.45 34.39, 132.46 34.39)', 'primary', NULL,
+     [{'connector_id': 'c4', 'at': 0.0::DOUBLE}, {'connector_id': 'c6', 'at': 1.0::DOUBLE}], NULL, NULL, NULL),
+    ('c', 'LINESTRING(132.46 34.39, 132.47 34.39)', 'footway', 'C path',
+     [{'connector_id': 'c6', 'at': 0.0::DOUBLE}, {'connector_id': 'c7', 'at': 1.0::DOUBLE}], NULL, NULL, NULL)
+  ) AS t(id, wkt, class, name, connectors, road_surface, speed_limits, access_restrictions)
+) TO 'PATH';
+"""
+
+# What "Segment files for the area" leaves behind, pointed at the made-up file instead of Overture.
+FAKE_FILES = """
+SET VARIABLE files = ['PATH'];
+SET VARIABLE files_bbox = getvariable('bbox');
+SET enable_geoparquet_conversion = false;
+CREATE OR REPLACE VIEW ov_segments AS SELECT * FROM read_parquet(getvariable('files'));
+"""
+
+AFTER_FILES = ["load-segments", "load-look", "prepare-macros", "prepare-segments", "prepare-connectors",
+               "prepare-edges", "explore-components", "route-dijkstra", "route-geojson"]
+
+COUNTS = """
+.mode json
+SELECT (SELECT count(*) FROM pgr_segments) AS segments, (SELECT count(*) FROM pgr_connectors) AS connectors,
+  (SELECT count(*) FROM pgr_edges) AS edges, (SELECT count(*) FROM pgr_edges WHERE one_way) AS one_way,
+  (SELECT count(*) FROM route) AS route_rows;
+"""
+
+
+def with_points(sql, pt0, pt1):
+    """The route preset with its two SET VARIABLE lines moved, as the map's pick buttons do."""
+    for variable, (lon, lat) in (("pt0", pt0), ("pt1", pt1)):
+        sql, n = re.subn(r"^SET VARIABLE {} = ST_Point\([^)]*\);$".format(variable),
+                         "SET VARIABLE {} = ST_Point({}, {});".format(variable, lon, lat), sql, flags=re.M)
+        assert n == 1, variable
+    return sql
+
+
+@unittest.skipUnless(BINARY.exists(), "build/release/duckdb not built")
+class TestOvertureWithoutOverture(unittest.TestCase):
+    """The overture presets after "2 Files", and their guards, on made-up segments.
+
+    "Latest Overture release" and "Segment files for the area" need Overture's servers. Every
+    later preset only needs a view named ov_segments with Overture's columns, so here that view
+    reads a local Parquet file of three made-up segments, and Checks runs this on every pull
+    request. The network chain itself runs only with PGROUTING_NETWORK_TESTS=1.
+    """
+
+    START = (132.45, 34.3801)  # next to c1, the one-way street's first connector
+    GOAL = (132.4599, 34.39)  # next to c6, the primary road's end
+
+    def setUp(self):
+        if gen.spatial_disabled():
+            self.skipTest("needs spatial: " + gen.NO_SPATIAL_ENV + "=1")
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.parquet = str(pathlib.Path(folder.name) / "segments.parquet")
+        self.presets = {p["id"]: preset_sql(p) for p in read_json("overture", "presets.json")["presets"]}
+        self.db = duckdbcli.DuckDB(str(BINARY), flags=["-bail"])
+
+    def run_chain(self, *parts):
+        head = "INSTALL spatial;\nLOAD spatial;\nINSTALL json;\nLOAD json;\n" + FAKE_SEGMENTS.replace("PATH", self.parquet)
+        return self.db.script(head + "\n".join(parts) + "\n", timeout=120)
+
+    def files(self):
+        return FAKE_FILES.replace("PATH", self.parquet)
+
+    def after_files(self, start, goal):
+        return [with_points(self.presets[i], start, goal) if i == "route-dijkstra" else self.presets[i]
+                for i in AFTER_FILES]
+
+    def assertStops(self, message, *parts):
+        with self.assertRaises(duckdbcli.DuckDBError) as caught:
+            self.run_chain(*parts)
+        self.assertIn(message, str(caught.exception))
+
+    def test_every_preset_after_the_files_runs_twice(self):
+        chain = [p for sql in self.after_files(self.START, self.GOAL) for p in (sql, sql)]
+        out = self.run_chain(self.presets["area-bbox"], self.files(), *chain, COUNTS)
+        counts = json.loads(out[out.rindex("[{"):])[0]
+        self.assertEqual({"segments": 4, "connectors": 5, "edges": 3, "one_way": 2, "route_rows": 4}, counts)
+
+    def test_loading_before_choosing_the_area_stops(self):
+        self.assertStops("Run the preset “Choose the area” first.", self.presets["load-segments"])
+
+    def test_loading_after_the_area_changed_stops(self):
+        self.assertStops("The area changed since the files were found",
+                         self.presets["area-bbox"], self.files(),
+                         "SET VARIABLE bbox = {xmin: 132.45, ymin: 34.37, xmax: 132.49, ymax: 34.41};",
+                         self.presets["load-segments"])
+
+    def test_loading_too_large_an_area_stops(self):
+        self.assertStops("the limit is 25 km²",
+                         self.presets["area-bbox"],
+                         "SET VARIABLE bbox = {xmin: 132.0, ymin: 34.0, xmax: 132.9, ymax: 34.9};",
+                         self.files(), self.presets["load-segments"])
+
+    def test_an_area_without_roads_stops(self):
+        self.assertStops("No roads in this area.",
+                         self.presets["area-bbox"],
+                         "SET VARIABLE bbox = {xmin: 132.30, ymin: 34.30, xmax: 132.31, ymax: 34.31};",
+                         self.files(), self.presets["load-segments"])
+
+    def test_start_and_goal_on_one_vertex_stop(self):
+        self.assertStops("Start and goal snap to the same vertex",
+                         self.presets["area-bbox"], self.files(), *self.after_files(self.START, self.START))
+
+    def test_a_route_against_a_one_way_street_stops(self):
+        self.assertStops("No route:", self.presets["area-bbox"], self.files(), *self.after_files(self.GOAL, self.START))
 
 
 if __name__ == "__main__":

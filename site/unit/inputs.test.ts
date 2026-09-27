@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: MIT
 import assert from 'node:assert/strict';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import type { MapInput } from '../src/datasets.ts';
+import { parseDataset } from '../src/datasets.ts';
 import { areaKm2, extentRefusal, hasInputLine, readInputs, writeInput } from '../src/inputs.ts';
+import { parsePresetFile } from '../src/presets.ts';
 
 const BBOX: MapInput = { variable: 'bbox', kind: 'extent', label: 'Use this view', maxAreaKm2: 25 };
 const PT0: MapInput = { variable: 'pt0', kind: 'point', label: 'Pick start' };
@@ -93,4 +97,36 @@ test('extentRefusal says how large the view is and what the limit is', () => {
     extentRefusal({ xmin: 132.4, ymin: 34.3, xmax: 132.5, ymax: 34.4 }, 25),
     'This view is 101.6 km²; the limit is 25 km². Zoom in.',
   );
+});
+
+const DATASETS = join(import.meta.dirname, '..', 'datasets');
+
+function committed(): string[] {
+  return readdirSync(DATASETS).filter((id) => existsSync(join(DATASETS, id, 'dataset.json')));
+}
+
+function read(id: string, file: string): unknown {
+  return JSON.parse(readFileSync(join(DATASETS, id, file), 'utf8'));
+}
+
+test('every map input of a committed dataset has its SET VARIABLE line in a preset', () => {
+  for (const id of committed()) {
+    const d = parseDataset(id, read(id, 'dataset.json'));
+    if (d.map.mode !== 'geographic') continue;
+    const presets = parsePresetFile(id, read(id, 'presets.json')).presets;
+    for (const input of d.map.inputs ?? []) {
+      assert.ok(
+        presets.some((p) => hasInputLine(p.sql, input)),
+        `${id}: no preset has a SET VARIABLE ${input.variable} line`,
+      );
+    }
+  }
+});
+
+test("overture's view is the area its first preset sets", () => {
+  const d = parseDataset('overture', read('overture', 'dataset.json'));
+  assert.ok(d.map.mode === 'geographic' && d.map.view && d.map.inputs);
+  const first = parsePresetFile('overture', read('overture', 'presets.json')).presets[0];
+  const [xmin, ymin, xmax, ymax] = d.map.view;
+  assert.deepEqual(readInputs(first?.sql ?? '', d.map.inputs).extent, { xmin, ymin, xmax, ymax });
 });
