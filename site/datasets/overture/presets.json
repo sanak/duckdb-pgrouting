@@ -1,7 +1,7 @@
 {
   "license": "MIT",
   "licenseUrl": "https://github.com/CrunchyData/crunchy-bridge-for-analytics-examples/blob/d09d90681a7eed3a9f49c3318d3181cdd17aff9f/LICENSE.md",
-  "attribution": "Adapted from overture.sql in Crunchy Data's crunchy-bridge-for-analytics-examples (MIT, © 2024 Crunchy Data), the example code of Paul Ramsey's article \"Vehicle Routing with PostGIS and Overture Data\". Changed for DuckDB: the PL/pgSQL functions became macros and statements, the foreign table became a view over the files found through Overture's STAC catalogue, sequences became row_number(), and the route is returned as rows so the map can draw it.",
+  "attribution": "Adapted from overture.sql in Crunchy Data's crunchy-bridge-for-analytics-examples (MIT, © 2024 Crunchy Data), the example code of Paul Ramsey's article [“Vehicle Routing with PostGIS and Overture Data”](https://www.crunchydata.com/blog/vehicle-routing-with-postgis-and-overture-data). Changed for DuckDB: the PL/pgSQL functions became macros and statements, the foreign table became a view over the files found through Overture's STAC catalogue, sequences became row_number(), and the route is returned as rows so the map can draw it.",
   "source": "https://github.com/CrunchyData/crunchy-bridge-for-analytics-examples/blob/fa3b6545e5cba0a44afdcd92d7995535ca20d979/overture/overture.sql",
   "sourceLabel": "overture.sql",
   "presets": [
@@ -10,7 +10,7 @@
       "group": "1 Area",
       "label": "Choose the area",
       "sql": [
-        "-- Adapted from overture.sql, the example code of Paul Ramsey's \"Vehicle Routing with PostGIS and Overture Data\": https://crunchydata.com/blog/vehicle-routing-with-postgis-and-overture-data",
+        "-- Adapted from overture.sql, the example code of Paul Ramsey's \"Vehicle Routing with PostGIS and Overture Data\": https://www.crunchydata.com/blog/vehicle-routing-with-postgis-and-overture-data",
         "-- Next: “Latest Overture release”. After changing the area, run the presets again from here.",
         "-- Playground: the area is a variable, and “Use this view” on the map rewrites the bbox line with",
         "-- the map's view. overture.sql's box around Victoria, Canada (about 180 km²) is over the limit",

@@ -2,7 +2,8 @@
 // Starting points for the editor. Each dataset has a presets.json next to its dataset.json:
 // { license, licenseUrl?, attribution?, source?, sourceLabel?, presets: [{ id, group, label, sql, source? }] }.
 // `sql` may be an array of lines, which reads better in JSON. `sourceLabel` is the text of the link
-// to a preset's `source` (default "Workshop page"). The presets of a file are in the order a reader
+// to a preset's `source` (default "Workshop page"). `attribution` may link a phrase as
+// [text](https://…); any other bracket is refused. The presets of a file are in the order a reader
 // runs them: one that needs a table, view or macro only ever needs one an earlier preset creates.
 import { type Json, list, object, text } from './json.ts';
 
@@ -21,6 +22,30 @@ export interface PresetFile {
   source?: string;
   sourceLabel?: string;
   presets: Preset[];
+}
+
+export type AttributionPart = string | { text: string; url: string };
+
+const ATTRIBUTION_LINK = /\[([^[\]]+)\]\(([^()\s]+)\)/g;
+
+// The attribution as prose and links, in order; throws on a bracket that is not a whole link.
+export function attributionParts(attribution: string): AttributionPart[] {
+  const parts: AttributionPart[] = [];
+  let at = 0;
+  const prose = (end: number) => {
+    const piece = attribution.slice(at, end);
+    if (/[[\]]/.test(piece)) throw new Error(`a bracket that is not a [text](https://…) link: “${piece}”`);
+    if (piece) parts.push(piece);
+  };
+  for (const match of attribution.matchAll(ATTRIBUTION_LINK)) {
+    const [whole, text, url] = match as unknown as [string, string, string];
+    prose(match.index);
+    if (!url.startsWith('https://')) throw new Error(`the link “${text}” is not an https:// link`);
+    parts.push({ text, url });
+    at = match.index + whole.length;
+  }
+  prose(attribution.length);
+  return parts;
 }
 
 const PRESET_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -57,6 +82,13 @@ export function parsePresetFile(where: string, value: unknown): PresetFile {
     };
   });
   const attribution = o.attribution === undefined ? undefined : text(o, 'attribution', where);
+  if (attribution !== undefined) {
+    try {
+      attributionParts(attribution);
+    } catch (error) {
+      throw new Error(`${where}.attribution: ${(error as Error).message}`);
+    }
+  }
   const source = optionalLink(o, 'source', where);
   const licenseUrl = optionalLink(o, 'licenseUrl', where);
   const sourceLabel = o.sourceLabel === undefined ? undefined : text(o, 'sourceLabel', where);

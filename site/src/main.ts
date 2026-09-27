@@ -5,7 +5,14 @@ import { ExtensionLoadError, type Session, startSession } from './duckdb.ts';
 import { applyInput, type Box, type LonLat, openingView, presetExtent, readInputs } from './inputs.ts';
 import { createDatasetLoader, fetchIndex, type OpenDataset } from './loader.ts';
 import { createRouteMap, GEOGRAPHIC_PADDING, type RouteMap } from './map.ts';
-import { createdNames, type Preset, type PresetFile, prerequisiteHint, presetGroups } from './presets.ts';
+import {
+  attributionParts,
+  createdNames,
+  type Preset,
+  type PresetFile,
+  prerequisiteHint,
+  presetGroups,
+} from './presets.ts';
 import { highlightOf, summarize } from './result.ts';
 import { nextSelection, type PickSource } from './selection.ts';
 import { hashFor, stateFromHash } from './share.ts';
@@ -97,7 +104,10 @@ function showPresetNote(file: PresetFile, chosen: Preset | undefined): void {
   presetNote.replaceChildren();
   presetNote.hidden = !(chosen && file.attribution);
   if (!chosen || !file.attribution) return;
-  presetNote.append(`${file.attribution} `);
+  for (const part of attributionParts(file.attribution)) {
+    presetNote.append(typeof part === 'string' ? part : link(part.url, part.text));
+  }
+  presetNote.append(' ');
   if (chosen.source) presetNote.append(link(chosen.source, file.sourceLabel ?? 'Workshop page'), ' · ');
   presetNote.append(file.licenseUrl ? link(file.licenseUrl, file.license) : file.license);
 }
