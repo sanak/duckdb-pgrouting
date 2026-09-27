@@ -297,6 +297,144 @@ class TestTieClassification(unittest.TestCase):
         )
 
 
+class TestTreeTieClassification(unittest.TestCase):
+    COLUMNS = ["seq", "depth", "start_vid", "pred", "node", "edge", "cost", "agg_cost"]
+    DIRECTIVE = "IIIIIIRR"
+    SQL = "SELECT * FROM pgr_drivingDistance('SELECT id, source, target, cost FROM edges', 11, 3.0)"
+
+    UPSTREAM = [
+        ["1", "0", "11", "11", "11", "-1", "0", "0"],
+        ["2", "1", "11", "11", "12", "11", "1", "1"],
+        ["3", "1", "11", "11", "16", "9", "1", "1"],
+        ["4", "2", "11", "16", "17", "15", "1", "2"],
+    ]
+    # 17 reached from 12 instead of 16: same vertices, same costs.
+    TIED = [
+        [1, 0, 11, 11, 11, -1, 0.0, 0.0],
+        [2, 1, 11, 11, 12, 11, 1.0, 1.0],
+        [3, 1, 11, 11, 16, 9, 1.0, 1.0],
+        [4, 2, 11, 12, 17, 13, 1.0, 2.0],
+    ]
+
+    def _table(self, rows):
+        import pgparse
+
+        return pgparse.AlignedTable(self.COLUMNS, rows, len(rows))
+
+    def _result(self, rows):
+        return duckdbcli.QueryResult(columns=self.COLUMNS, types=["BIGINT"] * 6 + ["DOUBLE"] * 2, rows=rows)
+
+    def test_another_equal_cost_predecessor_is_a_tree_tie(self):
+        self.assertEqual("tree_tie", gen.classify(self._table(self.UPSTREAM), self._result(self.TIED),
+                                                  self.DIRECTIVE, None, self.SQL))
+
+    def test_a_different_cost_is_a_defect(self):
+        wrong = [list(row) for row in self.TIED]
+        wrong[-1][-1] = 3.0
+        self.assertEqual("defect", gen.classify(self._table(self.UPSTREAM), self._result(wrong),
+                                                self.DIRECTIVE, None, self.SQL))
+
+    def test_a_spanning_tree_has_no_tree_invariant(self):
+        sql = self.SQL.replace("pgr_drivingDistance", "pgr_kruskalDD")
+        self.assertEqual("defect", gen.classify(self._table(self.UPSTREAM), self._result(self.TIED),
+                                                self.DIRECTIVE, None, sql))
+
+    def test_the_companion_expects_upstreams_vertices_and_costs(self):
+        self.assertEqual([["11", "11", "0"], ["11", "12", "1"], ["11", "16", "1"], ["11", "17", "2"]],
+                         gen.tree_companion_rows(self._table(self.UPSTREAM), self.DIRECTIVE, self.SQL))
+
+
+class TestForestCompanion(unittest.TestCase):
+    def _table(self, columns, rows):
+        import pgparse
+
+        return pgparse.AlignedTable(columns, rows, len(rows))
+
+    # --- edge, cost shape (pgr_kruskal, pgr_prim) -----------------------------------------
+
+    EDGE_COLUMNS = ["edge", "cost"]
+    EDGE_DIRECTIVE = "IR"
+    EDGE_UPSTREAM = [["1", "1"], ["2", "1"], ["3", "1"]]
+
+    def test_edge_cost_shape_is_recognised(self):
+        self.assertEqual("edges", gen.forest_shape(self.EDGE_COLUMNS))
+
+    def test_edge_cost_companion_counts_rows_and_sums_cost(self):
+        sql = gen.forest_companion_sql("SELECT * FROM pgr_kruskal('x')", "edges")
+        self.assertIn("count(*), sum(cost)", sql)
+        table = self._table(self.EDGE_COLUMNS, self.EDGE_UPSTREAM)
+        self.assertEqual(
+            [["3", "3"]], gen.forest_companion_rows(table, self.EDGE_DIRECTIVE, "edges")
+        )
+
+    # --- tree shape (pgr_kruskalBFS/DFS/DD, pgr_primBFS/DFS/DD) ---------------------------
+
+    TREE_COLUMNS = ["seq", "depth", "start_vid", "pred", "node", "edge", "cost", "agg_cost"]
+    TREE_DIRECTIVE = "IIIIIIRR"
+
+    # Two clean roots, 6 and 9: each has a single depth-0 row, no repeated node, and every
+    # other row hangs off its predecessor one level up at the predecessor's cost plus its own.
+    TREE_UPSTREAM = [
+        ["1", "0", "6", "6", "6", "-1", "0", "0"],
+        ["2", "1", "6", "6", "5", "1", "1", "1"],
+        ["3", "2", "6", "5", "15", "3", "1", "2"],
+        ["4", "0", "9", "9", "9", "-1", "0", "0"],
+        ["5", "1", "9", "9", "20", "5", "1", "1"],
+    ]
+
+    def test_tree_shape_is_recognised(self):
+        self.assertEqual("tree", gen.forest_shape(self.TREE_COLUMNS))
+
+    def test_tree_companion_sql_asserts_the_invariant(self):
+        sql = gen.forest_companion_sql("SELECT * FROM pgr_kruskalBFS('x', 6)", "tree")
+        self.assertIn("count(*) FILTER (WHERE depth = 0)", sql)
+        self.assertIn("count(*) = count(DISTINCT node)", sql)
+        self.assertIn("NOT EXISTS", sql)
+
+    def test_clean_tree_has_no_orphans_and_no_repeats(self):
+        table = self._table(self.TREE_COLUMNS, self.TREE_UPSTREAM)
+        self.assertEqual(
+            [["6", "1", "true", "0"], ["9", "1", "true", "0"]],
+            gen.forest_companion_rows(table, self.TREE_DIRECTIVE, "tree"),
+        )
+
+    def test_a_row_whose_predecessor_is_unreachable_is_an_orphan(self):
+        # Row 3's pred (99) names no row of root 6 one level up: an orphan, count 1.
+        orphaned = [list(row) for row in self.TREE_UPSTREAM]
+        orphaned[2] = ["3", "2", "6", "99", "15", "3", "1", "2"]
+        table = self._table(self.TREE_COLUMNS, orphaned)
+        self.assertEqual(
+            [["6", "1", "true", "1"], ["9", "1", "true", "0"]],
+            gen.forest_companion_rows(table, self.TREE_DIRECTIVE, "tree"),
+        )
+
+    def test_a_repeated_node_under_one_root_is_false(self):
+        # Row 3's node (5) repeats row 2's node under the same root 6; its predecessor link
+        # still holds, so only the no-repeat flag flips, not the orphan count.
+        repeated = [list(row) for row in self.TREE_UPSTREAM]
+        repeated[2] = ["3", "2", "6", "5", "5", "3", "1", "2"]
+        table = self._table(self.TREE_COLUMNS, repeated)
+        self.assertEqual(
+            [["6", "1", "false", "0"], ["9", "1", "true", "0"]],
+            gen.forest_companion_rows(table, self.TREE_DIRECTIVE, "tree"),
+        )
+
+    # --- unrecognised shape ----------------------------------------------------------------
+
+    def test_an_unrecognised_column_set_is_no_shape(self):
+        self.assertIsNone(gen.forest_shape(["node", "edge"]))
+
+    # --- the forest-call decision -----------------------------------------------------------
+
+    def test_kruskal_and_prim_calls_are_forest_calls(self):
+        self.assertTrue(gen.is_forest_call("SELECT * FROM pgr_kruskalDD('x', 6, 3.0)"))
+        self.assertTrue(gen.is_forest_call("SELECT * FROM PGR_PRIM('x')"))
+
+    def test_driving_distance_and_dijkstra_are_not_forest_calls(self):
+        self.assertFalse(gen.is_forest_call("SELECT * FROM pgr_drivingDistance('x', 6, 3.0)"))
+        self.assertFalse(gen.is_forest_call("SELECT * FROM pgr_dijkstra('x', 6, 10)"))
+
+
 class TestClassifyTextLeadingSpace(unittest.TestCase):
     def test_a_text_cells_leading_space_is_a_match_not_a_defect(self):
         import pgparse

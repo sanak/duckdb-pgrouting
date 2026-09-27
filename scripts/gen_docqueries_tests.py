@@ -42,6 +42,23 @@ TIES_FILE = "test/pgrouting_ties.json"
 TIE_COLUMNS = ("start_vid", "end_vid", "agg_cost")
 ROUTE_COLUMNS = ("node", "edge")
 
+# Driving-distance results: which predecessor reaches a vertex is an equal-cost choice, but each
+# root's set of reached vertices and their costs are not.
+TREE_TIE_FUNCTIONS = frozenset({"pgr_drivingdistance", "pgr_withpointsdd"})
+TREE_TIE_COLUMNS = ("start_vid", "node", "agg_cost")
+
+# Kruskal/Prim results: Boost's kruskal_minimum_spanning_tree pops equal-weight edges from a
+# std::priority_queue whose tie order depends on the C++ standard library, so which minimum
+# spanning forest (or which walk of one) comes back is never guaranteed, unlike a route or a
+# driving-distance tree. Every block calling one of these is a forest companion unconditionally,
+# whether or not this build's raw answer happens to equal upstream's.
+FOREST_FUNCTIONS = frozenset({
+    "pgr_kruskal", "pgr_kruskalbfs", "pgr_kruskaldfs", "pgr_kruskaldd",
+    "pgr_prim", "pgr_primbfs", "pgr_primdfs", "pgr_primdd",
+})
+FOREST_EDGE_COLUMNS = ("edge", "cost")
+FOREST_TREE_COLUMNS = ("seq", "depth", "start_vid", "pred", "node", "edge", "cost", "agg_cost")
+
 # A call is an upstream function only when pgr_ starts an identifier, so my_pgr_dijkstra_helper
 # is left alone.
 CALL_RE = re.compile(r"(?<![A-Za-z0-9_])(pgr_\w+)\s*\(", re.IGNORECASE)
@@ -263,18 +280,39 @@ def tie_shape(columns: Sequence[str], rows: Sequence[Sequence[Any]], directive: 
     )
 
 
+def tree_tie_shape(sql: str, columns: Sequence[str], rows: Sequence[Sequence[Any]], directive: str,
+                   float_digits: Optional[int] = None) -> Optional[List[Tuple[Any, ...]]]:
+    """Each root's reached vertices with their costs, for a driving-distance query.
+
+    None for every other query: a spanning tree or a traversal that edge order picks has no
+    invariant here, so any difference in it stays a defect.
+    """
+    called = {match.group(1).lower() for match in CALL_RE.finditer(sql)}
+    if not called & TREE_TIE_FUNCTIONS:
+        return None
+    lowered = [c.lower() for c in columns]
+    if not all(c in lowered for c in TREE_TIE_COLUMNS):
+        return None
+    index = [lowered.index(c) for c in TREE_TIE_COLUMNS]
+    return sorted(tuple(_actual(row[i], directive[i], float_digits) for i in index) for row in rows)
+
+
 def classify(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str,
-             float_digits: Optional[int] = None) -> str:
-    """"match", "tie" or "defect" for one block."""
+             float_digits: Optional[int] = None, sql: str = "") -> str:
+    """"match", "tie", "tree_tie" or "defect" for one block."""
     expected = [[coerce(cell, t) for cell, t in zip(row, directive)] for row in table.rows]
     actual = [[_actual(v, t, float_digits) for v, t in zip(row, directive)] for row in result.rows]
     if expected == actual:
         return "match"
     upstream_shape = tie_shape(table.columns, table.rows, directive, float_digits)
     ours_shape = tie_shape(result.columns, result.rows, directive, float_digits)
-    if upstream_shape is None or ours_shape is None:
-        return "defect"
-    return "tie" if upstream_shape == ours_shape else "defect"
+    if upstream_shape is not None and ours_shape is not None:
+        return "tie" if upstream_shape == ours_shape else "defect"
+    upstream_tree = tree_tie_shape(sql, table.columns, table.rows, directive, float_digits)
+    ours_tree = tree_tie_shape(sql, result.columns, result.rows, directive, float_digits)
+    if upstream_tree is not None and ours_tree is not None:
+        return "tree_tie" if upstream_tree == ours_tree else "defect"
+    return "defect"
 
 
 def check_column_count(category: str, stem: str, block_name: str,
@@ -311,6 +349,147 @@ def companion_rows(table: pgparse.AlignedTable, directive: str) -> List[List[str
         if isinstance(total, float) and total.is_integer():
             total_text = str(int(total))
         out.append([str(start), str(end), str(count), total_text])
+    return out
+
+
+def tree_companion_sql(sql: str) -> str:
+    """Wrap a driving-distance query in the assertion that survives a predecessor tie."""
+    return "SELECT start_vid, node, agg_cost\nFROM ({})\nORDER BY 1, 2, 3;".format(sql.strip().rstrip(";"))
+
+
+def tree_companion_rows(table: pgparse.AlignedTable, directive: str, sql: str) -> List[List[str]]:
+    """The tree companion's expected rows, computed from upstream's table."""
+    shape = tree_tie_shape(sql, table.columns, table.rows, directive)
+    assert shape is not None  # classify() already established this
+    out = []
+    for start, node, cost in shape:
+        cost_text = str(int(cost)) if isinstance(cost, float) and cost.is_integer() else repr(cost)
+        out.append([str(start), str(node), cost_text])
+    return out
+
+
+def is_forest_call(sql: str) -> bool:
+    """Whether sql calls a spanning-forest function (pgr_kruskal*/pgr_prim*), matched like CALL_RE."""
+    called = {match.group(1).lower() for match in CALL_RE.finditer(sql)}
+    return bool(called & FOREST_FUNCTIONS)
+
+
+def forest_shape(columns: Sequence[str]) -> Optional[str]:
+    """"edges" (pgr_kruskal/pgr_prim), "tree" (the *BFS/*DFS/*DD families), or None.
+
+    None is a shape this rule does not recognise: process() raises Mismatch on it, since a forest
+    function returning neither known column set is a defect this generator cannot classify.
+    """
+    lowered = {c.lower() for c in columns}
+    if lowered == set(FOREST_EDGE_COLUMNS):
+        return "edges"
+    if lowered == set(FOREST_TREE_COLUMNS):
+        return "tree"
+    return None
+
+
+FOREST_DIRECTIVES = {"edges": "IR", "tree": "IITI"}
+
+FOREST_NOTES = {
+    "edges": (
+        "which minimum spanning forest is built among equal-cost edges depends on the C++ "
+        "standard library's priority-queue order, so only what every such forest guarantees is "
+        "asserted: edge count and total cost"
+    ),
+    "tree": (
+        "which minimum spanning forest is built among equal-cost edges depends on the C++ "
+        "standard library's priority-queue order, so only what every such forest guarantees is "
+        "asserted: each root's single depth-0 row, no repeated node, and every other row hanging "
+        "off its predecessor one level up at the predecessor's cost plus its own"
+    ),
+}
+
+
+def forest_companion_sql(sql: str, shape: str) -> str:
+    """Wrap a spanning-forest query in the assertion that survives any equal-cost forest choice."""
+    body = sql.strip().rstrip(";")
+    if shape == "edges":
+        return "SELECT count(*), sum(cost)\nFROM ({});".format(body)
+    return (
+        "WITH q AS ({})\n"
+        "SELECT start_vid,\n"
+        "       count(*) FILTER (WHERE depth = 0),\n"
+        "       count(*) = count(DISTINCT node),\n"
+        "       count(*) FILTER (WHERE depth > 0 AND NOT EXISTS (\n"
+        "         SELECT 1 FROM q AS p\n"
+        "         WHERE p.start_vid = q.start_vid AND p.node = q.pred AND p.depth = q.depth - 1\n"
+        "           AND abs(p.agg_cost + q.cost - q.agg_cost) < 1e-9))\n"
+        "FROM q\n"
+        "GROUP BY start_vid\n"
+        "ORDER BY start_vid;"
+    ).format(body)
+
+
+def _forest_edges_rows(table: pgparse.AlignedTable, directive: str) -> List[List[str]]:
+    lowered = [c.lower() for c in table.columns]
+    cost_index = lowered.index("cost")
+    total = 0
+    for row in table.rows:
+        total += coerce(row[cost_index], directive[cost_index])
+    total_text = repr(total)
+    if isinstance(total, float) and total.is_integer():
+        total_text = str(int(total))
+    return [[str(table.row_count), total_text]]
+
+
+def _forest_tree_rows(table: pgparse.AlignedTable, directive: str) -> List[List[str]]:
+    lowered = [c.lower() for c in table.columns]
+    index = {name: lowered.index(name) for name in FOREST_TREE_COLUMNS}
+    parsed = [
+        {name: coerce(row[i], directive[i]) for name, i in index.items()}
+        for row in table.rows
+    ]
+    by_root: Dict[Any, List[Dict[str, Any]]] = {}
+    for row in parsed:
+        by_root.setdefault(row["start_vid"], []).append(row)
+    out = []
+    for start in sorted(by_root):
+        rows = by_root[start]
+        depth0 = sum(1 for r in rows if r["depth"] == 0)
+        nodes = [r["node"] for r in rows]
+        no_repeat = len(nodes) == len(set(nodes))
+        by_node_depth = {(r["node"], r["depth"]): r for r in rows}
+        orphans = 0
+        for r in rows:
+            if r["depth"] <= 0:
+                continue
+            pred_row = by_node_depth.get((r["pred"], r["depth"] - 1))
+            linked = (
+                pred_row is not None
+                and abs(pred_row["agg_cost"] + r["cost"] - r["agg_cost"]) < 1e-9
+            )
+            if not linked:
+                orphans += 1
+        out.append([str(start), str(depth0), "true" if no_repeat else "false", str(orphans)])
+    return out
+
+
+def forest_companion_rows(table: pgparse.AlignedTable, directive: str, shape: str) -> List[List[str]]:
+    """The forest companion's expected rows, computed in Python from upstream's table."""
+    if shape == "edges":
+        return _forest_edges_rows(table, directive)
+    return _forest_tree_rows(table, directive)
+
+
+def forest_actual_rows(result: duckdbcli.QueryResult, directive: str) -> List[List[str]]:
+    """This build's companion-query rows, formatted like forest_companion_rows' expected rows."""
+    out = []
+    for row in result.rows:
+        cells = []
+        for value, slt_type in zip(row, directive):
+            actual = _actual(value, slt_type)
+            if slt_type == "R":
+                cells.append(str(int(actual)) if actual.is_integer() else repr(actual))
+            elif isinstance(actual, bool):
+                cells.append("true" if actual else "false")
+            else:
+                cells.append(str(actual))
+        out.append(cells)
     return out
 
 
@@ -444,10 +623,39 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Set[str
         result = db.query(sql)
         check_column_count(category, stem, block.name, table, result)
         directive = slt_types(result.types)
+        if is_forest_call(sql):
+            shape = forest_shape(table.columns)
+            if shape is None:
+                raise Mismatch(
+                    "{}/{}.pg {}: a spanning-forest function returned a column set the forest "
+                    "invariant does not recognise: {}".format(category, stem, block.name, table.columns)
+                )
+            forest_directive = FOREST_DIRECTIVES[shape]
+            forest_sql = forest_companion_sql(sql, shape)
+            expected_forest_rows = forest_companion_rows(table, directive, shape)
+            actual_forest_rows = forest_actual_rows(db.query(forest_sql), forest_directive)
+            if actual_forest_rows != expected_forest_rows:
+                raise Mismatch(
+                    "{}/{}.pg {}: this build's spanning forest fails the forest invariant\n"
+                    "expected upstream's: {}\nthis build's:         {}".format(
+                        category, stem, block.name, expected_forest_rows, actual_forest_rows
+                    )
+                )
+            ties.setdefault("{}/{}.pg".format(category, stem), {})[block.name] = {
+                "reason": "equal-cost spanning forest",
+                "upstream_rows": table.row_count,
+            }
+            items.append(
+                Emitted(
+                    block.name, forest_directive, forest_sql, expected_forest_rows,
+                    note=FOREST_NOTES[shape],
+                )
+            )
+            continue
         if any(t == "T" and cell.strip() == "" for row in table.rows for cell, t in zip(row, directive)):
             items.append(Skipped(block.name, "blank cell in a text column"))
             continue
-        verdict = classify(table, result, directive, float_digits)
+        verdict = classify(table, result, directive, float_digits, sql)
         if verdict == "defect":
             raise Mismatch(
                 "{}/{}.pg {}: this build's answer is not an equal-cost alternative to "
@@ -471,6 +679,26 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Set[str
                         "this build reaches the same optimum by a different equal-cost route, "
                         "so only what upstream guarantees is asserted: endpoints, row count and "
                         "total agg_cost"
+                    ),
+                )
+            )
+            continue
+        if verdict == "tree_tie":
+            ties.setdefault("{}/{}.pg".format(category, stem), {})[block.name] = {
+                "reason": "equal-cost tie",
+                "upstream_rows": table.row_count,
+                "differing_rows": _differing(table, result, directive, float_digits),
+            }
+            items.append(
+                Emitted(
+                    block.name,
+                    "IIR",
+                    tree_companion_sql(sql),
+                    tree_companion_rows(table, directive, sql),
+                    note=(
+                        "this build reaches the same vertices at the same costs through different "
+                        "equal-cost predecessors, so only what upstream guarantees is asserted: "
+                        "each root's vertices and their costs"
                     ),
                 )
             )
