@@ -7,6 +7,7 @@ import {
   attributionParts,
   createdNames,
   missingName,
+  noteSource,
   type Preset,
   parsePresetFile,
   prerequisiteHint,
@@ -204,6 +205,17 @@ test('overture names its article as a link, and its SQL points at the same page'
     { text: '“Vehicle Routing with PostGIS and Overture Data”', url: ARTICLE },
   );
   assert.ok(file.presets[0]?.sql.includes(`Overture Data": ${ARTICLE}`));
+});
+
+test('noteSource links a preset without a source of its own to the whole file', () => {
+  const file = presetFile('overture');
+  const [area, , find] = file.presets;
+  assert.ok(area && find && area.source === undefined && find.source);
+  assert.equal(noteSource(file, area), OVERTURE_SQL);
+  assert.equal(noteSource(file, find), find.source);
+  assert.equal(noteSource({ license: 'MIT', presets: [] }, area), undefined);
+  // Every overture preset's note now carries an overture.sql link.
+  assert.ok(file.presets.every((p) => noteSource(file, p)?.startsWith(OVERTURE_SQL)));
 });
 
 const OVERTURE_SQL =

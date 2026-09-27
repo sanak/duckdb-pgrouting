@@ -8,6 +8,7 @@ import { createRouteMap, GEOGRAPHIC_PADDING, type RouteMap } from './map.ts';
 import {
   attributionParts,
   createdNames,
+  noteSource,
   type Preset,
   type PresetFile,
   prerequisiteHint,
@@ -108,7 +109,8 @@ function showPresetNote(file: PresetFile, chosen: Preset | undefined): void {
     presetNote.append(typeof part === 'string' ? part : link(part.url, part.text));
   }
   presetNote.append(' ');
-  if (chosen.source) presetNote.append(link(chosen.source, file.sourceLabel ?? 'Workshop page'), ' · ');
+  const source = noteSource(file, chosen);
+  if (source) presetNote.append(link(source, file.sourceLabel ?? 'Workshop page'), ' · ');
   presetNote.append(file.licenseUrl ? link(file.licenseUrl, file.license) : file.license);
 }
 

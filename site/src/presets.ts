@@ -102,6 +102,12 @@ export function parsePresetFile(where: string, value: unknown): PresetFile {
   };
 }
 
+// The link a preset's note carries: its own source, else the file's (a preset written for the
+// Playground has no lines of its own in the original).
+export function noteSource(file: PresetFile, chosen: Preset): string | undefined {
+  return chosen.source ?? file.source;
+}
+
 export function presetGroups(presets: readonly Preset[]): { group: string; presets: Preset[] }[] {
   const groups = new Map<string, Preset[]>();
   for (const p of presets) {
