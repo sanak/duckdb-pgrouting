@@ -14,7 +14,8 @@ namespace duckdb_pgrouting {
 
 namespace {
 
-// Plain data, so the table needs no dynamic initialization (as in the *_specs.cpp tables).
+// A plain C array of string literals: it depends on no DuckDB statics, so it needs no dynamic
+// initialization at load time (unlike the *_specs.cpp tables, which build duckdb::vector objects).
 struct FunctionDoc {
 	const char *name;
 	const char *description;

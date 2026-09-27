@@ -120,7 +120,7 @@ WHERE edge = -1;
 ----
 6	10	5
 
-# The error mapping is shared: an old-style driver's err/log pair arrives as the unified driver's
+# The error mapping is shared: a per-family driver's err/log pair arrives as the unified driver's
 # does (compare dijkstra_errors.test).
 statement error
 SELECT * FROM _pgr_exec(
