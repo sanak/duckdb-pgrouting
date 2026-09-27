@@ -202,11 +202,13 @@ async function main(): Promise<void> {
         mode: map.mode,
         attribution: geographic?.attribution,
         view: geographic
-          ? openingView(sql.value, mapInputs(opened.dataset), geographic.view, {
-              width: mapSection.clientWidth,
-              height: mapSection.clientHeight,
-              padding: GEOGRAPHIC_PADDING,
-            })
+          ? openingView(
+              sql.value,
+              mapInputs(opened.dataset),
+              geographic.view,
+              { width: mapSection.clientWidth, height: mapSection.clientHeight, padding: GEOGRAPHIC_PADDING },
+              geometry.bounds ? [...geometry.bounds[0], ...geometry.bounds[1]] : undefined,
+            )
           : undefined,
         dynamic: dependsOn(opened.dataset).length > 0,
         inputs: mapInputs(opened.dataset),

@@ -39,7 +39,7 @@ export interface MapOptions {
   mode: 'abstract' | 'geographic';
   // Shown in the attribution control for the network's own data (geographic mode).
   attribution?: string;
-  // Where the map opens while the network is empty.
+  // Where the map opens: while the network is empty, and for a dynamic map always.
   view?: View;
   // The network is rebuilt by the reader's queries: the map is not held to its bounds.
   dynamic?: boolean;
@@ -163,7 +163,9 @@ export async function createRouteMap(
 ): Promise<RouteMap> {
   const geographic = options.mode === 'geographic';
   const inputs = options.inputs ?? [];
-  const box = geometry.bounds ?? (options.view ? viewBounds(options.view) : null);
+  // A dynamic map opens on options.view, which already accounts for a network built earlier.
+  const opening = options.view ? viewBounds(options.view) : null;
+  const box = (options.dynamic ? (opening ?? geometry.bounds) : (geometry.bounds ?? opening)) ?? null;
   if (!box) throw new Error('the map has nothing to draw');
   const [[west, south], [east, north]] = box;
   const padX = (east - west) * 0.5;

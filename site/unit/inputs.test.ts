@@ -217,9 +217,20 @@ test('openingView reshapes an area that would show more than the limit, at any w
     assertShaped(openingView(DEFAULT_LINE, ALL, DEFAULT_AREA, frame), frame, DEFAULT_AREA_KM2);
     assertShaped(openingView('SELECT 1;', ALL, DEFAULT_AREA, frame), frame, DEFAULT_AREA_KM2);
   }
-  // An area larger than the limit (typed by hand) opens on the limit's worth of it.
   const big = 'SET VARIABLE bbox = {xmin: 132.43, ymin: 34.36, xmax: 132.49, ymax: 34.42};';
-  assertShaped(openingView(big, ALL, DEFAULT_AREA, MAXIMIZED), MAXIMIZED, 25);
+  // An area larger than the limit (typed by hand) opens a little under it, so the view is taken.
+  assertShaped(openingView(big, ALL, DEFAULT_AREA, MAXIMIZED), MAXIMIZED, 0.95 * 25);
+});
+
+test('openingView opens on a network already built, held to the limit like any other area', () => {
+  // 9 km², centred like the default area; fitted whole in the maximized frame it shows about 38 km².
+  const network: View = [132.445, 34.375, 132.475, 34.405];
+  const km2 = areaKm2({ xmin: 132.445, ymin: 34.375, xmax: 132.475, ymax: 34.405 });
+  // It wins over the committed line the editor gets back, and over the dataset's view.
+  assertShaped(openingView(DEFAULT_LINE, ALL, DEFAULT_AREA, MAXIMIZED, network), MAXIMIZED, km2);
+  assertShaped(openingView('SELECT 1;', ALL, DEFAULT_AREA, MAXIMIZED, network), MAXIMIZED, km2);
+  const squarish = { width: 600, height: 640, padding: 24 };
+  assert.deepEqual(openingView(DEFAULT_LINE, ALL, DEFAULT_AREA, squarish, network), network);
 });
 
 test('openingView keeps an area whole when the frame shows it within the limit', () => {

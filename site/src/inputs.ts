@@ -139,6 +139,8 @@ export function presetExtent(
   return writeInput(sql, input, view);
 }
 
+const LIMIT_MARGIN = 0.95;
+
 // The map's size in CSS pixels and the padding it fits a view inside.
 export interface Frame {
   width: number;
@@ -146,20 +148,22 @@ export interface Frame {
   padding: number;
 }
 
-// Where a map opens while its network is empty: on the area the SQL holds (the preset's own, a
-// share link's, or one typed by hand), so the reader sees the outline and builds the network on
-// screen; otherwise on the dataset's view. Fitting a box into a frame of another shape shows more
-// than the box; when that would pass the extent's limit, so that "Use this view" would be refused
-// straight away, the box is reshaped to the frame around the same centre and the map shows the
-// box's own area (at most the limit) instead, at any window size.
+// Where a map opens: on the network already built (a dataset opened again), else on the area the
+// SQL holds (the preset's own, a share link's, or one typed by hand), so the reader sees the
+// outline and builds the network on screen, else on the dataset's view. Fitting a box into a
+// frame of another shape shows more than the box; when that would pass the extent's limit, so
+// that "Use this view" would be refused straight away, the box is reshaped to the frame around the
+// same centre and the map shows the box's own area instead (a little under the limit at most), at
+// any window size.
 export function openingView(
   sql: string,
   inputs: readonly MapInput[],
   view: View | undefined,
   frame?: Frame,
+  built?: View,
 ): View | undefined {
   const box = readInputs(sql, inputs).extent;
-  const opening: View | undefined = box ? [box.xmin, box.ymin, box.xmax, box.ymax] : view;
+  const opening: View | undefined = built ?? (box ? [box.xmin, box.ymin, box.xmax, box.ymax] : view);
   const limit = inputs.find((i) => i.kind === 'extent')?.maxAreaKm2;
   if (!opening || !frame || limit === undefined) return opening;
   const inner = { width: frame.width - 2 * frame.padding, height: frame.height - 2 * frame.padding };
@@ -174,8 +178,9 @@ export function openingView(
   // What the whole map shows: the fitted box, the frame's spare side and the padding.
   const grow = (frame.width * frame.height) / (inner.width * inner.height);
   const shown = area * Math.max(boxAspect / frameAspect, frameAspect / boxAspect) * grow;
-  if (shown <= limit) return opening;
-  const innerArea = Math.min(area, limit) / grow;
+  if (shown <= LIMIT_MARGIN * limit) return opening;
+  // The margin keeps a view the map rounds or projects slightly larger within the limit.
+  const innerArea = Math.min(area, LIMIT_MARGIN * limit) / grow;
   const dy = Math.sqrt(innerArea / (frameAspect * KM_PER_DEGREE_LONGITUDE_AT_EQUATOR * KM_PER_DEGREE_LATITUDE));
   const dx = (frameAspect * dy) / cos;
   const x = (xmin + xmax) / 2;
