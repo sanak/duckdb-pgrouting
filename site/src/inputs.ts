@@ -6,7 +6,7 @@
 // them and the reader sees every value a query uses. Only a whole line of exactly one of these two
 // forms counts (any spacing and keyword case, an optional trailing -- comment); a line that is
 // commented out does not, and for a variable set twice the first line wins.
-import type { MapInput } from './datasets.ts';
+import type { MapInput, View } from './datasets.ts';
 
 export interface Box {
   xmin: number;
@@ -121,4 +121,12 @@ export function applyInput(
     if (refusal) return { error: refusal };
   }
   return { sql: next };
+}
+
+// Where a map opens while its network is empty: on the area the SQL holds (a share link's, or one
+// typed by hand), so the reader sees the outline and builds the network on screen; otherwise on
+// the dataset's view.
+export function openingView(sql: string, inputs: readonly MapInput[], view: View | undefined): View | undefined {
+  const box = readInputs(sql, inputs).extent;
+  return box ? [box.xmin, box.ymin, box.xmax, box.ymax] : view;
 }

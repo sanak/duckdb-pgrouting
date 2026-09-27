@@ -2,7 +2,7 @@
 import './style.css';
 import { type Dataset, type MapInput, networkHint } from './datasets.ts';
 import { ExtensionLoadError, type Session, startSession } from './duckdb.ts';
-import { applyInput, type Box, type LonLat, readInputs } from './inputs.ts';
+import { applyInput, type Box, type LonLat, openingView, readInputs } from './inputs.ts';
 import { createDatasetLoader, fetchIndex, type OpenDataset } from './loader.ts';
 import { createRouteMap, type RouteMap } from './map.ts';
 import { createdNames, type Preset, type PresetFile, prerequisiteHint, presetGroups } from './presets.ts';
@@ -176,7 +176,7 @@ async function main(): Promise<void> {
       routeMap = await createRouteMap(mapSection, geometry, {
         mode: map.mode,
         attribution: geographic?.attribution,
-        view: geographic?.view,
+        view: geographic ? openingView(sql.value, mapInputs(opened.dataset), geographic.view) : undefined,
         dynamic: dependsOn(opened.dataset).length > 0,
         inputs: mapInputs(opened.dataset),
       });

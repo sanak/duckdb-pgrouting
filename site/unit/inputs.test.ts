@@ -5,7 +5,15 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import type { MapInput } from '../src/datasets.ts';
 import { parseDataset } from '../src/datasets.ts';
-import { applyInput, areaKm2, extentRefusal, hasInputLine, readInputs, writeInput } from '../src/inputs.ts';
+import {
+  applyInput,
+  areaKm2,
+  extentRefusal,
+  hasInputLine,
+  openingView,
+  readInputs,
+  writeInput,
+} from '../src/inputs.ts';
 import { parsePresetFile } from '../src/presets.ts';
 
 const BBOX: MapInput = { variable: 'bbox', kind: 'extent', label: 'Use this view', maxAreaKm2: 25 };
@@ -149,4 +157,12 @@ test('applyInput refuses too large an extent and otherwise returns the rewritten
     error: 'This view is 101.6 km²; the limit is 25 km². Zoom in.',
   });
   assert.deepEqual(applyInput(PRESET, PT0, [5, 6], []), { sql: writeInput(PRESET, PT0, [5, 6]) });
+});
+
+test('openingView prefers the area the SQL holds, so a shared area opens on screen', () => {
+  const view: [number, number, number, number] = [132.44, 34.37, 132.48, 34.41];
+  const moved = 'SET VARIABLE bbox = {xmin: 135.49, ymin: 34.69, xmax: 135.51, ymax: 34.71};';
+  assert.deepEqual(openingView(moved, ALL, view), [135.49, 34.69, 135.51, 34.71]);
+  assert.deepEqual(openingView('SELECT 1;', ALL, view), view);
+  assert.equal(openingView('SELECT 1;', [], undefined), undefined);
 });

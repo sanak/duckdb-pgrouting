@@ -23,7 +23,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import type { MapInput, View } from './datasets.ts';
 import { idFilter, pathColour } from './expressions.ts';
-import { extentOutline, type NetworkGeometry, viewBounds } from './geometry.ts';
+import { type Bounds, boundsOverlap, extentOutline, type NetworkGeometry, viewBounds } from './geometry.ts';
 import type { Box, InputValues, LonLat } from './inputs.ts';
 import type { Highlight } from './result.ts';
 
@@ -339,6 +339,9 @@ export async function createRouteMap(
     setNetwork(next: NetworkGeometry) {
       map.getSource<GeoJSONSource>('edges')?.setData(next.edges);
       map.getSource<GeoJSONSource>('nodes')?.setData(next.nodes);
+      // The view stays put unless the new network lies wholly outside it (an area typed by hand).
+      const shown = map.getBounds().toArray() as Bounds;
+      if (next.bounds && !boundsOverlap(next.bounds, shown)) map.fitBounds(next.bounds, { padding: 24 });
       highlight({ edges: new Map(), nodes: new Map() });
       select(null);
     },

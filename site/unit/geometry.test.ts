@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  type Bounds,
+  boundsOverlap,
   EARTH_RADIUS,
   emptyNetwork,
   extentOutline,
@@ -146,4 +148,25 @@ test('extentOutline is a closed ring around the box, or nothing', () => {
     [1, 2],
   ]);
   assert.equal(extentOutline(null).features.length, 0);
+});
+
+test('boundsOverlap tells whether a new network is anywhere in the current view', () => {
+  const view: Bounds = [
+    [132.44, 34.37],
+    [132.48, 34.41],
+  ];
+  assert.equal(
+    boundsOverlap(view, [
+      [132.47, 34.4],
+      [132.5, 34.42],
+    ]),
+    true,
+  );
+  assert.equal(
+    boundsOverlap(view, [
+      [135.49, 34.69],
+      [135.51, 34.71],
+    ]),
+    false,
+  );
 });

@@ -185,3 +185,9 @@ export function extentOutline(box: Box | null): FeatureCollection<LineString> {
     ],
   };
 }
+
+// Whether two boxes share any area: a network redrawn in place is only brought into view when it
+// lies wholly outside the current one.
+export function boundsOverlap([[aw, as], [ae, an]]: Bounds, [[bw, bs], [be, bn]]: Bounds): boolean {
+  return aw <= be && bw <= ae && as <= bn && bs <= an;
+}
