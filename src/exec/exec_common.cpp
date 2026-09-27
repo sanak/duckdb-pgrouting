@@ -84,12 +84,15 @@ DriverResult RunDriver(duckdb::ClientContext &context, InputRegistry &registry, 
 		} else {
 			// The families pgRouting has not moved onto do_shortestPath (family_drivers.cpp).
 			auto out = RunFamilyDriver(request, arrays);
+			// Ownership of out.rows passes to `result` before the check below can throw, so a shape
+			// mismatch still frees the malloc'd rows (via ~DriverResult, on unwind) instead of
+			// leaking them.
+			result.rows = out.rows;
+			result.count = out.count;
 			if (out.shape != InfoOf(request.driver).shape) {
 				throw duckdb::InternalException(
 				    "pgrouting: driver '%s' returned rows of the wrong shape", InfoOf(request.driver).name);
 			}
-			result.rows = out.rows;
-			result.count = out.count;
 			log_text = std::move(out.log);
 			notice_text = std::move(out.notice);
 			err_text = std::move(out.err);

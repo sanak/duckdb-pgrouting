@@ -39,7 +39,7 @@ duckdb::vector<QueryColumn> BindColumns(duckdb::ClientContext &context, const du
 // The column called `name`, compared case-insensitively as DuckDB resolves names; nullptr if absent.
 const QueryColumn *FindColumn(const duckdb::vector<QueryColumn> &columns, const char *name);
 
-// Upstream's ANY-INTEGER, as the exec function reads it (exec_function.cpp ClassOf): the
+// Upstream's ANY-INTEGER, as the exec function reads it (input_slots.cpp ClassOf): the
 // signed types and the unsigned ones that fit in int64_t.
 bool IsAnyInteger(const duckdb::LogicalType &type);
 bool IsGeometry(const duckdb::LogicalType &type);

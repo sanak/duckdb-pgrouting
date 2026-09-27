@@ -49,8 +49,11 @@ Every public function carries a catalog description and an example (`duckdb_func
   include `postgres.h`; the DuckDB side reaches them through
   `src/include/pgrouting/family_drivers.hpp`, which, like `driver_request.hpp` and
   `driver_kind.hpp`, includes neither world.
-- `src/exec/` — input registry, driver invocation, the internal in-out table function, and the copy
-  of upstream's withPoints derived-query key template (`withpoints_keys.cpp`).
+- `src/exec/` — the internal in-out table function `_pgr_exec` (`exec_function.cpp`) and its three
+  declarations: the input-row slots (`input_slots.cpp`), the request's named parameters
+  (`request_params.cpp`) and the columns and emitter of each result shape (`result_emitters.cpp`);
+  the input registry, driver invocation (`exec_common.cpp`), and the copy of upstream's withPoints
+  derived-query key template (`withpoints_keys.cpp`).
 - `src/functions/` — the declarative overload table (`shortest_path_specs.cpp`), the catalog
   descriptions and examples (`function_docs.cpp`), the public function registration, the two
   PL/pgSQL reimplementations (`extract_vertices.cpp`, `find_close_edges.cpp`) and their shared
