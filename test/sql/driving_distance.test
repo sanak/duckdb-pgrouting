@@ -1,0 +1,135 @@
+# name: test/sql/driving_distance.test
+# description: pgr_drivingDistance: variants, equicost, checks, STRICT, edge cases
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+# The many-root signature has two defaulted parameters (directed, equicost), the one-root signature
+# one (directed): 3 + 2 variants.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name = 'pgr_drivingDistance' AND tags['ext'] = 'pgrouting' GROUP BY ALL;
+----
+pgr_drivingDistance	5
+
+query T
+SELECT column_name FROM (DESCRIBE SELECT * FROM pgr_drivingDistance(e(), 11, 3.0));
+----
+seq
+depth
+start_vid
+pred
+node
+edge
+cost
+agg_cost
+
+# Upstream's q5, through every variant: 13 vertices within 3.0 of 11.
+query I
+SELECT count(*) FROM pgr_drivingDistance(e(), 11, 3.0)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), 11, 3.0, true)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), 11, 3.0, directed := true)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), [11], 3.0)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), [11], 3.0, true)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), [11], 3.0, true, false)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), [11], 3.0, directed := true, equicost := false);
+----
+13
+13
+13
+13
+13
+13
+13
+
+query IR
+SELECT node, agg_cost FROM pgr_drivingDistance(e(), 11, 3.0) ORDER BY node;
+----
+1	3
+3	2
+5	3
+6	2
+7	1
+8	2
+9	3
+10	3
+11	0
+12	1
+15	2
+16	1
+17	2
+
+# Upstream's q6 (equicost) and q10 (undirected).
+query II
+SELECT start_vid, count(*) FROM pgr_drivingDistance(e(), [11, 16], 3.0, equicost := true) GROUP BY 1 ORDER BY 1;
+----
+11	9
+16	4
+
+query II
+SELECT start_vid, count(*) FROM pgr_drivingDistance(e(), [11, 16], 3.0, directed := false) GROUP BY 1 ORDER BY 1;
+----
+11	13
+16	10
+
+# Review focus 4: an integer or DECIMAL distance; distance 0 keeps the root only.
+query I
+SELECT count(*) FROM pgr_drivingDistance(e(), 11, 3)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), 11, 3.0::DECIMAL(4, 1))
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), 11, 0);
+----
+13
+13
+1
+
+# Review focus 1: roots are read as a set, so none gives no rows.
+query I
+SELECT count(*) FROM pgr_drivingDistance(e(), []::BIGINT[], 3.0);
+----
+0
+
+# Review focus 2: an absent root adds nothing beyond, at most, its own depth-0 row.
+query II
+SELECT count(*) FILTER (WHERE start_vid = 11), count(*) FILTER (WHERE start_vid = 999 AND node <> 999)
+FROM pgr_drivingDistance(e(), [11, 999], 3.0);
+----
+13	0
+
+# Review focus 3: no edges, no rows.
+query I
+SELECT count(*) FROM pgr_drivingDistance('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0', 11, 3.0);
+----
+0
+
+statement error
+SELECT * FROM pgr_drivingDistance(e(), 11, -1.0);
+----
+Invalid Input Error: Negative value found on 'distance'
+HINT: Must be positive
+
+statement error
+SELECT * FROM pgr_drivingDistance('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0', [11], -1);
+----
+Negative value found on 'distance'
+
+# STRICT: a NULL anywhere gives no rows, and no check runs.
+query I
+SELECT count(*) FROM pgr_drivingDistance(e(), NULL::BIGINT, 3.0)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), 11, NULL::DOUBLE)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), 11, 3.0, directed := NULL)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), [11], 3.0, equicost := NULL)
+UNION ALL SELECT count(*) FROM pgr_drivingDistance(e(), NULL::BIGINT, -1.0);
+----
+0
+0
+0
+0
+0

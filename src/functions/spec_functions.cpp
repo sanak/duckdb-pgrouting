@@ -200,7 +200,7 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::BD_DIJKSTRA_SPECS,       &duckdb_pgrouting::BELLMAN_FORD_SPECS,
 	    &duckdb_pgrouting::DAG_SHORTEST_PATH_SPECS, &duckdb_pgrouting::BREADTH_FIRST_SEARCH_SPECS,
 	    &duckdb_pgrouting::COMPONENTS_SPECS,        &duckdb_pgrouting::ASTAR_SPECS,
-	    &duckdb_pgrouting::BD_ASTAR_SPECS};
+	    &duckdb_pgrouting::BD_ASTAR_SPECS,          &duckdb_pgrouting::DRIVING_DISTANCE_SPECS};
 	return TABLES;
 }
 
@@ -230,11 +230,15 @@ LogicalType TypeOf(duckdb_pgrouting::ArgKind kind) {
 		return LogicalType::VARCHAR;
 	case ArgKind::START_VID:
 	case ArgKind::END_VID:
+	case ArgKind::ROOT:
 		return LogicalType::BIGINT;
 	case ArgKind::START_VIDS:
 	case ArgKind::END_VIDS:
 	case ArgKind::VIDS:
+	case ArgKind::ROOTS:
 		return LogicalType::LIST(LogicalType::BIGINT);
+	case ArgKind::DISTANCE:
+		return LogicalType::DOUBLE;
 	}
 	throw InternalException("Unhandled ArgKind");
 }
@@ -342,11 +346,11 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	bool has_points = false;
 
 	// One row carrying every input the driver needs, as a column each, so the exec function always
-	// sees at least these four columns (an overload with points adds 'points', 'edges_of_points'
+	// sees at least these five columns (an overload with points adds 'points', 'edges_of_points'
 	// and 'edges_no_points'; 'edges' is then NULL). A column this overload does not use gets either
 	// an untyped NULL constant ('edges'/'combinations') or an empty but LIST(BIGINT)-typed id list
-	// ('starts'/'ends' default to EmptyIdList() below, never a bare NULL). That typing is
-	// load-bearing: _pgr_exec's own bind rejects 'starts'/'ends' unless they are
+	// ('starts'/'ends'/'roots' default to EmptyIdList() below, never a bare NULL). That typing is
+	// load-bearing: _pgr_exec's own bind rejects 'starts'/'ends'/'roots' unless they are
 	// SQLNULL or LIST(BIGINT), so emitting an untyped NULL there instead would break every
 	// NULL-input call.
 	auto row = make_uniq<SelectNode>();
@@ -357,6 +361,7 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	unique_ptr<ParsedExpression> combinations_expr = Named(make_uniq<ConstantExpression>(Value()), "combinations");
 	unique_ptr<ParsedExpression> starts_expr = Named(EmptyIdList(), "starts");
 	unique_ptr<ParsedExpression> ends_expr = Named(EmptyIdList(), "ends");
+	unique_ptr<ParsedExpression> roots_expr = Named(EmptyIdList(), "roots");
 	// Only an overload with a points argument emits these three; see the loop below.
 	unique_ptr<ParsedExpression> points_expr;
 	unique_ptr<ParsedExpression> edges_of_points_expr;
@@ -403,6 +408,15 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 				SetRequestParameter(request, "driving_side", input.inputs[i]);
 				break;
 			}
+			case duckdb_pgrouting::ArgKind::ROOT:
+				roots_expr = Named(IdList(input.inputs[i]), "roots");
+				break;
+			case duckdb_pgrouting::ArgKind::ROOTS:
+				roots_expr = Named(IdListCast(input.inputs[i]), "roots");
+				break;
+			case duckdb_pgrouting::ArgKind::DISTANCE:
+				SetRequestParameter(request, "distance", input.inputs[i]);
+				break;
 			}
 		}
 		if (has_points) {
@@ -422,6 +436,7 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	row->select_list.push_back(std::move(combinations_expr));
 	row->select_list.push_back(std::move(starts_expr));
 	row->select_list.push_back(std::move(ends_expr));
+	row->select_list.push_back(std::move(roots_expr));
 	if (points_expr) {
 		row->select_list.push_back(std::move(points_expr));
 		row->select_list.push_back(std::move(edges_of_points_expr));

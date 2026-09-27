@@ -114,6 +114,16 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "Groups the vertices of an undirected graph into connected components, one row per vertex; each "
      "component is numbered by its smallest vertex id.",
      "SELECT * FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_drivingDistance",
+     "Every vertex reachable from one or more root vertices within a cost limit, with the "
+     "shortest-path tree that reaches it: predecessor, depth and cost from its root.",
+     "SELECT * FROM pgr_drivingDistance('SELECT id, source, target, cost, reverse_cost FROM edges', 11, "
+     "3.0)"},
+    {"pgr_withPointsDD",
+     "Driving distance on the graph plus temporary points placed along its edges: every vertex and "
+     "point within a cost limit of the roots; a point is addressed by the negative of its id.",
+     "SELECT * FROM pgr_withPointsDD('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "'SELECT pid, edge_id, fraction, side FROM pointsofinterest', -1, 3.3, 'r')"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "

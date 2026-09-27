@@ -37,6 +37,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/components_specs.cpp
     src/functions/dag_shortest_path_specs.cpp
     src/functions/dijkstra_specs.cpp
+    src/functions/driving_distance_specs.cpp
     src/functions/extract_vertices.cpp
     src/functions/find_close_edges.cpp
     src/functions/function_docs.cpp

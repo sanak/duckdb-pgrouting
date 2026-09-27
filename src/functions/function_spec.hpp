@@ -24,7 +24,10 @@ enum class ArgKind : uint8_t {
 	END_VIDS,         // BIGINT[]
 	POINTS_SQL,       // VARCHAR
 	DRIVING_SIDE,     // VARCHAR; upstream's CHAR, of which only the first character is used
-	VIDS              // BIGINT[] passed as both the starts and the ends, as pgr_bdDijkstraCostMatrix does
+	VIDS,             // BIGINT[] passed as both the starts and the ends, as pgr_bdDijkstraCostMatrix does
+	ROOT,             // BIGINT, a one-element roots list
+	ROOTS,            // BIGINT[]
+	DISTANCE          // DOUBLE; upstream's FLOAT, and NUMERIC in pgr_kruskalDD / pgr_primDD
 };
 
 enum class OptionalType : uint8_t { BOOLEAN, BIGINT, INTEGER, DOUBLE };
@@ -49,6 +52,7 @@ constexpr OptionalParam DETAILS {"details", OptionalType::BOOLEAN, 0, "details"}
 constexpr OptionalParam HEURISTIC {"heuristic", OptionalType::INTEGER, 5, "heuristic"};
 constexpr OptionalParam FACTOR {"factor", OptionalType::DOUBLE, 1.0, "factor"};
 constexpr OptionalParam EPSILON {"epsilon", OptionalType::DOUBLE, 1.0, "epsilon"};
+constexpr OptionalParam EQUICOST {"equicost", OptionalType::BOOLEAN, 0, "equicost"};
 
 // Where an overload's driving side comes from. NONE: the overload has none (which = 0 ignores it).
 // ARGUMENT: the CHAR signatures of the withPoints family take it as a required argument.
@@ -119,5 +123,6 @@ extern const duckdb::vector<FunctionSpec> BREADTH_FIRST_SEARCH_SPECS; // breadth
 extern const duckdb::vector<FunctionSpec> COMPONENTS_SPECS;           // components_specs.cpp
 extern const duckdb::vector<FunctionSpec> ASTAR_SPECS;                // astar_specs.cpp
 extern const duckdb::vector<FunctionSpec> BD_ASTAR_SPECS;             // bd_astar_specs.cpp
+extern const duckdb::vector<FunctionSpec> DRIVING_DISTANCE_SPECS;     // driving_distance_specs.cpp
 
 } // namespace duckdb_pgrouting

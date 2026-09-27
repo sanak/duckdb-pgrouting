@@ -1,0 +1,45 @@
+# name: test/sql/driving_distance_workshop.test
+# description: pgr_drivingDistance agrees with pgr_dijkstraCost on the workshop road network
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# test/data/workshop-hiroshima is the pgRouting workshop's OpenStreetMap network (see its
+# NOTICE.md); its costs are way lengths in degrees. Every vertex pgr_drivingDistance reports must
+# sit at its Dijkstra cost from the root, and every vertex Dijkstra finds within the limit must be
+# reported. The limit is small (about 500 m) so the run stays quick.
+
+require pgrouting
+
+require parquet
+
+statement ok
+CREATE TABLE ways AS SELECT * EXCLUDE (geom) FROM read_parquet('test/data/workshop-hiroshima/ways.parquet');
+
+statement ok
+SET VARIABLE vids = (SELECT list(DISTINCT v) FROM (SELECT source AS v FROM ways UNION SELECT target FROM ways));
+
+statement ok
+CREATE TABLE dd AS
+SELECT node, agg_cost FROM pgr_drivingDistance('SELECT id, source, target, cost, reverse_cost FROM ways', 7508, 0.005);
+
+statement ok
+CREATE TABLE dj AS
+SELECT end_vid AS node, agg_cost
+FROM pgr_dijkstraCost('SELECT id, source, target, cost, reverse_cost FROM ways', 7508, getvariable('vids'))
+WHERE agg_cost <= 0.005;
+
+query TTI
+SELECT (SELECT count(*) FROM dd) > 10,
+       (SELECT count(*) FROM dd) = (SELECT count(*) FROM dj) + 1,
+       (SELECT count(*) FROM dd JOIN dj USING (node) WHERE abs(dd.agg_cost - dj.agg_cost) > 1e-12);
+----
+true	true	0
+
+# With several roots and equicost, every vertex is reported once, under its nearest root.
+query T
+SELECT count(*) = count(DISTINCT node)
+FROM pgr_drivingDistance('SELECT id, source, target, cost, reverse_cost FROM ways',
+                         [7508, 4128, 4632], 0.005, equicost := true);
+----
+true

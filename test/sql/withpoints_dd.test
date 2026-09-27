@@ -1,0 +1,118 @@
+# name: test/sql/withpoints_dd.test
+# description: pgr_withPointsDD: variants, driving side, checks, STRICT
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id';
+
+statement ok
+CREATE MACRO p() AS 'SELECT pid, edge_id, fraction, side FROM pointsofinterest';
+
+# CHAR signatures: 3 + 4 variants; the others 3 + 4.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name = 'pgr_withPointsDD' AND tags['ext'] = 'pgrouting' GROUP BY ALL;
+----
+pgr_withPointsDD	14
+
+# Upstream's q2.
+query IR
+SELECT node, round(agg_cost, 6) FROM pgr_withPointsDD(e(), p(), -1, 3.3, 'r', details := true)
+ORDER BY agg_cost, node;
+----
+-1	0
+5	0.4
+6	1.4
+-6	2.1
+7	2.4
+
+# Every variant of the CHAR signatures.
+query I
+SELECT count(*) FROM pgr_withPointsDD(e(), p(), -1, 3.3, 'r', true, true)
+UNION ALL SELECT count(*) FROM pgr_withPointsDD(e(), p(), -1, 3.3, 'r', true, details := true)
+UNION ALL SELECT count(*) FROM pgr_withPointsDD(e(), p(), [-1], 3.3, 'r', true, true, false)
+UNION ALL SELECT count(*) FROM pgr_withPointsDD(e(), p(), [-1], 3.3, 'r', directed := true, details := true, equicost := false);
+----
+5
+5
+5
+5
+
+# Review focus 5: the side in upper case.
+query I
+SELECT count(*) FROM pgr_withPointsDD(e(), p(), -1, 3.3, 'R', details := true);
+----
+5
+
+# Upstream's q3 and q4.
+query II
+SELECT start_vid, count(*) FROM pgr_withPointsDD(e(), p(), [-1, 16], 3.3, 'l', equicost := true)
+GROUP BY 1 ORDER BY 1;
+----
+-1	8
+16	6
+
+query I
+SELECT count(*) FROM pgr_withPointsDD(e(), p(), -1, 3.3, 'b', directed := false, details := true);
+----
+13
+
+# Without a side argument the side follows directed, as upstream's wrapper passes
+# (CASE WHEN directed THEN 'r' ELSE 'b' END): the same rows as 'r' directed and 'b' undirected.
+query I
+SELECT count(*) FROM (
+  (SELECT * FROM pgr_withPointsDD(e(), p(), -1, 3.3, details := true)
+   EXCEPT SELECT * FROM pgr_withPointsDD(e(), p(), -1, 3.3, 'r', details := true))
+  UNION ALL
+  (SELECT * FROM pgr_withPointsDD(e(), p(), [-1, 16], 3.3, false, true)
+   EXCEPT SELECT * FROM pgr_withPointsDD(e(), p(), [-1, 16], 3.3, 'b', false, true)));
+----
+0
+
+query I
+SELECT count(*) FROM pgr_withPointsDD(e(), p(), [-1], 3.3, true, true, false);
+----
+5
+
+statement error
+SELECT * FROM pgr_withPointsDD(e(), p(), -1, 3.3, 'x');
+----
+Invalid Input Error: Invalid value of 'driving side'
+HINT: Valid value are 'r', 'l', 'b'
+
+statement error
+SELECT * FROM pgr_withPointsDD(e(), p(), [-1], 3.3, 'x', equicost := true);
+----
+Invalid value of 'driving side'
+
+statement error
+SELECT * FROM pgr_withPointsDD(e(), p(), -1, -3.3, 'r');
+----
+Invalid Input Error: Negative value found on 'distance'
+HINT: Must be positive
+
+statement error
+SELECT * FROM pgr_withPointsDD(e(), p(), -1, -3.3);
+----
+Negative value found on 'distance'
+
+query I
+SELECT count(*) FROM pgr_withPointsDD(e(), p(), -1, 3.3, NULL::VARCHAR)
+UNION ALL SELECT count(*) FROM pgr_withPointsDD(e(), p(), -1, 3.3, 'r', details := NULL)
+UNION ALL SELECT count(*) FROM pgr_withPointsDD(e(), p(), [-1], 3.3, equicost := NULL)
+UNION ALL SELECT count(*) FROM pgr_withPointsDD(e(), NULL::VARCHAR, -1, 3.3, 'x');
+----
+0
+0
+0
+0
