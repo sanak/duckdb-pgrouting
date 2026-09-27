@@ -74,7 +74,7 @@ WHERE function_name LIKE 'pgr\_%' ESCAPE '\' ORDER BY ALL;
 
 ## Functions
 
-Eighteen pgRouting functions — seventy-six of pgRouting 4.0's signatures — plus `pgr_version()`.
+Twenty-four pgRouting functions — ninety-eight of pgRouting 4.0's signatures — plus `pgr_version()`.
 The [pgRouting documentation](https://docs.pgrouting.org/4.0/en/) describes each algorithm, its
 parameters and its result columns, all of which this extension keeps.
 
@@ -83,6 +83,7 @@ parameters and its result columns, all of which this extension keeps.
 | Dijkstra | `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`, `pgr_dijkstraNear`, `pgr_dijkstraNearCost` |
 | With points | `pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix` |
 | Bidirectional Dijkstra | `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix` |
+| A* | `pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix`, `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix` |
 | Other shortest paths | `pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch` |
 | Components | `pgr_connectedComponents` |
 | Utilities | `pgr_extractVertices`, `pgr_findCloseEdges` |

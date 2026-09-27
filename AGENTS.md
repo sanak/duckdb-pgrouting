@@ -13,14 +13,16 @@ replaced. License: GPL-2.0-or-later.
 Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`,
 `pgr_dijkstraNear`, `pgr_dijkstraNearCost`, `pgr_withPoints`, `pgr_withPointsCost`,
 `pgr_withPointsCostMatrix`, `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`,
+`pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix`, `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix`,
 `pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch`,
 `pgr_connectedComponents`, `pgr_extractVertices` and `pgr_findCloseEdges` — pgRouting's
-seventy-six corresponding signatures, each registered once per number of its defaulted parameters
+ninety-eight corresponding signatures, each registered once per number of its defaulted parameters
 passed positionally — and `pgr_version()`. The `pgr_dijkstra` and `pgr_withPoints` families call
 pgRouting's unified `do_shortestPath` driver; with points given, DuckDB also materializes the two
-edge queries that driver derives from the edge and points SQL. The other five families call their
-own per-family `pgr_do_*` drivers through one adapter on the pg_compat side.
-`pgr_connectedComponents` goes through the same adapter and exec function, which returns its
+edge queries that driver derives from the edge and points SQL. The other seven families call their
+own per-family `pgr_do_*` drivers through one adapter on the pg_compat side; the two A* families also
+read each edge's end-point coordinates (`x1`, `y1`, `x2`, `y2`).
+`pgr_connectedComponents` goes through the same adapter and exec function (`_pgr_exec`), which returns its
 vertex/component pairs instead of path rows. `pgr_extractVertices` and `pgr_findCloseEdges`, which
 upstream writes in PL/pgSQL, are reimplemented as bind_replace functions. Each binds the caller's
 edge query, picks one of upstream's modes, and rewrites the call into a fixed DuckDB query
