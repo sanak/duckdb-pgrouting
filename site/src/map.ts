@@ -106,6 +106,7 @@ export async function createRouteMap(
   options: MapOptions,
 ): Promise<RouteMap> {
   const geographic = options.mode === 'geographic';
+  if (!geometry.bounds) throw new Error('the map has nothing to draw');
   const bounds = new LngLatBounds(geometry.bounds[0], geometry.bounds[1]);
   const [[west, south], [east, north]] = geometry.bounds;
   const padX = (east - west) * 0.5;

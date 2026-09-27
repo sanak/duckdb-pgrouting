@@ -4,6 +4,8 @@
 // and inverse-projected to longitude/latitude; MapLibre's own forward projection then cancels it
 // and the grid is drawn without distortion.
 import type { FeatureCollection, LineString, Point, Position } from 'geojson';
+import type { View } from './datasets.ts';
+import type { Box } from './inputs.ts';
 
 export const EARTH_RADIUS = 6378137;
 export const METRES_PER_UNIT = 1000;
@@ -28,10 +30,13 @@ export interface PointRow {
 
 export type NodeProps = { id: number; label: string; kind: 'vertex' | 'point' };
 
+// South-west and north-east corners, [longitude, latitude].
+export type Bounds = [[number, number], [number, number]];
+
 export interface NetworkGeometry {
   edges: FeatureCollection<LineString, { id: number }>;
   nodes: FeatureCollection<Point, NodeProps>;
-  bounds: [[number, number], [number, number]];
+  bounds: Bounds | null; // null only for a network that does not exist yet (emptyNetwork)
 }
 
 export function toLngLat(x: number, y: number): [number, number] {
@@ -89,7 +94,7 @@ export interface GeoNodeRow {
   y: number; // latitude
 }
 
-function boundsOf(positions: Iterable<Position>): NetworkGeometry['bounds'] {
+function boundsOf(positions: Iterable<Position>): Bounds {
   let [west, south, east, north] = [Infinity, Infinity, -Infinity, -Infinity];
   for (const [lng = 0, lat = 0] of positions) {
     west = Math.min(west, lng);
@@ -136,5 +141,47 @@ export function geographicGeometry(edges: GeoEdgeRow[], nodes: GeoNodeRow[]): Ne
     edges: { type: 'FeatureCollection', features: edgeFeatures },
     nodes: { type: 'FeatureCollection', features: nodeFeatures },
     bounds: boundsOf(positions),
+  };
+}
+
+// The network of a dataset whose presets have not built it yet (dataset.json dependsOn); the map
+// shows the dataset's view instead.
+export function emptyNetwork(): NetworkGeometry {
+  return {
+    edges: { type: 'FeatureCollection', features: [] },
+    nodes: { type: 'FeatureCollection', features: [] },
+    bounds: null,
+  };
+}
+
+export function viewBounds([xmin, ymin, xmax, ymax]: View): Bounds {
+  return [
+    [xmin, ymin],
+    [xmax, ymax],
+  ];
+}
+
+// The dashed outline the map draws for an extent input; no feature when there is no extent.
+export function extentOutline(box: Box | null): FeatureCollection<LineString> {
+  if (!box) return { type: 'FeatureCollection', features: [] };
+  const { xmin, ymin, xmax, ymax } = box;
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [xmin, ymin],
+            [xmax, ymin],
+            [xmax, ymax],
+            [xmin, ymax],
+            [xmin, ymin],
+          ],
+        },
+      },
+    ],
   };
 }

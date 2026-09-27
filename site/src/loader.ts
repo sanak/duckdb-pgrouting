@@ -8,6 +8,8 @@
 // expected to re-open the previous dataset. network() builds each dataset's map geometry once,
 // inside that same queue, so its unqualified queries never run against a catalog a later queued
 // open has since selected.
+// A dataset whose map draws tables its presets create (dataset.json dependsOn) has an empty
+// network until they exist; after a Run creates one, refreshNetwork() builds it again.
 import {
   type Dataset,
   type DatasetIndex,
@@ -18,8 +20,8 @@ import {
   useStatement,
 } from './datasets.ts';
 import type { Session } from './duckdb.ts';
-import { geographicGeometry, type NetworkGeometry, sampleGeometry } from './geometry.ts';
-import { type PresetFile, parsePresetFile } from './presets.ts';
+import { emptyNetwork, geographicGeometry, type NetworkGeometry, sampleGeometry } from './geometry.ts';
+import { missingName, type PresetFile, parsePresetFile } from './presets.ts';
 
 export interface OpenDataset {
   dataset: Dataset;
@@ -39,6 +41,7 @@ export async function fetchIndex(): Promise<DatasetIndex> {
 export function createDatasetLoader(session: Session): {
   open(id: string): Promise<OpenDataset>;
   network(id: string): Promise<NetworkGeometry>;
+  refreshNetwork(id: string): Promise<NetworkGeometry>;
 } {
   const built = new Map<string, Promise<OpenDataset>>();
   const networks = new Map<string, Promise<NetworkGeometry>>();
@@ -77,21 +80,28 @@ export function createDatasetLoader(session: Session): {
     return opened;
   }
 
+  function network(id: string): Promise<NetworkGeometry> {
+    let pending = networks.get(id);
+    if (!pending) {
+      pending = enqueue(async () => {
+        const { dataset } = await openNow(id);
+        return networkOf(session, dataset.map);
+      });
+      networks.set(id, pending);
+      pending.catch(() => networks.delete(id));
+    }
+    return pending;
+  }
+
   return {
     open(id: string): Promise<OpenDataset> {
       return enqueue(() => openNow(id));
     },
-    network(id: string): Promise<NetworkGeometry> {
-      let pending = networks.get(id);
-      if (!pending) {
-        pending = enqueue(async () => {
-          const { dataset } = await openNow(id);
-          return networkOf(session, dataset.map);
-        });
-        networks.set(id, pending);
-        pending.catch(() => networks.delete(id));
-      }
-      return pending;
+    network,
+    // Forgets the dataset's network and builds it again, inside the same queue.
+    refreshNetwork(id: string): Promise<NetworkGeometry> {
+      networks.delete(id);
+      return network(id);
     },
   };
 }
@@ -111,10 +121,18 @@ export async function networkOf(session: Session, spec: MapSpec): Promise<Networ
       points.map(([pid = 0, edge_id = 0, fraction = 0]) => ({ pid, edge_id, fraction })),
     );
   }
-  const edges = (await session.query(spec.edges)).rows.map(([id, geojson]) => ({
-    id: Number(id),
-    geojson: String(geojson),
-  }));
-  const nodes = (await numbers(spec.nodes)).map(([id = 0, x = 0, y = 0]) => ({ id, x, y }));
-  return geographicGeometry(edges, nodes);
+  try {
+    const edges = (await session.query(spec.edges)).rows.map(([id, geojson]) => ({
+      id: Number(id),
+      geojson: String(geojson),
+    }));
+    const nodes = (await numbers(spec.nodes)).map(([id = 0, x = 0, y = 0]) => ({ id, x, y }));
+    if (spec.dependsOn && edges.length === 0 && nodes.length === 0) return emptyNetwork();
+    return geographicGeometry(edges, nodes);
+  } catch (error) {
+    // Not built yet: one of the tables the presets create is missing.
+    const name = missingName(error instanceof Error ? error.message : String(error));
+    if (name !== null && spec.dependsOn?.includes(name)) return emptyNetwork();
+    throw error;
+  }
 }

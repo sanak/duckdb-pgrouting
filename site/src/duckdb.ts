@@ -3,6 +3,10 @@
 // DuckDB accepts only at start-up — and loads this site's own build of pgrouting, which is
 // unsigned because only DuckDB's core and community repositories are signed. Datasets are built
 // separately (loader.ts).
+// Remote files are read by HTTP range: without the filesystem option below, DuckDB-Wasm downloads
+// a remote Parquet file whole (Overture's are about 500 MB each). A server that does not answer a
+// ranged HEAD request with 206 (Overture's STAC catalogue behind CloudFront) is still read whole
+// rather than refused. Files registered from buffers are not HTTP files and are unaffected.
 import * as duckdb from '@duckdb/duckdb-wasm';
 import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
@@ -85,7 +89,10 @@ export async function startSession(): Promise<Session> {
   if (!bundle.mainWorker) throw new Error('DuckDB-Wasm bundle has no worker');
   const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(bundle.mainWorker));
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-  await db.open({ allowUnsignedExtensions: true });
+  await db.open({
+    allowUnsignedExtensions: true,
+    filesystem: { forceFullHTTPReads: false, reliableHeadRequests: true, allowFullHTTPReads: true },
+  });
   const conn = await db.connect();
   const query = async (sql: string) => toResultSet(await conn.query(sql));
 

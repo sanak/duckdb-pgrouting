@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: MIT
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { EARTH_RADIUS, geographicGeometry, METRES_PER_UNIT, sampleGeometry, toLngLat } from '../src/geometry.ts';
+import {
+  EARTH_RADIUS,
+  emptyNetwork,
+  extentOutline,
+  geographicGeometry,
+  METRES_PER_UNIT,
+  sampleGeometry,
+  toLngLat,
+  viewBounds,
+} from '../src/geometry.ts';
 
 // Web Mercator's forward projection, which MapLibre applies when it draws.
 function forward([lng, lat]: [number, number]): [number, number] {
@@ -111,4 +120,30 @@ test('geographic nodes are vertices at their longitude and latitude; bounds cove
     [132.44, 34.39],
     [132.46, 34.4],
   ]);
+});
+
+test('an empty network has no features and no bounds', () => {
+  const g = emptyNetwork();
+  assert.equal(g.edges.features.length, 0);
+  assert.equal(g.nodes.features.length, 0);
+  assert.equal(g.bounds, null);
+});
+
+test('viewBounds turns a dataset view into south-west and north-east corners', () => {
+  assert.deepEqual(viewBounds([132.44, 34.37, 132.48, 34.41]), [
+    [132.44, 34.37],
+    [132.48, 34.41],
+  ]);
+});
+
+test('extentOutline is a closed ring around the box, or nothing', () => {
+  const ring = extentOutline({ xmin: 1, ymin: 2, xmax: 3, ymax: 4 }).features[0]?.geometry.coordinates;
+  assert.deepEqual(ring, [
+    [1, 2],
+    [3, 2],
+    [3, 4],
+    [1, 4],
+    [1, 2],
+  ]);
+  assert.equal(extentOutline(null).features.length, 0);
 });
