@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 import './style.css';
+import { type Dataset, type MapInput, networkHint } from './datasets.ts';
 import { ExtensionLoadError, type Session, startSession } from './duckdb.ts';
+import { type Box, extentRefusal, hasInputLine, type LonLat, readInputs, writeInput } from './inputs.ts';
 import { createDatasetLoader, fetchIndex, type OpenDataset } from './loader.ts';
 import { createRouteMap, type RouteMap } from './map.ts';
-import { type Preset, type PresetFile, prerequisiteHint, presetGroups } from './presets.ts';
+import { createdNames, type Preset, type PresetFile, prerequisiteHint, presetGroups } from './presets.ts';
 import { highlightOf, summarize } from './result.ts';
 import { nextSelection, type PickSource } from './selection.ts';
 import { hashFor, stateFromHash } from './share.ts';
@@ -43,6 +45,15 @@ const grid = createResultGrid(byId<HTMLDivElement>('result'));
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function mapInputs(dataset: Dataset): MapInput[] {
+  return dataset.map.mode === 'geographic' ? (dataset.map.inputs ?? []) : [];
+}
+
+// The tables the map draws when the reader's queries build them (dataset.json dependsOn).
+function dependsOn(dataset: Dataset): string[] {
+  return dataset.map.mode === 'geographic' ? (dataset.map.dependsOn ?? []) : [];
 }
 
 function setStatus(text: string, isError = false): void {
@@ -112,6 +123,46 @@ async function main(): Promise<void> {
   let routeMap = NO_MAP;
   // The one edge selected in both the grid and the map (edge ids only; see selection.ts).
   let selected: number | null = null;
+  // True while a dependsOn dataset's network has not been built yet.
+  let networkEmpty = false;
+
+  function readyStatus(): string {
+    const first = current?.opened.presets.presets[0];
+    return networkEmpty && first
+      ? `${READY_STATUS}\nNo network yet — run the presets from “${first.group}” onward.`
+      : READY_STATUS;
+  }
+
+  // Busy like setBusy(), and the map's input buttons with it.
+  function setAllBusy(busy: boolean): void {
+    setBusy(busy);
+    routeMap.setInputsEnabled(!busy);
+  }
+
+  function showInputValues(): void {
+    if (current) routeMap.showInputs(readInputs(sql.value, mapInputs(current.opened.dataset)));
+  }
+
+  function onMapInput(input: MapInput, value: Box | LonLat): void {
+    if (!current) return;
+    if (input.kind === 'extent' && !Array.isArray(value)) {
+      const refusal = extentRefusal(value, input.maxAreaKm2 ?? Number.POSITIVE_INFINITY);
+      if (refusal) {
+        setStatus(refusal, true);
+        return;
+      }
+    }
+    const next = writeInput(sql.value, input, value);
+    if (next === null) {
+      const holder = current.opened.presets.presets.find((p) => hasInputLine(p.sql, input));
+      const where = holder ? ` — it is in the preset “${holder.label}”` : '';
+      setStatus(`This query has no SET VARIABLE ${input.variable} line${where}.`, true);
+      return;
+    }
+    sql.value = next;
+    showInputValues();
+    setStatus(`${input.label}: the SET VARIABLE ${input.variable} line now holds it. Run the query to use it.`);
+  }
 
   function pick(edge: number | null, source: PickSource): void {
     selected = nextSelection(selected, edge, source);
@@ -123,14 +174,26 @@ async function main(): Promise<void> {
   async function rebuildMap(opened: OpenDataset): Promise<void> {
     const old = routeMap;
     routeMap = NO_MAP;
+    networkEmpty = false;
     try {
       old.remove();
       mapSection.replaceChildren();
       // Built once per dataset by the loader, inside its queue (see loader.ts).
       const geometry = await loader.network(opened.dataset.id);
-      const attribution = opened.dataset.map.mode === 'geographic' ? opened.dataset.map.attribution : undefined;
-      routeMap = await createRouteMap(mapSection, geometry, { mode: opened.dataset.map.mode, attribution });
+      const map = opened.dataset.map;
+      const geographic = map.mode === 'geographic' ? map : null;
+      routeMap = await createRouteMap(mapSection, geometry, {
+        mode: map.mode,
+        attribution: geographic?.attribution,
+        view: geographic?.view,
+        dynamic: dependsOn(opened.dataset).length > 0,
+        inputs: mapInputs(opened.dataset),
+      });
+      networkEmpty = dependsOn(opened.dataset).length > 0 && geometry.edges.features.length === 0;
       routeMap.onEdgeClick((edge) => pick(edge, 'map'));
+      routeMap.onInput(onMapInput);
+      routeMap.setInputsEnabled(!run.disabled);
+      showInputValues();
     } catch (error) {
       showBanner(`The map is unavailable, but queries still run: ${messageOf(error)}`);
     }
@@ -151,7 +214,7 @@ async function main(): Promise<void> {
   async function openDataset(id: string, text: string | null, notice = ''): Promise<boolean> {
     const previous = current;
     let failure: string | null = null;
-    setBusy(true);
+    setAllBusy(true);
     showBanner(notice);
     const title = index.datasets.find((d) => d.id === id)?.title ?? id;
     setStatus(`Loading ${title}…`);
@@ -176,7 +239,7 @@ async function main(): Promise<void> {
       grid.show({ columns: [], rows: [] }, []);
       selected = null;
       await rebuildMap(opened);
-      setStatus(READY_STATUS);
+      setStatus(readyStatus());
       return true;
     } catch (error) {
       failure = `${notice ? `${notice} ` : ''}Could not load ${title}: ${messageOf(error)}`;
@@ -188,7 +251,7 @@ async function main(): Promise<void> {
           await loader.open(previous.id);
           current = previous;
           datasetSelect.value = previous.id;
-          setStatus(READY_STATUS);
+          setStatus(readyStatus());
         } catch (reopenError) {
           showBanner(`${failure}. Returning to ${previous.opened.dataset.title} failed too: ${messageOf(reopenError)}`);
           nothingOpen();
@@ -196,7 +259,7 @@ async function main(): Promise<void> {
         failure = null;
       }
     } finally {
-      setBusy(false);
+      setAllBusy(false);
       if (!current) run.disabled = true;
     }
     // Only a failed first open gets here with a failure: fall back to the default dataset, once.
@@ -210,23 +273,36 @@ async function main(): Promise<void> {
   async function execute(): Promise<void> {
     if (run.disabled || !current) return;
     // Busy like a dataset load, so a load and a query never overlap on the one connection.
-    setBusy(true);
+    setAllBusy(true);
     setStatus('Running…');
     const started = performance.now();
     try {
       const result = await session.query(sql.value);
       const { shown, text } = summarize(result, MAX_TABLE_ROWS);
       grid.show(result, shown);
+      const built = dependsOn(current.opened.dataset);
+      if (built.length > 0 && createdNames(sql.value).some((name) => built.includes(name))) {
+        try {
+          const geometry = await loader.refreshNetwork(current.id);
+          networkEmpty = geometry.edges.features.length === 0;
+          routeMap.setNetwork(geometry);
+        } catch (error) {
+          showBanner(`The map could not be redrawn: ${messageOf(error)}`);
+        }
+      }
       selected = null;
       routeMap.select(null);
       routeMap.highlight(highlightOf(result));
       setStatus(`${text} · ${Math.round(performance.now() - started)} ms`);
     } catch (error) {
       const message = messageOf(error);
-      const hint = prerequisiteHint(message, current.opened.presets.presets, preset.value || null);
-      setStatus(hint ? `${message}\n${hint}` : message, true);
+      const hints = [
+        prerequisiteHint(message, current.opened.presets.presets, preset.value || null),
+        networkHint(message, current.opened.dataset),
+      ].filter((hint): hint is string => hint !== null);
+      setStatus([message, ...hints].join('\n'), true);
     } finally {
-      setBusy(false);
+      setAllBusy(false);
       if (!current) run.disabled = true;
     }
   }
@@ -236,6 +312,7 @@ async function main(): Promise<void> {
     const chosen = current.opened.presets.presets.find((p) => p.id === preset.value);
     if (chosen) sql.value = chosen.sql;
     showPresetNote(current.opened.presets, chosen);
+    showInputValues();
   });
   datasetSelect.addEventListener('change', () => {
     history.replaceState(null, '', location.pathname + location.search);
@@ -257,6 +334,12 @@ async function main(): Promise<void> {
       event.preventDefault();
       void execute();
     }
+  });
+  // The outline and markers follow the SET VARIABLE lines as the reader types.
+  let inputTimer: ReturnType<typeof setTimeout> | undefined;
+  sql.addEventListener('input', () => {
+    clearTimeout(inputTimer);
+    inputTimer = setTimeout(showInputValues, 200);
   });
 
   const linked = stateFromHash(location.hash);
