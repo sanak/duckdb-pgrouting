@@ -1,4 +1,4 @@
-# name: test/sql/old_style_exec.test
+# name: test/sql/family_exec.test
 # description: _pgr_exec with the driver argument: dispatch to each per-family driver
 # group: [sql]
 
@@ -25,7 +25,7 @@ SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
   directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
-  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driving_side := ' ', details := true, null_input := false,
   driver := 'bd_dijkstra')
 WHERE edge = -1;
 ----
@@ -37,7 +37,7 @@ SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
   directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
-  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driving_side := ' ', details := true, null_input := false,
   driver := 'bellman_ford')
 WHERE edge = -1;
 ----
@@ -49,7 +49,7 @@ SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
   directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
-  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driving_side := ' ', details := true, null_input := false,
   driver := 'edward_moore')
 WHERE edge = -1;
 ----
@@ -61,7 +61,7 @@ SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
   directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
-  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driving_side := ' ', details := true, null_input := false,
   driver := 'binary_bfs')
 WHERE edge = -1;
 ----
@@ -75,7 +75,7 @@ SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
           NULL AS combinations, [5]::BIGINT[] AS starts, [11]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost FROM edges', combinations_sql := '',
   directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
-  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driving_side := ' ', details := true, null_input := false,
   driver := 'dag_shortest_path')
 WHERE edge = -1;
 ----
@@ -88,7 +88,7 @@ SELECT start_vid, end_vid, edge, agg_cost FROM _pgr_exec(
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
   directed := true, only_cost := true, normal := true, n_goals := 0, global := false, which := 0,
-  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driving_side := ' ', details := true, null_input := false,
   driver := 'bd_dijkstra');
 ----
 6	10	-1	5
@@ -100,7 +100,7 @@ SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
   directed := false, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
-  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driving_side := ' ', details := true, null_input := false,
   driver := 'bellman_ford')
 WHERE edge = -1;
 ----
@@ -114,7 +114,7 @@ SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
   combinations_sql := 'SELECT 6 AS source, 10 AS target',
   directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
-  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driving_side := ' ', details := true, null_input := false,
   driver := 'edward_moore')
 WHERE edge = -1;
 ----
@@ -128,7 +128,7 @@ SELECT * FROM _pgr_exec(
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target FROM edges', combinations_sql := '',
   directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
-  driving_side := ' ', details := true, null_input := false, result_kind := 'path',
+  driving_side := ' ', details := true, null_input := false,
   driver := 'bd_dijkstra');
 ----
 Invalid Input Error: Column 'cost' not Found
@@ -155,7 +155,7 @@ SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
           NULL AS combinations, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', combinations_sql := '',
   directed := true, only_cost := false, normal := true, n_goals := 0, global := false, which := 0,
-  driving_side := ' ', details := true, null_input := false, result_kind := 'path')
+  driving_side := ' ', details := true, null_input := false)
 WHERE edge = -1;
 ----
 6	10	5
@@ -165,8 +165,7 @@ WHERE edge = -1;
 query III
 SELECT seq, component, node FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges),
-  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false,
-  result_kind := 'components', driver := 'connected_components');
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false, driver := 'connected_components');
 ----
 1	1	1
 2	1	3
@@ -192,26 +191,19 @@ SELECT count(*) FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0) e)
      AS edges),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0',
-  null_input := false, result_kind := 'components', driver := 'connected_components');
+  null_input := false, driver := 'connected_components');
 ----
 0
 
-# result_kind and driver must agree, in both directions, as an ordinary input error.
-statement error
-SELECT * FROM _pgr_exec(
-  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges),
-  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false,
-  result_kind := 'components', driver := 'bellman_ford');
-----
-Invalid Input Error: _pgr_exec: result_kind 'components' needs driver 'connected_components'
-
+# The output columns follow the driver's result shape (src/include/pgrouting/driver_kind.hpp), so
+# no argument exists that could disagree with it.
 statement error
 SELECT * FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges),
   edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false,
   result_kind := 'path', driver := 'connected_components');
 ----
-Invalid Input Error: _pgr_exec: driver 'connected_components' needs result_kind 'components'
+Invalid named parameter "result_kind" for function _pgr_exec
 
 # The pre-rename spelling is gone rather than kept as an alias.
 statement error

@@ -33,8 +33,10 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/shortest_path_functions.cpp
     src/functions/shortest_path_specs.cpp
     src/functions/sql_template.cpp
+    src/pg_compat/src/drivers_graph.cpp
+    src/pg_compat/src/drivers_path.cpp
+    src/pg_compat/src/family_drivers.cpp
     src/pg_compat/src/get_check_data.cpp
-    src/pg_compat/src/old_style_drivers.cpp
     src/pg_compat/src/pg_types.cpp)
 
 set(EXTENSION_SOURCES ${DUCKDB_PGROUTING_SOURCES} ${PGROUTING_SOURCES})

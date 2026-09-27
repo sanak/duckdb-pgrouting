@@ -42,8 +42,8 @@ struct RowSchema {
 struct ExecBindData : public TableFunctionData {
 	duckdb_pgrouting::DriverRequest request;
 	bool null_input = false;
-	// result_kind 'components': the driver returned vertex/component pairs, not path rows.
-	bool components = false;
+	// What the driver returns, and therefore which columns this call has (driver_kind.hpp).
+	duckdb_pgrouting::ResultShape shape = duckdb_pgrouting::ResultShape::PATH;
 	// Column positions of the input row, resolved by name so that new columns can be added
 	// without disturbing the ones already bound.
 	idx_t edges_column = DConstants::INVALID_INDEX;
@@ -279,35 +279,17 @@ unique_ptr<FunctionData> ExecBind(ClientContext &, TableFunctionBindInput &input
 	request.details = NamedOr<bool>(input, "details", true);
 	const auto driving_side = NamedStringOr(input, "driving_side", " ");
 	request.driving_side = driving_side.empty() ? ' ' : driving_side[0];
-	const auto driver =
-	    NamedStringOr(input, "driver", duckdb_pgrouting::DriverKindName(duckdb_pgrouting::DriverKind::SHORTEST_PATH));
-	if (!duckdb_pgrouting::ParseDriverKind(driver, request.driver)) {
-		throw InvalidInputException("_pgr_exec: unknown driver '%s'", driver);
+	const auto driver_name = NamedStringOr(input, "driver", "shortest_path");
+	const auto *driver = duckdb_pgrouting::FindDriver(driver_name);
+	if (!driver) {
+		throw InvalidInputException("_pgr_exec: unknown driver '%s'", driver_name);
 	}
+	request.driver = driver->kind;
 	if (request.driver != duckdb_pgrouting::DriverKind::SHORTEST_PATH && !request.points_sql.empty()) {
-		throw InvalidInputException("_pgr_exec: points_sql is only supported by driver '%s'",
-		                            duckdb_pgrouting::DriverKindName(duckdb_pgrouting::DriverKind::SHORTEST_PATH));
+		throw InvalidInputException("_pgr_exec: points_sql is only supported by driver 'shortest_path'");
 	}
 	data->null_input = NamedOr<bool>(input, "null_input", false);
-
-	const auto result_kind = NamedStringOr(input, "result_kind", "path");
-	const auto components_name =
-	    duckdb_pgrouting::DriverKindName(duckdb_pgrouting::DriverKind::CONNECTED_COMPONENTS);
-	const bool components_driver = request.driver == duckdb_pgrouting::DriverKind::CONNECTED_COMPONENTS;
-	if (result_kind == "components") {
-		if (!components_driver) {
-			throw InvalidInputException("_pgr_exec: result_kind 'components' needs driver '%s'",
-			                            components_name);
-		}
-		data->components = true;
-	} else if (result_kind == "path") {
-		if (components_driver) {
-			throw InvalidInputException("_pgr_exec: driver '%s' needs result_kind 'components'",
-			                            components_name);
-		}
-	} else {
-		throw InvalidInputException("_pgr_exec: unsupported result_kind '%s'", result_kind);
-	}
+	data->shape = driver->shape;
 
 	data->edges_column = FindInputColumn(input, "edges");
 	data->combinations_column = FindInputColumn(input, "combinations");
@@ -332,7 +314,7 @@ unique_ptr<FunctionData> ExecBind(ClientContext &, TableFunctionBindInput &input
 	CaptureRowSchema(input, data->edges_of_points_column, data->edges_of_points_schema);
 	CaptureRowSchema(input, data->edges_no_points_column, data->edges_no_points_schema);
 
-	if (data->components) {
+	if (data->shape == duckdb_pgrouting::ResultShape::PAIRS) {
 		// Upstream's pgr_connectedComponents: all three BIGINT, seq included.
 		return_types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
 		names = {"seq", "component", "node"};
@@ -400,7 +382,7 @@ void RunOnce(ClientContext &context, const ExecBindData &bind, ExecState &state,
 	request.starts = ReadIdList(input, bind.starts_column, "starts", request.has_starts);
 	request.ends = ReadIdList(input, bind.ends_column, "ends", request.has_ends);
 
-	state.result = duckdb_pgrouting::RunShortestPath(context, state.registry, request);
+	state.result = duckdb_pgrouting::RunDriver(context, state.registry, request);
 }
 
 // Upstream's _pgr_connectedComponents emits (call counter + 1, d2.value, d1.id) per pair; so does
@@ -411,7 +393,7 @@ void EmitComponents(const ExecState &state, idx_t n, DataChunk &output) {
 	auto node = FlatVector::ScatterWriter<int64_t>(output.data[2]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
-		const auto &pair = state.result.pairs[k];
+		const auto &pair = state.result.Rows<II_t_rt>()[k];
 		seq[i] = NumericCast<int64_t>(k + 1);
 		component[i] = pair.d2.value;
 		node[i] = pair.d1.id;
@@ -433,7 +415,7 @@ OperatorResultType ExecFunction(ExecutionContext &context, TableFunctionInput &d
 
 	const auto remaining = state.result.count - state.offset;
 	const auto n = MinValue<idx_t>(STANDARD_VECTOR_SIZE, remaining);
-	if (bind.components) {
+	if (bind.shape == duckdb_pgrouting::ResultShape::PAIRS) {
 		EmitComponents(state, n, output);
 		output.SetChildCardinality(n);
 		state.offset += n;
@@ -453,7 +435,7 @@ OperatorResultType ExecFunction(ExecutionContext &context, TableFunctionInput &d
 	auto agg_cost = FlatVector::ScatterWriter<double>(output.data[7]);
 	for (idx_t i = 0; i < n; i++) {
 		const auto k = state.offset + i;
-		const auto &row = state.result.rows[k];
+		const auto &row = state.result.Rows<Path_rt>()[k];
 		seq[i] = NumericCast<int32_t>(k + 1);
 		path_seq[i] = NumericCast<int32_t>(state.next_path_seq);
 		start_vid[i] = row.start_id;
@@ -509,7 +491,6 @@ void RegisterExec(ExtensionLoader &loader) {
 	exec.named_parameters["driving_side"] = LogicalType::VARCHAR;
 	exec.named_parameters["details"] = LogicalType::BOOLEAN;
 	exec.named_parameters["null_input"] = LogicalType::BOOLEAN;
-	exec.named_parameters["result_kind"] = LogicalType::VARCHAR;
 	exec.named_parameters["driver"] = LogicalType::VARCHAR;
 	loader.RegisterFunction(exec);
 	TagExecFunction(loader);

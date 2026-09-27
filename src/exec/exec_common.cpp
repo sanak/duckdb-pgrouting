@@ -12,56 +12,59 @@
 #include "c_types/path_rt.h"
 #include "drivers/shortestPath_driver.hpp"
 #include "pgrouting/driver_input.hpp"
+#include "pgrouting/family_drivers.hpp"
 #include "pgrouting/input_registry.hpp"
-#include "pgrouting/old_style_drivers.hpp"
 
 namespace duckdb_pgrouting {
 
 DriverResult::~DriverResult() {
-	if (rows) {
-		std::free(rows);
-	}
-	if (pairs) {
-		std::free(pairs);
-	}
+	Release();
 }
 
 DriverResult::DriverResult(DriverResult &&other) noexcept
-    : rows(other.rows), pairs(other.pairs), count(other.count), is_matrix(other.is_matrix) {
+    : shape(other.shape), rows(other.rows), count(other.count), is_matrix(other.is_matrix) {
 	other.rows = nullptr;
-	other.pairs = nullptr;
 	other.count = 0;
 }
 
 DriverResult &DriverResult::operator=(DriverResult &&other) noexcept {
 	if (this != &other) {
-		if (rows) {
-			std::free(rows);
-		}
-		if (pairs) {
-			std::free(pairs);
-		}
+		Release();
+		shape = other.shape;
 		rows = other.rows;
-		pairs = other.pairs;
 		count = other.count;
 		is_matrix = other.is_matrix;
 		other.rows = nullptr;
-		other.pairs = nullptr;
 		other.count = 0;
 	}
 	return *this;
 }
 
-DriverResult RunShortestPath(duckdb::ClientContext &context, InputRegistry &registry, const DriverRequest &request) {
+// A shape whose rows own arrays of their own frees those here, before the rows themselves, so the
+// error path that drops partial results releases them too.
+void DriverResult::Release() {
+	switch (shape) {
+	case ResultShape::PATH:
+	case ResultShape::PAIRS:
+		break; // flat rows
+	}
+	std::free(rows);
+	rows = nullptr;
+	count = 0;
+}
+
+DriverResult RunDriver(duckdb::ClientContext &context, InputRegistry &registry, const DriverRequest &request) {
 	DriverResult result;
+	result.shape = InfoOf(request.driver).shape;
 	std::string log_text;
 	std::string notice_text;
 	std::string err_text;
 
 	ScopedIntArray starts(request.starts);
 	ScopedIntArray ends(request.ends);
-	auto *starts_arg = request.has_starts ? starts.get() : nullptr;
-	auto *ends_arg = request.has_ends ? ends.get() : nullptr;
+	DriverArrays arrays;
+	arrays.starts = request.has_starts ? starts.get() : nullptr;
+	arrays.ends = request.has_ends ? ends.get() : nullptr;
 
 	{
 		ScopedRoutingContext scope(context, registry);
@@ -69,19 +72,23 @@ DriverResult RunShortestPath(duckdb::ClientContext &context, InputRegistry &regi
 			std::ostringstream log;
 			std::ostringstream notice;
 			std::ostringstream err;
-			do_shortestPath(request.edges_sql, request.points_sql, request.combinations_sql, starts_arg, ends_arg,
-			                request.directed, request.only_cost, request.normal, request.n_goals, request.global,
-			                request.driving_side, request.details, request.which, result.is_matrix, result.rows,
-			                result.count, log, notice, err);
+			Path_rt *rows = nullptr;
+			do_shortestPath(request.edges_sql, request.points_sql, request.combinations_sql, arrays.starts,
+			                arrays.ends, request.directed, request.only_cost, request.normal, request.n_goals,
+			                request.global, request.driving_side, request.details, request.which, result.is_matrix,
+			                rows, result.count, log, notice, err);
+			result.rows = rows;
 			log_text = log.str();
 			notice_text = notice.str();
 			err_text = err.str();
 		} else {
-			// The families pgRouting has not moved onto do_shortestPath (old_style_drivers.cpp).
-			auto out = RunOldStyle(request.driver, request.edges_sql, request.combinations_sql, starts_arg, ends_arg,
-			                       request.directed, request.only_cost, request.normal);
+			// The families pgRouting has not moved onto do_shortestPath (family_drivers.cpp).
+			auto out = RunFamilyDriver(request, arrays);
+			if (out.shape != InfoOf(request.driver).shape) {
+				throw duckdb::InternalException(
+				    "pgrouting: driver '%s' returned rows of the wrong shape", InfoOf(request.driver).name);
+			}
 			result.rows = out.rows;
-			result.pairs = out.pairs;
 			result.count = out.count;
 			log_text = std::move(out.log);
 			notice_text = std::move(out.notice);
