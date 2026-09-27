@@ -199,7 +199,8 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::DIJKSTRA_SPECS,          &duckdb_pgrouting::WITH_POINTS_SPECS,
 	    &duckdb_pgrouting::BD_DIJKSTRA_SPECS,       &duckdb_pgrouting::BELLMAN_FORD_SPECS,
 	    &duckdb_pgrouting::DAG_SHORTEST_PATH_SPECS, &duckdb_pgrouting::BREADTH_FIRST_SEARCH_SPECS,
-	    &duckdb_pgrouting::COMPONENTS_SPECS};
+	    &duckdb_pgrouting::COMPONENTS_SPECS,        &duckdb_pgrouting::ASTAR_SPECS,
+	    &duckdb_pgrouting::BD_ASTAR_SPECS};
 	return TABLES;
 }
 
@@ -213,6 +214,7 @@ vector<string> ProjectionColumns(const duckdb_pgrouting::FunctionSpec &spec) {
 	}
 	case duckdb_pgrouting::Projection::COST:
 	case duckdb_pgrouting::Projection::COST_OF_PATH:
+	case duckdb_pgrouting::Projection::COST_SORTED:
 		return {"start_vid", "end_vid", "agg_cost"};
 	}
 	throw InternalException("Unhandled Projection");
@@ -243,6 +245,10 @@ LogicalType TypeOf(duckdb_pgrouting::OptionalType type) {
 		return LogicalType::BOOLEAN;
 	case duckdb_pgrouting::OptionalType::BIGINT:
 		return LogicalType::BIGINT;
+	case duckdb_pgrouting::OptionalType::INTEGER:
+		return LogicalType::INTEGER;
+	case duckdb_pgrouting::OptionalType::DOUBLE:
+		return LogicalType::DOUBLE;
 	}
 	throw InternalException("Unhandled OptionalType");
 }
@@ -259,10 +265,17 @@ Value ResolveOptional(const duckdb_pgrouting::FunctionSpec &spec, TableFunctionB
 	if (it != input.named_parameters.end()) {
 		return it->second;
 	}
-	if (param.type == duckdb_pgrouting::OptionalType::BOOLEAN) {
+	switch (param.type) {
+	case duckdb_pgrouting::OptionalType::BOOLEAN:
 		return Value::BOOLEAN(param.default_value != 0);
+	case duckdb_pgrouting::OptionalType::BIGINT:
+		return Value::BIGINT(static_cast<int64_t>(param.default_value));
+	case duckdb_pgrouting::OptionalType::INTEGER:
+		return Value::INTEGER(static_cast<int32_t>(param.default_value));
+	case duckdb_pgrouting::OptionalType::DOUBLE:
+		return Value::DOUBLE(param.default_value);
 	}
-	return Value::BIGINT(param.default_value);
+	throw InternalException("Unhandled OptionalType");
 }
 
 // A spec row is data. These are the ways it can disagree with the rest of the extension; checked
@@ -436,6 +449,14 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 		// -1.
 		outer->where_clause = make_uniq<ComparisonExpression>(
 		    ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>("edge"), Constant(Value::BIGINT(-1)));
+	}
+	if (spec.flags.projection == duckdb_pgrouting::Projection::COST_SORTED) {
+		auto order = make_uniq<OrderModifier>();
+		for (const char *column : {"start_vid", "end_vid"}) {
+			order->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST,
+			                           make_uniq<ColumnRefExpression>(string(column)));
+		}
+		outer->modifiers.push_back(std::move(order));
 	}
 	return make_uniq<SubqueryRef>(WrapNode(std::move(outer)));
 }

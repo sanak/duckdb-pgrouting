@@ -81,6 +81,34 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "breadth-first search over a double-ended queue.",
      "SELECT * FROM pgr_binaryBreadthFirstSearch('SELECT id, source, target, cost, reverse_cost FROM "
      "edges', 6, 10)"},
+    {"pgr_aStar",
+     "Shortest paths by A* search, which steers toward the destination using each edge's end-point "
+     "coordinates (x1, y1, x2, y2); takes one or many start and end vertices, or a query of start/end "
+     "pairs.",
+     "SELECT * FROM pgr_aStar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', "
+     "6, 12)"},
+    {"pgr_aStarCost",
+     "Total cost of the A* shortest path for each requested start/end pair, without the path, sorted "
+     "by start and end vertex.",
+     "SELECT * FROM pgr_aStarCost('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM "
+     "edges', 6, 12)"},
+    {"pgr_aStarCostMatrix",
+     "A* shortest-path costs between every ordered pair of the given vertices, one row per pair.",
+     "SELECT * FROM pgr_aStarCostMatrix('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 "
+     "FROM edges', [5, 6, 10, 15])"},
+    {"pgr_bdAstar",
+     "Shortest paths by a bidirectional A* search, which grows from both ends toward each other, "
+     "steered by each edge's end-point coordinates (x1, y1, x2, y2).",
+     "SELECT * FROM pgr_bdAstar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM "
+     "edges', 6, 12)"},
+    {"pgr_bdAstarCost",
+     "Total cost of the bidirectional A* shortest path for each requested start/end pair.",
+     "SELECT * FROM pgr_bdAstarCost('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM "
+     "edges', 6, 12)"},
+    {"pgr_bdAstarCostMatrix",
+     "Bidirectional A* costs between every ordered pair of the given vertices, one row per pair.",
+     "SELECT * FROM pgr_bdAstarCostMatrix('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, "
+     "y2 FROM edges', [5, 6, 10, 15])"},
     {"pgr_connectedComponents",
      "Groups the vertices of an undirected graph into connected components, one row per vertex; each "
      "component is numbered by its smallest vertex id.",

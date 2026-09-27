@@ -27,7 +27,7 @@ enum class ArgKind : uint8_t {
 	VIDS              // BIGINT[] passed as both the starts and the ends, as pgr_bdDijkstraCostMatrix does
 };
 
-enum class OptionalType : uint8_t { BOOLEAN, BIGINT };
+enum class OptionalType : uint8_t { BOOLEAN, BIGINT, INTEGER, DOUBLE };
 
 // A parameter upstream declares with a DEFAULT. PostgreSQL accepts any leading run of these
 // positionally as well as by name; DuckDB never matches a named parameter positionally, so a spec
@@ -37,7 +37,8 @@ enum class OptionalType : uint8_t { BOOLEAN, BIGINT };
 struct OptionalParam {
 	const char *name; // upstream's parameter name, which callers also pass by name
 	OptionalType type;
-	int64_t default_value;     // 0 or 1 for BOOLEAN
+	double default_value;      // upstream's DEFAULT; 0 or 1 for BOOLEAN. Every default upstream
+	                            // declares (0, 1, 5, 1.0) is exact in a double.
 	const char *request_field; // the _pgr_exec request parameter it sets (src/exec/request_params.cpp)
 };
 
@@ -45,6 +46,9 @@ constexpr OptionalParam DIRECTED {"directed", OptionalType::BOOLEAN, 1, "directe
 constexpr OptionalParam CAP {"cap", OptionalType::BIGINT, 1, "n_goals"};
 constexpr OptionalParam GLOBAL {"global", OptionalType::BOOLEAN, 1, "global"};
 constexpr OptionalParam DETAILS {"details", OptionalType::BOOLEAN, 0, "details"};
+constexpr OptionalParam HEURISTIC {"heuristic", OptionalType::INTEGER, 5, "heuristic"};
+constexpr OptionalParam FACTOR {"factor", OptionalType::DOUBLE, 1.0, "factor"};
+constexpr OptionalParam EPSILON {"epsilon", OptionalType::DOUBLE, 1.0, "epsilon"};
 
 // Where an overload's driving side comes from. NONE: the overload has none (which = 0 ignores it).
 // ARGUMENT: the CHAR signatures of the withPoints family take it as a required argument.
@@ -65,7 +69,9 @@ enum class Projection : uint8_t {
 	// return the wrong nearest destination. Upstream fixed this in commit b27576bd58 (not in
 	// any released version yet): once the pinned release contains that fix, the NearCost
 	// overloads can go back to only_cost = true with plain COST.
-	COST_OF_PATH
+	COST_OF_PATH,
+	// COST, ORDER BY start_vid, end_vid: pgr_aStarCost's wrapper sorts (sql/astar/astarCost.sql).
+	COST_SORTED
 };
 
 // The request fields that are fixed per overload rather than chosen by the caller. n_goals, global
@@ -111,5 +117,7 @@ extern const duckdb::vector<FunctionSpec> BELLMAN_FORD_SPECS;         // bellman
 extern const duckdb::vector<FunctionSpec> DAG_SHORTEST_PATH_SPECS;    // dag_shortest_path_specs.cpp
 extern const duckdb::vector<FunctionSpec> BREADTH_FIRST_SEARCH_SPECS; // breadth_first_search_specs.cpp
 extern const duckdb::vector<FunctionSpec> COMPONENTS_SPECS;           // components_specs.cpp
+extern const duckdb::vector<FunctionSpec> ASTAR_SPECS;                // astar_specs.cpp
+extern const duckdb::vector<FunctionSpec> BD_ASTAR_SPECS;             // bd_astar_specs.cpp
 
 } // namespace duckdb_pgrouting

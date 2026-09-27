@@ -1,0 +1,59 @@
+# name: test/sql/astar_workshop.test
+# description: pgr_aStarCost(Matrix) agrees with pgr_dijkstraCost(Matrix) on the workshop network
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# test/data/workshop-hiroshima is the pgRouting workshop's OpenStreetMap network (see its
+# NOTICE.md). Its cost column is each way's length in degrees, and x1..y2 its end points in
+# degrees, so the straight-line distance never exceeds the cost (checked below, up to the rounding
+# of two separate computations): heuristic 4 (that distance) never overestimates on this data.
+#
+# With one target per source, A* must then return Dijkstra's optimum exactly. With several targets
+# per source, as pgr_aStarCostMatrix asks for below, it need not: upstream's heuristic
+# (distance_heuristic in include/astar/astar.hpp) stops considering a target as soon as it is first
+# discovered, and removes it from the set the remaining heuristic evaluations minimize over, before
+# that target's own cost is final. From that point the heuristic is no longer admissible for it, so
+# a multi-target A* run can return a dearer-than-optimal cost for some pairs; it can never return a
+# cheaper one, since the algorithm still only reports costs of paths it actually walked. PostgreSQL
+# runs the same unmodified header and has the same behaviour (see docs/BACKLOG.md).
+
+require pgrouting
+
+require parquet
+
+statement ok
+CREATE TABLE ways AS SELECT * EXCLUDE (geom) FROM read_parquet('test/data/workshop-hiroshima/ways.parquet');
+
+query I
+SELECT count(*) FROM ways
+WHERE (cost >= 0 AND cost < sqrt((x2 - x1)^2 + (y2 - y1)^2) - 1e-12)
+   OR (reverse_cost >= 0 AND reverse_cost < sqrt((x2 - x1)^2 + (y2 - y1)^2) - 1e-12);
+----
+0
+
+# Exact check: one target per source (all five sources distinct), so the multi-target defect above
+# cannot fire. Covers the three pairs a 5x5 matrix run turns up as dearer than Dijkstra's optimum.
+query II
+SELECT count(*), count(*) FILTER (WHERE abs(a.agg_cost - d.agg_cost) > 1e-9)
+FROM pgr_aStarCost('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM ways',
+                   'SELECT * FROM (VALUES (2110, 4128), (4632, 2110), (7508, 2110), (4128, 1688), (1688, 4632))
+                      AS combinations (source, target)',
+                   heuristic := 4) a
+JOIN pgr_dijkstraCost('SELECT id, source, target, cost, reverse_cost FROM ways',
+                      'SELECT * FROM (VALUES (2110, 4128), (4632, 2110), (7508, 2110), (4128, 1688), (1688, 4632))
+                         AS combinations (source, target)') d USING (start_vid, end_vid);
+----
+5	0
+
+# Invariant check for the full 5x5 matrix (four targets per source): never cheaper than Dijkstra's
+# optimum. The dearer-than-optimal rows are not pinned to specific values, since which pairs are
+# affected depends on the order pgr_aStarCostMatrix's internal per-source calls discover targets in.
+query II
+SELECT count(*), count(*) FILTER (WHERE a.agg_cost < d.agg_cost - 1e-9)
+FROM pgr_aStarCostMatrix('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM ways',
+                         [7508, 4128, 4632, 2110, 1688], heuristic := 4) a
+JOIN pgr_dijkstraCostMatrix('SELECT id, source, target, cost, reverse_cost FROM ways',
+                            [7508, 4128, 4632, 2110, 1688]) d USING (start_vid, end_vid);
+----
+20	0

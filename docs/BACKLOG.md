@@ -51,6 +51,16 @@ decision rather than an oversight.
   unlike `pgr_bellmanFord`, `pgr_edwardMoore` and `pgr_dagShortestPath`, whose headers do poll it
   inside their main loop. PostgreSQL runs the same unmodified algorithm bodies and is equally
   uncancellable there, so this is not a regression introduced by the shared interrupt path.
+- **`pgr_aStar` / `pgr_aStarCost` / `pgr_aStarCostMatrix` can return a dearer-than-optimal cost when
+  a source has several targets.** `distance_heuristic::operator()` in
+  `include/astar/astar.hpp` minimizes over the still-open goals but erases a goal from that set as
+  soon as it is first discovered, before its cost is final; from then on the heuristic is no longer
+  admissible for that goal, so A* can settle for a worse route to it. It never returns a cheaper
+  route than Dijkstra's, only a costlier one, and only when a source has more than one target (see
+  `test/sql/astar_workshop.test`, which checks the one-target-per-source case exactly and the
+  many-target case only for that direction). PostgreSQL runs the same unmodified header and has the
+  same behaviour, so this is not a regression introduced here; it is not fixed here because upstream
+  files are never modified. A candidate to report upstream.
 
 ## Closed as declined
 
