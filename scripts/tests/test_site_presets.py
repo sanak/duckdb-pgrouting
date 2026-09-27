@@ -8,7 +8,8 @@ under the dataset's id and selected with USE, then the table SQL -- with the rel
 runs every preset in file order, each one twice, because a reader may run any preset again.
 The table SQL names files "<id>/<file>", relative to test/data, which is where the data lives.
 Skips when the binary is absent; spatial datasets and presets skip where spatial cannot be
-installed (PGROUTING_NO_SPATIAL=1).
+installed (PGROUTING_NO_SPATIAL=1), and a dataset that reads from third-party servers runs only
+with PGROUTING_NETWORK_TESTS=1.
 """
 
 import json
@@ -16,6 +17,7 @@ import os
 import pathlib
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -29,6 +31,14 @@ DATA = REPO / "test/data"
 
 # The workshop chain builds 22,889 vertices, components and several cost matrices; seconds each.
 TIMEOUT_SECONDS = 600
+
+# A dataset with "network": true reads from third-party servers while its presets run (Overture's
+# STAC catalogue and S3 bucket). Its chain runs only when this is 1: before a release, by hand.
+NETWORK_ENV = "PGROUTING_NETWORK_TESTS"
+
+
+def network_enabled():
+    return os.environ.get(NETWORK_ENV, "") == "1"
 
 
 def quote_ident(name):
@@ -52,11 +62,15 @@ def setup_sql(dataset_id, dataset, presets):
     """Mirrors site/src/datasets.ts setupStatements(), plus INSTALL spatial when anything loads it.
 
     stdlib-only Python cannot import TypeScript, so this deliberately duplicates that function's
-    logic. Keep the two in step.
+    logic. Keep the two in step. A network dataset also gets httpfs and json: the browser reads
+    https:// URLs and JSON without them, but the CLI needs httpfs, and the locally built one
+    autoloads nothing.
     """
     lines = []
     if uses_spatial(dataset, presets):
         lines.append("INSTALL spatial;")
+    if dataset.get("network", False):
+        lines += ["INSTALL httpfs;", "LOAD httpfs;", "INSTALL json;", "LOAD json;"]
     lines.append("ATTACH IF NOT EXISTS ':memory:' AS {};".format(quote_ident(dataset_id)))
     lines.append("USE {};".format(quote_ident(dataset_id)))
     if dataset.get("spatial", False):
@@ -71,21 +85,38 @@ def map_queries(dataset):
 
     Which keys a `map` object has depends on its `mode` (see site/src/datasets.ts parseMap):
     abstract has vertices/edges/points, geographic has edges/nodes. Read back every string value
-    except `mode` and `attribution` instead of hard-coding either list, so the two stay in step.
+    except `mode` and `attribution` instead of hard-coding either list, so the two stay in step
+    (`view`, `dependsOn` and `inputs` are not strings).
     """
     return [(key, value) for key, value in dataset["map"].items()
             if key not in ("mode", "attribution") and isinstance(value, str)]
 
 
+def builds_its_network(dataset):
+    """The map draws tables the presets create (dataset.json map.dependsOn)."""
+    return bool(dataset["map"].get("dependsOn"))
+
+
 def chain_sql(dataset_id, dataset, presets):
-    parts = [setup_sql(dataset_id, dataset, presets)]
-    for key, query in map_queries(dataset):
-        parts.append(".print map {}\nSELECT count(*) FROM ({});\n".format(key, query.strip().rstrip(";")))
+    maps = [".print map {}\nSELECT count(*) FROM ({});\n".format(key, query.strip().rstrip(";"))
+            for key, query in map_queries(dataset)]
+    # A network the presets build exists only once they have run.
+    before, after = ([], maps) if builds_its_network(dataset) else (maps, [])
+    parts = [setup_sql(dataset_id, dataset, presets), *before]
     for preset in presets:
         body = preset_sql(preset).rstrip().rstrip(";") + ";\n"
         parts.append(".print preset {}\n{}".format(preset["id"], body))
         parts.append(".print again {}\n{}".format(preset["id"], body))
-    return "".join(parts)
+    return "".join(parts + after)
+
+
+def skip_reason(dataset):
+    """Why the native chain skips this dataset here, or None."""
+    if dataset.get("network", False) and not network_enabled():
+        return "network dataset skipped: set {}=1 to run it".format(NETWORK_ENV)
+    if dataset.get("spatial", False) and gen.spatial_disabled():
+        return "spatial dataset skipped: " + gen.NO_SPATIAL_ENV + "=1"
+    return None
 
 
 def committed_datasets():
@@ -139,6 +170,33 @@ class TestChainSql(unittest.TestCase):
         }
         self.assertEqual([("edges", "SELECT 1"), ("nodes", "SELECT 2")], map_queries(dataset))
 
+    def test_setup_without_tables_attaches_and_uses(self):
+        self.assertEqual('ATTACH IF NOT EXISTS \':memory:\' AS "o";\nUSE "o";\n',
+                         setup_sql("o", {"spatial": False, "tables": []}, []))
+
+    def test_a_network_dataset_installs_and_loads_httpfs_and_json_first(self):
+        setup = setup_sql("o", {"network": True, "tables": []}, [])
+        self.assertTrue(setup.startswith("INSTALL httpfs;\nLOAD httpfs;\nINSTALL json;\nLOAD json;\nATTACH "))
+
+    def test_map_queries_of_a_network_the_presets_build_run_after_them(self):
+        dataset = {
+            "tables": [],
+            "map": {"mode": "geographic", "edges": "SELECT 1", "nodes": "SELECT 2", "attribution": "©",
+                    "view": [0, 0, 1, 1], "dependsOn": ["t"], "inputs": []},
+        }
+        chain = chain_sql("a", dataset, [{"id": "p", "sql": "SELECT 4;"}])
+        self.assertEqual([("edges", "SELECT 1"), ("nodes", "SELECT 2")], map_queries(dataset))
+        self.assertLess(chain.index(".print again p"), chain.index(".print map edges"))
+
+    def test_network_datasets_run_only_when_opted_in(self):
+        with mock.patch.dict(os.environ, {NETWORK_ENV: "", gen.NO_SPATIAL_ENV: ""}):
+            self.assertIn(NETWORK_ENV, skip_reason({"network": True}))
+            self.assertIsNone(skip_reason({"network": False, "spatial": True}))
+        with mock.patch.dict(os.environ, {NETWORK_ENV: "1", gen.NO_SPATIAL_ENV: ""}):
+            self.assertIsNone(skip_reason({"network": True, "spatial": True}))
+        with mock.patch.dict(os.environ, {NETWORK_ENV: "1", gen.NO_SPATIAL_ENV: "1"}):
+            self.assertIn(gen.NO_SPATIAL_ENV, skip_reason({"network": True, "spatial": True}))
+
 
 @unittest.skipUnless(BINARY.exists(), "build/release/duckdb not built")
 class TestSitePresets(unittest.TestCase):
@@ -155,9 +213,10 @@ class TestSitePresets(unittest.TestCase):
             with self.subTest(dataset=dataset_id):
                 dataset = read_json(dataset_id, "dataset.json")
                 presets = read_json(dataset_id, "presets.json")["presets"]
+                reason = skip_reason(dataset)
+                if reason:
+                    self.skipTest(reason)
                 if gen.spatial_disabled():
-                    if dataset.get("spatial", False):
-                        self.skipTest("spatial dataset skipped: " + gen.NO_SPATIAL_ENV + "=1")
                     presets = [p for p in presets if "LOAD spatial" not in preset_sql(p)]
                 try:
                     db.script(chain_sql(dataset_id, dataset, presets), timeout=TIMEOUT_SECONDS)
