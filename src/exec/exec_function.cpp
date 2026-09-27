@@ -14,6 +14,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 
@@ -129,7 +130,7 @@ bool CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 }
 
 unique_ptr<FunctionData> ExecBind(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &return_types,
-                                  vector<string> &names) {
+                                  vector<Identifier> &names) {
 	auto data = make_uniq<ExecBindData>();
 	ReadRequestParameters(input.named_parameters, data->request);
 	const auto &request = data->request;
@@ -182,7 +183,7 @@ OperatorResultType ExecFunction(ExecutionContext &context, TableFunctionInput &d
 
 	const auto n = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.result.count - state.emit.offset);
 	EmitRows(state.result, state.emit, n, output);
-	output.SetCardinality(n);
+	output.SetChildCardinality(n);
 	if (state.emit.offset < state.result.count) {
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	}
@@ -196,8 +197,8 @@ void TagExecFunction(ExtensionLoader &loader) {
 	auto &db = loader.GetDatabaseInstance();
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
-	auto &schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
-	auto entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, "_pgr_exec");
+	auto &schema = catalog.GetSchema(transaction, Identifier::DefaultSchema());
+	auto entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, Identifier("_pgr_exec"));
 	if (!entry) {
 		throw InternalException("pgrouting: _pgr_exec was not registered");
 	}
@@ -213,7 +214,8 @@ void RegisterExec(ExtensionLoader &loader) {
 	exec.init_local = ExecInitLocal;
 	exec.in_out_function = ExecFunction;
 	RegisterRequestParameters(exec);
-	exec.named_parameters["null_input"] = LogicalType::BOOLEAN;
+	exec.GetSignature().ExtendTypedKwargs(
+	    [](TypedKwargs &options) { options.Add("null_input", LogicalType::BOOLEAN); });
 	loader.RegisterFunction(exec);
 	TagExecFunction(loader);
 }

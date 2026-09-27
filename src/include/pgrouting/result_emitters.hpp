@@ -7,6 +7,7 @@
 // across output chunks in EmitState.
 
 #include "duckdb.hpp"
+#include "duckdb/common/identifier.hpp"
 
 #include "pgrouting/exec_common.hpp"
 
@@ -19,7 +20,7 @@ struct EmitState {
 };
 
 // The columns of `shape`, in order.
-void ShapeColumns(duckdb_pgrouting::ResultShape shape, vector<LogicalType> &types, vector<string> &names);
+void ShapeColumns(duckdb_pgrouting::ResultShape shape, vector<LogicalType> &types, vector<Identifier> &names);
 
 // Writes rows [state.offset, state.offset + n) of `result` into `output` and advances `state`. The
 // shape is dispatched once per chunk, never per row. n == 0 writes nothing, so a result that never

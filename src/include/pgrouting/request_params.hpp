@@ -21,7 +21,7 @@ void RegisterRequestParameters(TableFunction &exec);
 
 // Overwrites each request field whose named parameter was given and is not NULL; the others keep
 // DriverRequest's defaults. Throws InvalidInputException for an unknown driver name.
-void ReadRequestParameters(const named_parameter_map_t &named, duckdb_pgrouting::DriverRequest &request);
+void ReadRequestParameters(const named_argument_map_t &named, duckdb_pgrouting::DriverRequest &request);
 
 // The request as `name := constant` arguments to _pgr_exec, one per field, whether or not the
 // caller changed it.

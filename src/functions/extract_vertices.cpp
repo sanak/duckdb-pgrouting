@@ -230,7 +230,8 @@ void RegisterExtractVertices(ExtensionLoader &loader) {
 		}
 		TableFunction function(arguments, nullptr, nullptr);
 		function.bind_replace = ExtractVerticesBindReplace;
-		function.named_parameters["dryrun"] = LogicalType::BOOLEAN;
+		function.GetSignature().WithTypedKwargs(
+		    "options", [](TypedKwargs &options) { options.Add("dryrun", LogicalType::BOOLEAN); });
 		set.AddFunction(function);
 	}
 	// Tagged spatial although the source/target modes do not need it: the tag tells the tooling to

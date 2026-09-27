@@ -179,7 +179,8 @@ void RegisterDegree(ExtensionLoader &loader) {
 			}
 			TableFunction function(arguments, nullptr, nullptr);
 			function.bind_replace = queries == 1 ? DegreeFromEdgesBindReplace : DegreeFromVerticesBindReplace;
-			function.named_parameters["dryrun"] = LogicalType::BOOLEAN;
+			function.GetSignature().WithTypedKwargs(
+			    "options", [](TypedKwargs &options) { options.Add("dryrun", LogicalType::BOOLEAN); });
 			set.AddFunction(function);
 		}
 	}
