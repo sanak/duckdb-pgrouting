@@ -122,10 +122,12 @@ jobs:
       # either a porting defect or a real behaviour difference, and both want a human rather than
       # a quiet edit. The one deliberate exception is dijkstra_interrupt.test, which exists only
       # there: it needs the max_execution_time setting, which DuckDB v1.5 does not have.
+      # The branch is main plus a few commits, rebased only now and then, so it is compared with
+      # the main commit it was rebased onto, not with main's head, which may have moved on.
       # checkout's fetch-depth 0 makes origin/main available.
       - name: Test parity with main (v2.0 line only)
         if: github.ref == 'refs/heads/v2.0-cyanoptera' || github.base_ref == 'v2.0-cyanoptera'
         run: |
-          diff <(git diff --name-status origin/main HEAD -- test/sql test/pgrouting_skip.json \
+          diff <(git diff --name-status "$(git merge-base origin/main HEAD)" HEAD -- test/sql test/pgrouting_skip.json \
                    test/pgrouting_ties.json test/pgrouting_not_ported.json) \
                <(printf 'A\ttest/sql/dijkstra_interrupt.test\n')

@@ -127,12 +127,15 @@ Wasm unittest always passes it, and on `v2.0-cyanoptera` the Makefile exports it
 
 Until DuckDB 2.0.0 ships there are two lines. `main` (stable) is built against the current
 DuckDB v1.5 release and is what users install; the `v2.0-cyanoptera` branch (next) is built
-against DuckDB's branch of that name. Every change lands on `main` first and is cherry-picked
-onto the branch; the branch differs only in its submodule pins, its v2.0 source adaptations, the
-two `if: false` lines of `MainDistributionPipeline.yml`, the one extra test
-`test/sql/dijkstra_interrupt.test` and the Makefile line that exports `DUCKDB_TEST_CONFIG`. No
-`#if` compatibility macros go on either line. When DuckDB
-2.0.0 ships, `v2.0-cyanoptera` is merged into `main` and a v1.5 maintenance branch is cut first.
+against DuckDB's branch of that name. Every change lands on `main` only. The branch is `main`
+plus three commits: one for its submodule pins, the two `if: false` lines of
+`MainDistributionPipeline.yml` and the Makefile line that exports `DUCKDB_TEST_CONFIG`; one for
+its v2.0 source adaptations; and one for the extra test `test/sql/dijkstra_interrupt.test`. It
+is rebased onto `main` (and force-pushed) only before a release tag, when its DuckDB pin moves,
+and when DuckDB 2.0.0 ships, so it usually lags `main`; a rebase conflict is resolved by taking
+`main`'s side and re-applying the v2.0 API. No `#if` compatibility macros go on either line.
+When DuckDB 2.0.0 ships, a v1.5 maintenance branch is cut from `main`, `v2.0-cyanoptera` is
+rebased onto `main` a last time, and `main` is fast-forwarded to it.
 
 Releases are tags on `main` only. A pushed `v*` tag runs the distribution pipeline, and
 its `Draft GitHub Release` job turns that run's nine artifacts into a draft Release:

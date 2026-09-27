@@ -19,8 +19,8 @@ concurrency:
 # Two release lines until DuckDB 2.0.0 ships. The stable line is main, built against the latest
 # DuckDB v1.5 release; it is what users install and where tags are cut. The next line is the
 # v2.0-cyanoptera branch, built against DuckDB's branch of that name. Both branches carry this
-# same file and each one disables the job that is not its own, so a change here cherry-picks
-# between them unchanged.
+# same file and each one disables the job that is not its own, so a change here carries over
+# unchanged when the branch is rebased onto main.
 #
 # reduced_ci_mode is left at its upstream default, which gates osx/windows/wasm on the linux job
 # and turns fail-fast on: a broken build then reports as one job instead of nine. WasmTests.yml

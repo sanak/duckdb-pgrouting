@@ -10,10 +10,12 @@ a person.
   what users install. The `v2.0-cyanoptera` branch is built against DuckDB's branch of that name
   and is not released until DuckDB 2.0.0 ships; then it is merged into `main`, after a v1.5
   maintenance branch has been cut from `main`.
-- **Changes land on `main` first** and are cherry-picked onto `v2.0-cyanoptera`. The branch
-  differs from `main` only in its DuckDB and extension-ci-tools submodule pins, the v2.0 source
-  adaptations, the two `if: false` lines of `MainDistributionPipeline.yml`, and the one test only
-  v2.0 can run (`test/sql/dijkstra_interrupt.test`). `Checks.yml` enforces the test parity.
+- **Changes land on `main` only.** `v2.0-cyanoptera` is `main` plus three commits: its DuckDB
+  and extension-ci-tools submodule pins with the build and CI lines that go with them, the v2.0
+  source adaptations, and the one test only v2.0 can run (`test/sql/dijkstra_interrupt.test`).
+  It is rebased onto `main` and force-pushed only before a release tag, when its DuckDB pin
+  moves, and when DuckDB 2.0.0 ships; between those it lags `main`. `Checks.yml` enforces the
+  test parity against the `main` commit it was rebased onto.
 - **One DuckDB version per Release.** An extension loads only into the DuckDB version it was built
   for. Asset names carry that version after the first `.` (DuckDB names an extension after its
   file name up to the first `.`):
@@ -29,8 +31,9 @@ a person.
 ## Cutting a release
 
 1. **Both lines green.** On the commits to release, all three workflows are green on
-   `main` (Main Extension Distribution Pipeline, Wasm Tests, Checks), and the same
-   change is green on `v2.0-cyanoptera`. Checks includes both generators in `--check` mode, so
+   `main` (Main Extension Distribution Pipeline, Wasm Tests, Checks). Rebase
+   `v2.0-cyanoptera` onto that commit, force-push it, and wait for the same three workflows to be
+   green there too. Checks includes both generators in `--check` mode, so
    fixtures and the generated docquery tests are current.
 2. **W2 against the branch build.** Run the W2 workflow in `artifact` mode with the `main`
    distribution run's id:
@@ -86,9 +89,11 @@ Registration in DuckDB's community-extensions repository waits until the pgRouti
 responded to a courtesy notice about the use of its name. When it happens:
 
 1. Open the descriptor pull request, with `repo.ref` at the released commit on `main` and
-   `repo.ref_next` at `v2.0-cyanoptera`.
+   `repo.ref_next` at the head of `v2.0-cyanoptera`. Every later rebase replaces that commit, so
+   move `repo.ref_next` to the new head each time.
 2. After the community build is published, verify `INSTALL pgrouting FROM community` on
    shell.duckdb.org and run W2 in `community` mode.
 3. Make `FROM community` the default install instruction in the README and on the site.
-4. **Before DuckDB 2.0.0 is released**, cut the v1.5 maintenance branch, merge `v2.0-cyanoptera`
-   into `main`, point `repo.ref` at it and drop `repo.ref_next`.
+4. **Before DuckDB 2.0.0 is released**, cut the v1.5 maintenance branch, rebase
+   `v2.0-cyanoptera` onto `main` a last time, fast-forward `main` to it, point `repo.ref` at it
+   and drop `repo.ref_next`.
