@@ -9,10 +9,11 @@ upstream also commits ``docqueries/src/sampledata.result``, the psql transcript 
 run. Every derived value is printed there in psql's aligned output, so the fixtures are read out
 of the transcript instead of recomputed.
 
-The one thing the transcript does not print is the four literal columns of the edges INSERT
-(``cost``, ``reverse_cost``, ``capacity``, ``reverse_capacity``); those come from the ``.pg``
-file, joined to the transcript on ``id``. ``edges.id`` is a BIGSERIAL filled by a single
-multi-row INSERT, so id = row index + 1.
+The literal columns of the edges INSERT come from the ``.pg`` file, joined to the transcript on
+``id``. The cost and coordinate columns are FLOAT upstream; the two capacity columns are BIGINT.
+``x1``, ``y1``, ``x2`` and ``y2`` come from the same INSERT: upstream fills them from the vertices,
+whose coordinates are the end points of each edge's ``ST_MakeLine`` literal. ``edges.id`` is a
+BIGSERIAL filled by a single multi-row INSERT, so id = row index + 1.
 
 Geometry is kept as WKT text in upstream's own spelling (``LINESTRING(2 0,2 1)``). The edges'
 comes from the ``.pg`` INSERT, whose ``ST_MakeLine(ST_POINT(x, y), ST_POINT(x, y))`` literals are
@@ -134,8 +135,8 @@ def _project(table: pgparse.AlignedTable, columns: List[str]) -> Rows:
 
 
 def _edge_literals(repo: pathlib.Path) -> Rows:
-    """cost, reverse_cost, capacity, reverse_capacity and the WKT geometry, in id order, from the
-    .pg INSERT."""
+    """cost, reverse_cost, capacity, reverse_capacity, x1, y1, x2, y2 and the WKT geometry, in id
+    order, from the .pg INSERT."""
     lines = (repo / PG_FILE).read_text(encoding="utf-8").splitlines()
     body = lines[lines.index(EDGES_START) : lines.index(EDGES_END)]
     rows: Rows = []
@@ -143,8 +144,10 @@ def _edge_literals(repo: pathlib.Path) -> Rows:
         match = _EDGE_ROW_RE.match(line.strip())
         if match:
             cost, reverse_cost, capacity, reverse_capacity, x1, y1, x2, y2 = match.groups()
-            # The two cost columns are FLOAT upstream; the two capacity columns are BIGINT.
+            # The cost and coordinate columns are FLOAT upstream; the two capacity columns are
+            # BIGINT. The WKT keeps the literal digits.
             rows.append([str(float(cost)), str(float(reverse_cost)), capacity, reverse_capacity,
+                         str(float(x1)), str(float(y1)), str(float(x2)), str(float(y2)),
                          f"LINESTRING({x1} {y1},{x2} {y2})"])
     return rows
 
@@ -160,7 +163,7 @@ def build_tables(repo: pathlib.Path) -> Tables:
         raise SystemExit(f"edges: {len(ids)} rows in marker q4, {len(literals)} in {PG_FILE}")
     tables["edges"] = (
         ["id", "source", "target", "cost", "reverse_cost", "capacity", "reverse_capacity",
-         "geom"],
+         "x1", "y1", "x2", "y2", "geom"],
         [left + right for left, right in zip(ids, literals)],
     )
 
