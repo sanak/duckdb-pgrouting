@@ -9,6 +9,8 @@
 
 #include "pgrouting/family_drivers.hpp"
 
+#include <cstdlib>
+
 #include "cpp_common/alloc.hpp"
 #include "driver_groups.hpp"
 
@@ -37,11 +39,28 @@ void *RowsOf(const DriverCall &call, ResultShape shape) {
 	return nullptr;
 }
 
+// The field a driver of this shape should never have written: path_rows for a PAIRS driver, or
+// pair_rows for a PATH one. A driver that writes there anyway has the wrong shape for its
+// DriverKind, which InfoOf() -- not the driver's own choice -- declares.
+void *WrongShapeRows(const DriverCall &call, ResultShape shape) {
+	switch (shape) {
+	case ResultShape::PATH:
+		return call.pair_rows;
+	case ResultShape::PAIRS:
+		return call.path_rows;
+	}
+	return nullptr;
+}
+
+std::string WrongShapeErr(const char *driver_name) {
+	return std::string("Internal error: driver '") + driver_name + "' wrote rows of the wrong shape";
+}
+
 } // namespace
 
 DriverOutput RunFamilyDriver(const DriverRequest &request, const DriverArrays &arrays) {
 	DriverOutput out;
-	out.shape = InfoOf(request.driver).shape;
+	auto shape = InfoOf(request.driver).shape;
 	DriverCall call;
 	try {
 		if (!CallPathDriver(request, arrays, call) && !CallGraphDriver(request, arrays, call)) {
@@ -56,8 +75,19 @@ DriverOutput RunFamilyDriver(const DriverRequest &request, const DriverArrays &a
 		// of memory inside a driver's own catch block reaches this handler that way.
 		out.err = message;
 	}
-	out.rows = RowsOf(call, out.shape);
+	out.rows = RowsOf(call, shape);
 	out.count = call.count;
+	// A meaningful shape check, unlike comparing InfoOf(request.driver).shape against itself: a
+	// driver that populated the other DriverCall field, or reported rows without populating either,
+	// wrote something RunDriver's caller cannot safely interpret as this shape.
+	if (out.err.empty()) {
+		if (void *wrong_rows = WrongShapeRows(call, shape)) {
+			std::free(wrong_rows);
+			out.err = WrongShapeErr(InfoOf(request.driver).name);
+		} else if (call.count > 0 && out.rows == nullptr) {
+			out.err = WrongShapeErr(InfoOf(request.driver).name);
+		}
+	}
 	out.log = TakeMessage(call.log);
 	out.notice = TakeMessage(call.notice);
 	if (out.err.empty()) {
