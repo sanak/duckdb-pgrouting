@@ -218,10 +218,15 @@ export function setupStatements(d: Dataset): string[] {
   ];
 }
 
-// The index collect.ts writes to public/data/index.json: the default dataset first, then by id.
-export function buildIndex(entries: { id: string; title: string }[], fallback = 'sampledata'): DatasetIndex {
-  const datasets = [...entries].sort((a, b) =>
-    a.id === fallback ? -1 : b.id === fallback ? 1 : a.id.localeCompare(b.id),
-  );
+// The index collect.ts writes to public/data/index.json: the default dataset first, then the
+// offline datasets by id, then the network ones by id (they are slower and need a connection).
+export function buildIndex(
+  entries: { id: string; title: string; network: boolean }[],
+  fallback = 'sampledata',
+): DatasetIndex {
+  const rank = (e: { id: string; network: boolean }) => (e.id === fallback ? 0 : e.network ? 2 : 1);
+  const datasets = [...entries]
+    .sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id))
+    .map(({ id, title }) => ({ id, title }));
   return parseDatasetIndex({ default: fallback, datasets });
 }

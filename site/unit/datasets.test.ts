@@ -112,19 +112,21 @@ test('workshop-hiroshima loads spatial and draws a geographic map', () => {
   assert.ok(setupStatements(d).indexOf('LOAD spatial') < setupStatements(d).findIndex((s) => s.includes('ways')));
 });
 
-test('buildIndex puts the default first, then the rest by id', () => {
+test('buildIndex puts the default first, then offline datasets by id, then network ones by id', () => {
   const index = buildIndex([
-    { id: 'zeta', title: 'Z' },
-    { id: 'sampledata', title: 'S' },
-    { id: 'alpha', title: 'A' },
+    { id: 'zeta', title: 'Z', network: false },
+    { id: 'net', title: 'N', network: true },
+    { id: 'sampledata', title: 'S', network: false },
+    { id: 'alpha', title: 'A', network: false },
+    { id: 'beta', title: 'B', network: true },
   ]);
   assert.equal(index.default, 'sampledata');
   assert.deepEqual(
     index.datasets.map((d) => d.id),
-    ['sampledata', 'alpha', 'zeta'],
+    ['sampledata', 'alpha', 'zeta', 'beta', 'net'],
   );
   assert.deepEqual(parseDatasetIndex(JSON.parse(JSON.stringify(index))), index);
-  assert.throws(() => buildIndex([{ id: 'alpha', title: 'A' }]), /default/);
+  assert.throws(() => buildIndex([{ id: 'alpha', title: 'A', network: false }]), /default/);
 });
 
 const GEOGRAPHIC = { mode: 'geographic', edges: 'SELECT 1', nodes: 'SELECT 2', attribution: '© OSM' };

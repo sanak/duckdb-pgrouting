@@ -37,7 +37,7 @@ function copyDatasets(): void {
   const data = join(site, '..', 'test', 'data');
   const to = join(site, 'public', 'data');
   rmSync(to, { recursive: true, force: true });
-  const entries: { id: string; title: string }[] = [];
+  const entries: { id: string; title: string; network: boolean }[] = [];
   for (const id of readdirSync(from).sort()) {
     if (!existsSync(join(from, id, 'dataset.json'))) continue;
     // Parsing here fails the build on a broken file instead of shipping it.
@@ -47,7 +47,7 @@ function copyDatasets(): void {
     for (const f of ['dataset.json', 'presets.json']) copyFileSync(join(from, id, f), join(to, id, f));
     for (const f of dataset.files) copyFileSync(join(data, id, f), join(to, id, f));
     if (existsSync(join(data, id, 'NOTICE.md'))) copyFileSync(join(data, id, 'NOTICE.md'), join(to, id, 'NOTICE.md'));
-    entries.push({ id, title: dataset.title });
+    entries.push({ id, title: dataset.title, network: dataset.network });
     console.log(`data: ${id} (${dataset.files.length} files)`);
   }
   writeFileSync(join(to, 'index.json'), `${JSON.stringify(buildIndex(entries), null, 2)}\n`);
