@@ -21,7 +21,9 @@ enum class DriverKind : uint8_t {
 	EDWARD_MOORE,
 	DAG_SHORTEST_PATH,
 	BINARY_BFS,
-	CONNECTED_COMPONENTS
+	CONNECTED_COMPONENTS,
+	ASTAR,
+	BD_ASTAR
 };
 
 // The upstream result struct a driver fills, one value per struct. It decides _pgr_exec's output
@@ -31,21 +33,34 @@ enum class ResultShape : uint8_t {
 	PAIRS // II_t_rt
 };
 
+// A check upstream's C entry runs on the parameters before it calls the driver, even when the
+// edge query returns nothing. _pgr_exec runs it at bind time, unless an argument is NULL: a
+// STRICT function is never entered then.
+enum class RequestCheck : uint8_t {
+	NONE,
+	// check_parameters(heuristic, factor, epsilon): src/common/check_parameters.c, called by
+	// src/astar/astar.c and src/bdAstar/bdAstar.c.
+	ASTAR_PARAMETERS
+};
+
 struct DriverInfo {
 	DriverKind kind;
 	const char *name; // the spelling _pgr_exec's `driver` argument takes
 	ResultShape shape;
+	RequestCheck check;
 };
 
 // One row per DriverKind, in enumerator order: the only list of drivers.
 inline constexpr DriverInfo DRIVERS[] = {
-    {DriverKind::SHORTEST_PATH, "shortest_path", ResultShape::PATH},
-    {DriverKind::BD_DIJKSTRA, "bd_dijkstra", ResultShape::PATH},
-    {DriverKind::BELLMAN_FORD, "bellman_ford", ResultShape::PATH},
-    {DriverKind::EDWARD_MOORE, "edward_moore", ResultShape::PATH},
-    {DriverKind::DAG_SHORTEST_PATH, "dag_shortest_path", ResultShape::PATH},
-    {DriverKind::BINARY_BFS, "binary_bfs", ResultShape::PATH},
-    {DriverKind::CONNECTED_COMPONENTS, "connected_components", ResultShape::PAIRS},
+    {DriverKind::SHORTEST_PATH, "shortest_path", ResultShape::PATH, RequestCheck::NONE},
+    {DriverKind::BD_DIJKSTRA, "bd_dijkstra", ResultShape::PATH, RequestCheck::NONE},
+    {DriverKind::BELLMAN_FORD, "bellman_ford", ResultShape::PATH, RequestCheck::NONE},
+    {DriverKind::EDWARD_MOORE, "edward_moore", ResultShape::PATH, RequestCheck::NONE},
+    {DriverKind::DAG_SHORTEST_PATH, "dag_shortest_path", ResultShape::PATH, RequestCheck::NONE},
+    {DriverKind::BINARY_BFS, "binary_bfs", ResultShape::PATH, RequestCheck::NONE},
+    {DriverKind::CONNECTED_COMPONENTS, "connected_components", ResultShape::PAIRS, RequestCheck::NONE},
+    {DriverKind::ASTAR, "astar", ResultShape::PATH, RequestCheck::ASTAR_PARAMETERS},
+    {DriverKind::BD_ASTAR, "bd_astar", ResultShape::PATH, RequestCheck::ASTAR_PARAMETERS},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -60,7 +75,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::CONNECTED_COMPONENTS) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::BD_ASTAR) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

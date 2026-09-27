@@ -37,6 +37,8 @@ set(PGROUTING_SOURCES
 # Sources that reach PostgreSQL only through symbols this extension replaces
 # (src/pg_compat provides the stub headers and the replaced definitions).
 list(APPEND PGROUTING_SOURCES
+    ${PGROUTING_DIR}/src/astar/astar_driver.cpp
+    ${PGROUTING_DIR}/src/bdAstar/bdAstar_driver.cpp
     ${PGROUTING_DIR}/src/bdDijkstra/bdDijkstra_driver.cpp
     ${PGROUTING_DIR}/src/bellman_ford/bellman_ford_driver.cpp
     ${PGROUTING_DIR}/src/bellman_ford/edwardMoore_driver.cpp

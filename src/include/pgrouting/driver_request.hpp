@@ -28,6 +28,10 @@ struct DriverRequest {
 	char driving_side = ' ';
 	bool details = true;
 	int32_t which = 0;
+	// The A* families (pgr_aStar*, pgr_bdAstar*), with upstream's defaults.
+	int32_t heuristic = 5;
+	double factor = 1.0;
+	double epsilon = 1.0;
 	// Which driver runs the request. Each driver reads only the fields its upstream C entry passes
 	// it; only SHORTEST_PATH reads points_sql, n_goals, global, driving_side, details and which.
 	DriverKind driver = DriverKind::SHORTEST_PATH;

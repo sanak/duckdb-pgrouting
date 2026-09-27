@@ -37,6 +37,9 @@ const RequestParameter REQUEST_PARAMETERS[] = {
     {"driving_side", &DriverRequest::driving_side},
     {"details", &DriverRequest::details},
     {"which", &DriverRequest::which},
+    {"heuristic", &DriverRequest::heuristic},
+    {"factor", &DriverRequest::factor},
+    {"epsilon", &DriverRequest::epsilon},
     {"driver", &DriverRequest::driver},
 };
 
