@@ -1,4 +1,14 @@
 {
+  "astar/aStarCostMatrix.pg": {
+    "q2": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    }
+  },
+  "bdAstar/bdAstarCostMatrix.pg": {
+    "q2": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    }
+  },
   "bdDijkstra/bdDijkstraCostMatrix.pg": {
     "q2": {
       "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"

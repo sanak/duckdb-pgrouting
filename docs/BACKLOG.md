@@ -45,8 +45,8 @@ decision rather than an oversight.
   the same rows as `cap := 2` (the positional value), not `cap := 1` (the named one); PostgreSQL
   rejects such a call outright. DuckDB resolves named and positional arguments independently and
   this extension does not add its own check for the overlap.
-- **`pgr_bdDijkstra*` and `pgr_binaryBreadthFirstSearch` cannot be cancelled once the algorithm is
-  running.** Upstream's `include/bdDijkstra/bdDijkstra.hpp`, `include/cpp_common/bidirectional.hpp`
+- **`pgr_bdDijkstra*`, `pgr_bdAstar*` and `pgr_binaryBreadthFirstSearch` cannot be cancelled once the algorithm is
+  running.** Upstream's `include/bdDijkstra/bdDijkstra.hpp`, `include/bdAstar/bdAstar.hpp`, `include/cpp_common/bidirectional.hpp`
   and `include/breadthFirstSearch/binaryBreadthFirstSearch.hpp` never call `CHECK_FOR_INTERRUPTS`,
   unlike `pgr_bellmanFord`, `pgr_edwardMoore` and `pgr_dagShortestPath`, whose headers do poll it
   inside their main loop. PostgreSQL runs the same unmodified algorithm bodies and is equally
@@ -61,6 +61,11 @@ decision rather than an oversight.
   many-target case only for that direction). PostgreSQL runs the same unmodified header and has the
   same behaviour, so this is not a regression introduced here; it is not fixed here because upstream
   files are never modified. A candidate to report upstream.
+- **Driver allocations are not counted by `memory_limit`.** pgRouting's drivers build their graphs
+  and results with `new` and `malloc`, which DuckDB's buffer manager never sees, so a query's
+  routing work can exceed `memory_limit` (and, in Wasm, press against the 4 GB address space)
+  without DuckDB refusing it. PostgreSQL's `work_mem` does not bound them either. Accepted: the
+  alternative is an allocator shim inside unmodified upstream code.
 
 ## Closed as declined
 
@@ -149,6 +154,10 @@ Each of these would be a change no test could observe, so none of them is made:
   reason: its only runnable block, q2, passes a scalar subquery as the vertex array and is skipped
   in `test/pgrouting_skip.json`; q3 calls `pgr_TSP`. Coverage for `pgr_bdDijkstraCostMatrix` comes
   from the hand-written `test/sql/bd_dijkstra.test`, which also pins upstream's q2 rows.
+- **`astar/aStarCostMatrix.pg` and `bdAstar/bdAstarCostMatrix.pg` produce no generated test file
+  either**, for the same reason: q2 passes a scalar subquery and is skipped in
+  `test/pgrouting_skip.json`, and q3 calls `pgr_TSP`. `test/sql/astar.test` and
+  `test/sql/bd_astar.test` pin both q2 results.
 
 ## Open decision
 

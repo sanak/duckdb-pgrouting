@@ -10,7 +10,7 @@ the following checklist, in order. Every step either passes or tells you exactly
    An error anywhere else means an upstream file joined the compiled set without being added to
    `cmake/pgrouting_sources.cmake`.
 
-   If upstream moved one of the per-family drivers (pgr_bdDijkstra, pgr_bellmanFord,
+   If upstream moved one of the per-family drivers (pgr_aStar, pgr_bdAstar, pgr_bdDijkstra, pgr_bellmanFord,
    pgr_edwardMoore, pgr_dagShortestPath, pgr_binaryBreadthFirstSearch) onto `do_shortestPath`,
    delete its case in its `src/pg_compat/src/drivers_*.cpp` file, switch that family's rows in
    its `src/functions/*_specs.cpp` table to `DriverKind::SHORTEST_PATH` with the flags its new SQL
