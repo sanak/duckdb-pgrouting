@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Starting points for the editor. Each dataset has a presets.json next to its dataset.json:
-// { license, licenseUrl?, attribution?, source?, presets: [{ id, group, label, sql, source? }] }. `sql` may be an
-// array of lines, which reads better in JSON. The presets of a file are in the order a reader runs
-// them: one that needs a table, view or macro only ever needs one an earlier preset creates.
+// { license, licenseUrl?, attribution?, source?, sourceLabel?, presets: [{ id, group, label, sql, source? }] }.
+// `sql` may be an array of lines, which reads better in JSON. `sourceLabel` is the text of the link
+// to a preset's `source` (default "Workshop page"). The presets of a file are in the order a reader
+// runs them: one that needs a table, view or macro only ever needs one an earlier preset creates.
 import { type Json, list, object, text } from './json.ts';
 
 export interface Preset {
@@ -18,6 +19,7 @@ export interface PresetFile {
   licenseUrl?: string;
   attribution?: string;
   source?: string;
+  sourceLabel?: string;
   presets: Preset[];
 }
 
@@ -57,11 +59,13 @@ export function parsePresetFile(where: string, value: unknown): PresetFile {
   const attribution = o.attribution === undefined ? undefined : text(o, 'attribution', where);
   const source = optionalLink(o, 'source', where);
   const licenseUrl = optionalLink(o, 'licenseUrl', where);
+  const sourceLabel = o.sourceLabel === undefined ? undefined : text(o, 'sourceLabel', where);
   return {
     license: text(o, 'license', where),
     ...(licenseUrl ? { licenseUrl } : {}),
     ...(attribution ? { attribution } : {}),
     ...(source ? { source } : {}),
+    ...(sourceLabel ? { sourceLabel } : {}),
     presets,
   };
 }

@@ -77,7 +77,7 @@ function showPresetNote(file: PresetFile, chosen: Preset | undefined): void {
   presetNote.hidden = !(chosen && file.attribution);
   if (!chosen || !file.attribution) return;
   presetNote.append(`${file.attribution} `);
-  if (chosen.source) presetNote.append(link(chosen.source, 'Workshop page'), ' · ');
+  if (chosen.source) presetNote.append(link(chosen.source, file.sourceLabel ?? 'Workshop page'), ' · ');
   presetNote.append(file.licenseUrl ? link(file.licenseUrl, file.license) : file.license);
 }
 

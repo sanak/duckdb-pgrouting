@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { buildIndex, parseDataset, parseDatasetIndex, quoteIdent, setupStatements } from '../src/datasets.ts';
+import {
+  buildIndex,
+  networkHint,
+  parseDataset,
+  parseDatasetIndex,
+  quoteIdent,
+  setupStatements,
+} from '../src/datasets.ts';
 
 const DATASETS = join(import.meta.dirname, '..', 'datasets');
 
@@ -71,7 +78,6 @@ test('a spatial dataset loads spatial right after USE', () => {
 test('bad dataset files are rejected with the place that is wrong', () => {
   const good = read('sampledata', 'dataset.json') as Record<string, unknown>;
   assert.throws(() => parseDataset('Sample Data', good), /dataset id/);
-  assert.throws(() => parseDataset('s', { ...good, tables: [] }), /tables: expected at least one/);
   assert.throws(() => parseDataset('s', { ...good, spatial: 'yes' }), /spatial/);
   assert.throws(() => parseDataset('s', { ...good, files: ['../x.csv'] }), /files\[0\]/);
   assert.throws(() => parseDataset('s', { ...good, map: { mode: 'globe' } }), /map\.mode/);
@@ -119,4 +125,81 @@ test('buildIndex puts the default first, then the rest by id', () => {
   );
   assert.deepEqual(parseDatasetIndex(JSON.parse(JSON.stringify(index))), index);
   assert.throws(() => buildIndex([{ id: 'alpha', title: 'A' }]), /default/);
+});
+
+const GEOGRAPHIC = { mode: 'geographic', edges: 'SELECT 1', nodes: 'SELECT 2', attribution: '© OSM' };
+
+function withMap(map: Record<string, unknown>, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return { title: 'X', license: 'MIT', spatial: true, files: [], tables: [], map: { ...GEOGRAPHIC, ...map }, ...extra };
+}
+
+const EXTENT = { variable: 'bbox', kind: 'extent', label: 'Use this view', maxAreaKm2: 25 };
+const POINT = { variable: 'pt0', kind: 'point', label: 'Pick start' };
+
+test('a dataset may have no files and no tables', () => {
+  const d = parseDataset('x-y', withMap({}));
+  assert.deepEqual(d.files, []);
+  assert.deepEqual(d.tables, []);
+  assert.deepEqual(setupStatements(d), ['ATTACH IF NOT EXISTS \':memory:\' AS "x-y"', 'USE "x-y"', 'LOAD spatial']);
+});
+
+test('network is false unless the dataset says true', () => {
+  assert.equal(parseDataset('x', withMap({})).network, false);
+  assert.equal(parseDataset('x', withMap({}, { network: true })).network, true);
+  assert.equal(parseDataset('sampledata', read('sampledata', 'dataset.json')).network, false);
+  assert.throws(() => parseDataset('x', withMap({}, { network: 'yes' })), /x\/dataset\.json\.network/);
+});
+
+test('a geographic map may carry a view, dependsOn and inputs', () => {
+  const d = parseDataset(
+    'x',
+    withMap({
+      view: [132.44, 34.37, 132.48, 34.41],
+      dependsOn: ['pgr_connectors', 'pgr_edges'],
+      inputs: [EXTENT, POINT],
+    }),
+  );
+  assert.ok(d.map.mode === 'geographic');
+  assert.deepEqual(d.map.view, [132.44, 34.37, 132.48, 34.41]);
+  assert.deepEqual(d.map.dependsOn, ['pgr_connectors', 'pgr_edges']);
+  assert.deepEqual(d.map.inputs, [EXTENT, POINT]);
+});
+
+test('a geographic map without them has none of the three keys', () => {
+  const d = parseDataset('workshop-hiroshima', read('workshop-hiroshima', 'dataset.json'));
+  assert.ok(!('view' in d.map) && !('dependsOn' in d.map) && !('inputs' in d.map));
+});
+
+test('bad map inputs are rejected with the place that is wrong', () => {
+  const bad = (inputs: unknown[]) => () => parseDataset('x', withMap({ inputs }));
+  assert.throws(bad([{ ...POINT, kind: 'line' }]), /map\.inputs\[0\]\.kind/);
+  assert.throws(bad([{ ...EXTENT, maxAreaKm2: undefined }]), /map\.inputs\[0\]\.maxAreaKm2/);
+  assert.throws(bad([{ ...EXTENT, maxAreaKm2: 0 }]), /map\.inputs\[0\]\.maxAreaKm2/);
+  assert.throws(bad([{ ...POINT, maxAreaKm2: 25 }]), /map\.inputs\[0\]\.maxAreaKm2/);
+  assert.throws(bad([EXTENT, { ...EXTENT, variable: 'box2' }]), /map\.inputs: at most one extent/);
+  assert.throws(bad([POINT, { ...POINT, label: 'Again' }]), /map\.inputs: each variable at most once/);
+  assert.throws(bad([{ ...POINT, variable: 'Pt0' }]), /map\.inputs\[0\]\.variable/);
+  assert.throws(bad([{ ...POINT, variable: '0pt' }]), /map\.inputs\[0\]\.variable/);
+  assert.throws(bad([{ ...POINT, label: '' }]), /map\.inputs\[0\]\.label/);
+  assert.throws(() => parseDataset('x', withMap({ inputs: 'bbox' })), /map\.inputs/);
+});
+
+test('a bad view or dependsOn is rejected', () => {
+  const bad = (map: Record<string, unknown>) => () => parseDataset('x', withMap(map));
+  assert.throws(bad({ view: [1, 2, 3] }), /map\.view/);
+  assert.throws(bad({ view: [132.48, 34.37, 132.44, 34.41] }), /map\.view/);
+  assert.throws(bad({ view: [0, 0, 181, 1] }), /map\.view/);
+  assert.throws(bad({ view: [0, 0, '1', 1] }), /map\.view/);
+  assert.throws(bad({ dependsOn: ['pgr_edges', 'Edges'] }), /map\.dependsOn\[1\]/);
+  assert.throws(bad({ dependsOn: 'pgr_edges' }), /map\.dependsOn/);
+});
+
+test('networkHint speaks only for a network dataset and a connection error', () => {
+  const network = parseDataset('x', withMap({}, { network: true }));
+  const local = parseDataset('x', withMap({}));
+  const hint = 'This dataset reads from third-party servers at run time; check the connection.';
+  assert.equal(networkHint('IO Error: Could not establish connection', network), hint);
+  assert.equal(networkHint("HTTP Error: HTTP GET error on 'https://x/y.json' (HTTP 403)", network), hint);
+  assert.equal(networkHint('Catalog Error: Table with name ov_segments does not exist!', network), null);
+  assert.equal(networkHint('IO Error: Could not establish connection', local), null);
 });

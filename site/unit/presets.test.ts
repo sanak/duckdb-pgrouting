@@ -159,3 +159,13 @@ test('every workshop preset that uses a view or macro comes after the one creati
     }
   });
 });
+
+test('sourceLabel is the text of the link to a preset source', () => {
+  const one = { id: 'a', group: 'G', label: 'A', sql: 'SELECT 1' };
+  assert.equal(
+    parsePresetFile('t', { license: 'MIT', sourceLabel: 'overture.sql', presets: [one] }).sourceLabel,
+    'overture.sql',
+  );
+  assert.equal(parsePresetFile('t', { license: 'MIT', presets: [one] }).sourceLabel, undefined);
+  assert.throws(() => parsePresetFile('t', { license: 'MIT', sourceLabel: '', presets: [one] }), /t\.sourceLabel/);
+});
