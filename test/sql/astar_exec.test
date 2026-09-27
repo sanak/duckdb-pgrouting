@@ -1,0 +1,133 @@
+# name: test/sql/astar_exec.test
+# description: _pgr_exec with the A* drivers: edges with coordinates, and upstream's parameter checks
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+# Upstream's q2 (docqueries astar and bdAstar): 6 -> 12 costs 3. Only the closing row is asserted,
+# so an equal-cost tie cannot make this flaky.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges) e)
+            AS edges,
+          [6]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+  driver := 'astar', heuristic := 2)
+WHERE edge = -1;
+----
+6	12	3
+
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges) e)
+            AS edges,
+          [6]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+  driver := 'bd_astar', heuristic := 2)
+WHERE edge = -1;
+----
+6	12	3
+
+# Upstream's q4: undirected, many-to-one with normal = false, as pgr_aStar's wrapper passes it.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges) e)
+            AS edges,
+          [6, 8]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+  driver := 'astar', directed := false, normal := false, heuristic := 4)
+WHERE edge = -1
+ORDER BY start_vid;
+----
+6	10	1
+8	10	3
+
+# check_parameters (src/common/check_parameters.c), which the aStar and bdAstar C entries run before
+# the driver: its messages and hints, verbatim.
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges) e)
+            AS edges,
+          [6]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+  driver := 'astar', heuristic := 6);
+----
+Invalid Input Error: Unknown heuristic
+HINT: Valid values: 0~5
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges) e)
+            AS edges,
+          [6]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+  driver := 'bd_astar', heuristic := -1);
+----
+Invalid Input Error: Unknown heuristic
+HINT: Valid values: 0~5
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges) e)
+            AS edges,
+          [6]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+  driver := 'astar', factor := 0.0);
+----
+Invalid Input Error: Factor value out of range
+HINT: Valid values: positive non zero
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges) e)
+            AS edges,
+          [6]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges',
+  driver := 'bd_astar', epsilon := 0.5);
+----
+Invalid Input Error: Epsilon value out of range
+HINT: Valid values: 1 or greater than 1
+
+# The check runs before any input is read, so an edge query with no rows still fails it.
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges
+                                WHERE id < 0) e) AS edges,
+          [6]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges WHERE id < 0',
+  driver := 'astar', heuristic := 9);
+----
+Invalid Input Error: Unknown heuristic
+
+# A NULL argument means the function is never entered (STRICT), so nothing is checked.
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT NULL AS edges),
+  edges_sql := '', driver := 'astar', heuristic := 9, null_input := true);
+----
+0
+
+# The check belongs to the A* drivers: the unified driver ignores these parameters.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          [6]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', heuristic := 9)
+WHERE edge = -1;
+----
+6	12	3
+
+# The coordinates are required columns; the hint is the edge query, as for every missing column.
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          [6]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'astar');
+----
+Invalid Input Error: Column 'x1' not Found
+HINT: SELECT id, source, target, cost, reverse_cost FROM edges

@@ -41,6 +41,28 @@ struct ExecState : public LocalTableFunctionState {
 	EmitState emit;
 };
 
+// Upstream's C entries check some parameters before they call the driver (RequestCheck), with
+// these messages and hints, verbatim.
+void CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
+	switch (duckdb_pgrouting::InfoOf(request.driver).check) {
+	case duckdb_pgrouting::RequestCheck::NONE:
+		return;
+	case duckdb_pgrouting::RequestCheck::ASTAR_PARAMETERS:
+		if (request.heuristic > 5 || request.heuristic < 0) {
+			throw InvalidInputException(string("Unknown heuristic") + "\nHINT: " + "Valid values: 0~5");
+		}
+		if (request.factor <= 0) {
+			throw InvalidInputException(string("Factor value out of range") + "\nHINT: " +
+			                            "Valid values: positive non zero");
+		}
+		if (request.epsilon < 1) {
+			throw InvalidInputException(string("Epsilon value out of range") + "\nHINT: " +
+			                            "Valid values: 1 or greater than 1");
+		}
+		return;
+	}
+}
+
 unique_ptr<FunctionData> ExecBind(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &return_types,
                                   vector<Identifier> &names) {
 	auto data = make_uniq<ExecBindData>();
@@ -53,6 +75,9 @@ unique_ptr<FunctionData> ExecBind(ClientContext &, TableFunctionBindInput &input
 	data->null_input = null_input != input.named_parameters.end() && !null_input->second.IsNull() &&
 	                   BooleanValue::Get(null_input->second);
 	data->slots = BindInputSlots(input);
+	if (!data->null_input) {
+		CheckRequest(request);
+	}
 	data->shape = duckdb_pgrouting::InfoOf(request.driver).shape;
 	ShapeColumns(data->shape, return_types, names);
 	return std::move(data);

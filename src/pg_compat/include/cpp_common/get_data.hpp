@@ -11,6 +11,7 @@
 
 #include "c_types/ii_t_rt.h"
 #include "cpp_common/edge_t.hpp"
+#include "cpp_common/edge_xy_t.hpp"
 #include "cpp_common/get_check_data.hpp"
 #include "cpp_common/info_t.hpp"
 #include "cpp_common/point_on_edge_t.hpp"
@@ -23,10 +24,10 @@ namespace detail {
 
 // Maps a pgRouting row type to the kind tag its SQL string was registered under (see
 // pgrouting/input_access.hpp: DuckDB-side registration and this lookup agree on the tag because
-// both name it from the row shape, not from the SQL text). A type with no entry here is never
-// actually fetched by anything this extension currently calls, so the empty default is dead code,
-// not a latent bug; a new family that starts calling get_data<SomeType> for a genuinely new input
-// kind adds a specialization here alongside the new KIND_* constant and DuckDB-side registration.
+// both name it from the row shape, not from the SQL text). A row type with no entry here is
+// looked up under the empty kind and fails with "no '' input registered": a family that starts
+// calling get_data<SomeType> for a new row type adds its specialization here, alongside a new
+// KIND_* constant when its SQL is a new kind of input.
 // This is a hand-written trait rather than typeid(Data_type).name(): duckdb/CMakeLists.txt has a
 // DISABLE_RTTI option (-fno-rtti) that is off in this build but is documented as something "a
 // dependency that cannot build this way can re-enable ... for its own targets", i.e. a real
@@ -35,6 +36,10 @@ template <typename Data_type> inline std::string InputKind() {
 	return std::string();
 }
 template <> inline std::string InputKind<Edge_t>() {
+	return duckdb_pgrouting::KIND_EDGES;
+}
+// Edges with coordinates (the A* families' get_edges_xy) come from the same edge query.
+template <> inline std::string InputKind<Edge_xy_t>() {
 	return duckdb_pgrouting::KIND_EDGES;
 }
 template <> inline std::string InputKind<II_t_rt>() {

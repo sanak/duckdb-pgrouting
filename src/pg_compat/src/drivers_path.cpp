@@ -5,6 +5,8 @@
 
 #include "driver_groups.hpp"
 
+#include "drivers/astar/astar_driver.h"
+#include "drivers/bdAstar/bdAstar_driver.h"
 #include "drivers/bdDijkstra/bdDijkstra_driver.h"
 #include "drivers/bellman_ford/bellman_ford_driver.h"
 #include "drivers/bellman_ford/edwardMoore_driver.h"
@@ -39,6 +41,17 @@ bool CallPathDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 		// No only_cost: pgr_binaryBreadthFirstSearch has no Cost variant.
 		pgr_do_binaryBreadthFirstSearch(edges, combinations, arrays.starts, arrays.ends, request.directed,
 		                                &call.path_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::ASTAR:
+		pgr_do_astar(edges, combinations, arrays.starts, arrays.ends, request.directed, request.heuristic,
+		             request.factor, request.epsilon, request.only_cost, request.normal, &call.path_rows,
+		             &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::BD_ASTAR:
+		// No normal: pgr_bdAstar's C entry passes the arrays unswapped.
+		pgr_do_bdAstar(edges, combinations, arrays.starts, arrays.ends, request.directed, request.heuristic,
+		               request.factor, request.epsilon, request.only_cost, &call.path_rows, &call.count,
+		               &call.log, &call.notice, &call.err);
 		return true;
 	default:
 		return false;
