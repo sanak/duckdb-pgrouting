@@ -161,3 +161,78 @@ footer {
       "result";
   }
 }
+
+/* Map input buttons (dataset.json map.inputs), stacked at the map's top left. */
+.maplibregl-ctrl-group button.map-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: auto;
+  padding: 5px 10px;
+  font:
+    12px / 1.2 system-ui,
+    sans-serif;
+  white-space: nowrap;
+}
+
+.maplibregl-ctrl-group button.map-input[aria-pressed="true"] {
+  background: #dcebf2;
+}
+
+.maplibregl-ctrl-group button.map-input:disabled {
+  opacity: 0.5;
+}
+
+.input-icon.extent {
+  width: 12px;
+  height: 9px;
+  border: 1.5px dashed var(--fg);
+}
+
+.input-icon.mark,
+.input-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: #ffffff;
+  font:
+    bold 10px / 1 system-ui,
+    sans-serif;
+}
+
+.input-mark {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 2px rgb(0 0 0 / 0.5);
+}
+
+.mark-start {
+  background: #2e7d32;
+}
+
+.mark-goal {
+  background: #c62828;
+}
+
+.mark-other {
+  background: var(--accent);
+}
+
+.map-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgb(31 35 40 / 0.85);
+  color: #ffffff;
+  font-size: 12px;
+  pointer-events: none;
+}

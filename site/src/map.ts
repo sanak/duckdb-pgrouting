@@ -4,8 +4,15 @@
 // layer that makes the result's edges easy to click. The abstract sample graph is drawn on a blank
 // background with a label per node; a geographic network is drawn over OpenFreeMap's basemap, with
 // its nodes shown only when zoomed in (the workshop network has 22,889).
+// A network the reader's own queries build (dataset.json dependsOn) may be empty at first: the map
+// then opens on the dataset's view, is not held to the network's bounds, and takes each rebuilt
+// network in place (setNetwork) without moving. Map inputs (dataset.json inputs) are buttons at the
+// top left: an extent takes the current view; a point button starts a pick, and the next map click
+// is the point. The map only reports values: the page writes them into the SQL (inputs.ts).
 import {
   type ErrorEvent,
+  type GeoJSONSource,
+  type IControl,
   type LayerSpecification,
   LngLatBounds,
   Map as MapLibreMap,
@@ -14,8 +21,10 @@ import {
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import type { MapInput, View } from './datasets.ts';
 import { idFilter, pathColour } from './expressions.ts';
-import type { NetworkGeometry } from './geometry.ts';
+import { extentOutline, type NetworkGeometry, viewBounds } from './geometry.ts';
+import type { Box, InputValues, LonLat } from './inputs.ts';
 import type { Highlight } from './result.ts';
 
 // MapLibre locates its worker relative to its own module, which bundling breaks; Vite emits it.
@@ -27,18 +36,41 @@ export interface MapOptions {
   mode: 'abstract' | 'geographic';
   // Shown in the attribution control for the network's own data (geographic mode).
   attribution?: string;
+  // Where the map opens while the network is empty.
+  view?: View;
+  // The network is rebuilt by the reader's queries: the map is not held to its bounds.
+  dynamic?: boolean;
+  inputs?: MapInput[];
 }
 
 export interface RouteMap {
   highlight(h: Highlight): void;
   select(edge: number | null): void;
-  // Called on every map click: with the result edge under the pointer, or null when there is none.
+  // Called on every map click that is not a pick: with the result edge under the pointer, or null.
   onEdgeClick(handler: (edge: number | null) => void): void;
+  // Replaces the drawn network and clears highlight and selection; the view does not move.
+  setNetwork(geometry: NetworkGeometry): void;
+  // Draws the inputs' values: the extent as a dashed outline, the points as lettered markers.
+  showInputs(values: InputValues): void;
+  // Called with an input and its new value: an extent on its button, a point on the click after it.
+  onInput(handler: (input: MapInput, value: Box | LonLat) => void): void;
+  setInputsEnabled(enabled: boolean): void;
   remove(): void;
 }
 
 function only(edge: number | null): Map<number, number> {
   return new Map(edge === null ? [] : [[edge, 0]]);
+}
+
+// The first point input is the start, the second the goal.
+const POINT_MARKS = [
+  { letter: 'S', className: 'mark-start' },
+  { letter: 'G', className: 'mark-goal' },
+];
+
+function pointMark(inputs: readonly MapInput[], input: MapInput): { letter: string; className: string } {
+  const index = inputs.filter((i) => i.kind === 'point').indexOf(input);
+  return POINT_MARKS[index] ?? { letter: String(index + 1), className: 'mark-other' };
 }
 
 function networkLayers(geographic: boolean): LayerSpecification[] {
@@ -100,15 +132,34 @@ function networkLayers(geographic: boolean): LayerSpecification[] {
   ];
 }
 
+// The input buttons, stacked in one MapLibre control group.
+class InputControl implements IControl {
+  readonly container = document.createElement('div');
+
+  constructor(buttons: HTMLButtonElement[]) {
+    this.container.className = 'maplibregl-ctrl maplibregl-ctrl-group map-inputs';
+    this.container.append(...buttons);
+  }
+
+  onAdd(): HTMLElement {
+    return this.container;
+  }
+
+  onRemove(): void {
+    this.container.remove();
+  }
+}
+
 export async function createRouteMap(
   container: HTMLElement,
   geometry: NetworkGeometry,
   options: MapOptions,
 ): Promise<RouteMap> {
   const geographic = options.mode === 'geographic';
-  if (!geometry.bounds) throw new Error('the map has nothing to draw');
-  const bounds = new LngLatBounds(geometry.bounds[0], geometry.bounds[1]);
-  const [[west, south], [east, north]] = geometry.bounds;
+  const inputs = options.inputs ?? [];
+  const box = geometry.bounds ?? (options.view ? viewBounds(options.view) : null);
+  if (!box) throw new Error('the map has nothing to draw');
+  const [[west, south], [east, north]] = box;
   const padX = (east - west) * 0.5;
   const padY = (north - south) * 0.5;
   const edges = { type: 'geojson' as const, data: geometry.edges, attribution: options.attribution };
@@ -126,12 +177,16 @@ export async function createRouteMap(
             ...networkLayers(false),
           ],
         },
-    bounds,
+    bounds: new LngLatBounds(box[0], box[1]),
     fitBoundsOptions: { padding: geographic ? 24 : 48 },
-    maxBounds: [
-      [west - padX, south - padY],
-      [east + padX, north + padY],
-    ],
+    ...(options.dynamic
+      ? {}
+      : {
+          maxBounds: [
+            [west - padX, south - padY],
+            [east + padX, north + padY],
+          ] as [[number, number], [number, number]],
+        }),
     renderWorldCopies: false,
     dragRotate: false,
     pitchWithRotate: false,
@@ -173,31 +228,150 @@ export async function createRouteMap(
   } else {
     await map.once('load');
   }
+
+  let edgeHandler: ((edge: number | null) => void) | null = null;
+  let inputHandler: ((input: MapInput, value: Box | LonLat) => void) | null = null;
+  // The point input whose button was pressed and whose map click has not come yet.
+  let picking: MapInput | null = null;
+  const buttons = new Map<MapInput, HTMLButtonElement>();
+  const markers = new Map<string, Marker>();
+  const hint = document.createElement('div');
+  hint.className = 'map-hint';
+  hint.hidden = true;
+  map.getContainer().append(hint);
+
+  function onKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape') stopPicking();
+  }
+
+  function stopPicking(): void {
+    if (!picking) return;
+    buttons.get(picking)?.setAttribute('aria-pressed', 'false');
+    picking = null;
+    hint.hidden = true;
+    map.getCanvas().style.cursor = '';
+    document.removeEventListener('keydown', onKey);
+  }
+
+  function startPicking(input: MapInput): void {
+    stopPicking();
+    picking = input;
+    buttons.get(input)?.setAttribute('aria-pressed', 'true');
+    hint.textContent = `Click the map to set “${input.label}” · Esc cancels`;
+    hint.hidden = false;
+    map.getCanvas().style.cursor = 'crosshair';
+    document.addEventListener('keydown', onKey);
+  }
+
+  for (const input of inputs) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'map-input';
+    const icon = document.createElement('span');
+    if (input.kind === 'extent') {
+      icon.className = 'input-icon extent';
+    } else {
+      const mark = pointMark(inputs, input);
+      icon.className = `input-icon mark ${mark.className}`;
+      icon.textContent = mark.letter;
+      button.setAttribute('aria-pressed', 'false');
+    }
+    button.append(icon, input.label);
+    button.addEventListener('click', () => {
+      if (input.kind === 'extent') {
+        stopPicking();
+        const b = map.getBounds();
+        inputHandler?.(input, { xmin: b.getWest(), ymin: b.getSouth(), xmax: b.getEast(), ymax: b.getNorth() });
+      } else if (picking === input) {
+        stopPicking();
+      } else {
+        startPicking(input);
+      }
+    });
+    buttons.set(input, button);
+  }
+  if (buttons.size > 0) map.addControl(new InputControl([...buttons.values()]), 'top-left');
+  if (inputs.some((input) => input.kind === 'extent')) {
+    map.addSource('input-extent', { type: 'geojson', data: extentOutline(null) });
+    map.addLayer({
+      id: 'input-extent',
+      type: 'line',
+      source: 'input-extent',
+      paint: { 'line-color': '#1f2328', 'line-width': 1.5, 'line-dasharray': [3, 2] },
+    });
+  }
+
   map.on('mouseenter', 'edge-hit', () => {
-    map.getCanvas().style.cursor = 'pointer';
+    if (!picking) map.getCanvas().style.cursor = 'pointer';
   });
   map.on('mouseleave', 'edge-hit', () => {
-    map.getCanvas().style.cursor = '';
+    if (!picking) map.getCanvas().style.cursor = '';
+  });
+  map.on('click', (event) => {
+    if (picking) {
+      const input = picking;
+      stopPicking();
+      inputHandler?.(input, [event.lngLat.lng, event.lngLat.lat]);
+      return;
+    }
+    const id = map.queryRenderedFeatures(event.point, { layers: ['edge-hit'] })[0]?.properties.id;
+    edgeHandler?.(typeof id === 'number' ? id : null);
   });
 
+  function highlight(h: Highlight): void {
+    map.setFilter('route-edges', idFilter(h.edges));
+    map.setPaintProperty('route-edges', 'line-color', pathColour(h.edges));
+    map.setFilter('route-nodes', idFilter(h.nodes));
+    map.setPaintProperty('route-nodes', 'circle-color', pathColour(h.nodes));
+    map.setFilter('edge-hit', idFilter(h.edges));
+  }
+
+  function select(edge: number | null): void {
+    map.setFilter('selected-edge', idFilter(only(edge)));
+  }
+
   return {
-    highlight(h: Highlight) {
-      map.setFilter('route-edges', idFilter(h.edges));
-      map.setPaintProperty('route-edges', 'line-color', pathColour(h.edges));
-      map.setFilter('route-nodes', idFilter(h.nodes));
-      map.setPaintProperty('route-nodes', 'circle-color', pathColour(h.nodes));
-      map.setFilter('edge-hit', idFilter(h.edges));
-    },
-    select(edge: number | null) {
-      map.setFilter('selected-edge', idFilter(only(edge)));
-    },
+    highlight,
+    select,
     onEdgeClick(handler: (edge: number | null) => void) {
-      map.on('click', (event) => {
-        const id = map.queryRenderedFeatures(event.point, { layers: ['edge-hit'] })[0]?.properties.id;
-        handler(typeof id === 'number' ? id : null);
-      });
+      edgeHandler = handler;
+    },
+    setNetwork(next: NetworkGeometry) {
+      map.getSource<GeoJSONSource>('edges')?.setData(next.edges);
+      map.getSource<GeoJSONSource>('nodes')?.setData(next.nodes);
+      highlight({ edges: new Map(), nodes: new Map() });
+      select(null);
+    },
+    showInputs(values: InputValues) {
+      map.getSource<GeoJSONSource>('input-extent')?.setData(extentOutline(values.extent ?? null));
+      for (const input of inputs) {
+        if (input.kind !== 'point') continue;
+        const at = values.points.get(input.variable);
+        const marker = markers.get(input.variable);
+        if (!at) {
+          marker?.remove();
+          markers.delete(input.variable);
+        } else if (marker) {
+          marker.setLngLat(at);
+        } else {
+          const mark = pointMark(inputs, input);
+          const element = document.createElement('div');
+          element.className = `input-mark ${mark.className}`;
+          element.textContent = mark.letter;
+          element.title = input.label;
+          markers.set(input.variable, new Marker({ element }).setLngLat(at).addTo(map));
+        }
+      }
+    },
+    onInput(handler: (input: MapInput, value: Box | LonLat) => void) {
+      inputHandler = handler;
+    },
+    setInputsEnabled(enabled: boolean) {
+      if (!enabled) stopPicking();
+      for (const button of buttons.values()) button.disabled = !enabled;
     },
     remove() {
+      stopPicking();
       map.remove();
     },
   };

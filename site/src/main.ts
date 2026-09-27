@@ -12,7 +12,16 @@ import { createResultGrid } from './table.ts';
 const MAX_TABLE_ROWS = 1000;
 const READY_STATUS = 'Ready. Ctrl+Enter (⌘+Enter) runs the query.';
 // Without the map (no WebGL, or its data failed) queries still run; only the highlighting is lost.
-const NO_MAP: RouteMap = { highlight() {}, select() {}, onEdgeClick() {}, remove() {} };
+const NO_MAP: RouteMap = {
+  highlight() {},
+  select() {},
+  onEdgeClick() {},
+  setNetwork() {},
+  showInputs() {},
+  onInput() {},
+  setInputsEnabled() {},
+  remove() {},
+};
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
