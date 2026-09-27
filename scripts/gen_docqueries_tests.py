@@ -388,7 +388,108 @@ def forest_shape(columns: Sequence[str]) -> Optional[str]:
     return None
 
 
-FOREST_DIRECTIVES = {"edges": "IR", "tree": "IITI"}
+# The *BFS/*DFS forms without a max_depth: an unlimited walk always reaches its whole connected
+# component, whichever equal-cost forest was built, so its row count per root is an invariant too.
+# *BFS/*DFS with a max_depth, and the DD forms (which always take a required distance bound), stop
+# at a boundary that itself depends on which forest was built, so they keep the four-column
+# companion; see forest_variant().
+FOREST_UNLIMITED_FUNCTIONS = frozenset({
+    "pgr_kruskalbfs", "pgr_kruskaldfs", "pgr_primbfs", "pgr_primdfs",
+})
+
+
+def _matching_paren(sql: str, open_index: int) -> int:
+    """Index of the ')' matching the '(' at open_index, skipping quoted text and nested parens.
+
+    A single quote doubled ('') is psql/PostgreSQL's escape for a literal quote inside a quoted
+    string, so it does not end the quote.
+    """
+    depth = 1
+    in_quote = False
+    i = open_index + 1
+    n = len(sql)
+    while i < n:
+        ch = sql[i]
+        if in_quote:
+            if ch == "'":
+                if i + 1 < n and sql[i + 1] == "'":
+                    i += 2
+                    continue
+                in_quote = False
+            i += 1
+            continue
+        if ch == "'":
+            in_quote = True
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return n
+
+
+def top_level_arg_count(args: str) -> int:
+    """How many comma-separated top-level arguments a call's raw argument-list text has.
+
+    A comma inside a quoted string (an inner SQL query may itself call other functions, with
+    their own commas and parentheses) or inside an ``ARRAY[...]``/``[...]`` literal is not a
+    top-level separator; only a comma outside all of those, at paren/bracket depth 0, separates
+    two arguments of the outer call.
+    """
+    if not args.strip():
+        return 0
+    depth = 0
+    in_quote = False
+    commas = 0
+    i = 0
+    n = len(args)
+    while i < n:
+        ch = args[i]
+        if in_quote:
+            if ch == "'":
+                if i + 1 < n and args[i + 1] == "'":
+                    i += 2
+                    continue
+                in_quote = False
+            i += 1
+            continue
+        if ch == "'":
+            in_quote = True
+        elif ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            commas += 1
+        i += 1
+    return commas + 1
+
+
+def is_unlimited_forest_call(sql: str) -> bool:
+    """Whether sql's forest call is an unlimited *BFS/*DFS walk (see FOREST_UNLIMITED_FUNCTIONS).
+
+    True only for one of those functions called with exactly its two required top-level
+    arguments (the edges SQL and a root or a roots array) -- no max_depth, positional or named.
+    """
+    for match in CALL_RE.finditer(sql):
+        if match.group(1).lower() not in FOREST_UNLIMITED_FUNCTIONS:
+            continue
+        open_index = match.end() - 1  # CALL_RE's own match already consumes the '('.
+        close_index = _matching_paren(sql, open_index)
+        return top_level_arg_count(sql[open_index + 1:close_index]) == 2
+    return False
+
+
+def forest_variant(shape: str, sql: str) -> str:
+    """"edges", "tree" or "tree_unlimited" (a "tree" whose call is_unlimited_forest_call)."""
+    if shape == "tree" and is_unlimited_forest_call(sql):
+        return "tree_unlimited"
+    return shape
+
+
+FOREST_DIRECTIVES = {"edges": "IR", "tree": "IITI", "tree_unlimited": "IITII"}
 
 FOREST_NOTES = {
     "edges": (
@@ -402,14 +503,23 @@ FOREST_NOTES = {
         "asserted: each root's single depth-0 row, no repeated node, and every other row hanging "
         "off its predecessor one level up at the predecessor's cost plus its own"
     ),
+    "tree_unlimited": (
+        "which minimum spanning forest is built among equal-cost edges depends on the C++ "
+        "standard library's priority-queue order, so only what every such forest guarantees is "
+        "asserted: each root's single depth-0 row, no repeated node, every other row hanging off "
+        "its predecessor one level up at the predecessor's cost plus its own, and its total row "
+        "count -- an unlimited walk always reaches its whole connected component, whichever "
+        "equal-cost forest was built"
+    ),
 }
 
 
-def forest_companion_sql(sql: str, shape: str) -> str:
+def forest_companion_sql(sql: str, variant: str) -> str:
     """Wrap a spanning-forest query in the assertion that survives any equal-cost forest choice."""
     body = sql.strip().rstrip(";")
-    if shape == "edges":
-        return "SELECT count(*), sum(cost)\nFROM ({});".format(body)
+    if variant == "edges":
+        return "SELECT count(*), coalesce(sum(cost), 0)\nFROM ({});".format(body)
+    extra = ",\n       count(*)" if variant == "tree_unlimited" else ""
     return (
         "WITH q AS ({})\n"
         "SELECT start_vid,\n"
@@ -418,11 +528,11 @@ def forest_companion_sql(sql: str, shape: str) -> str:
         "       count(*) FILTER (WHERE depth > 0 AND NOT EXISTS (\n"
         "         SELECT 1 FROM q AS p\n"
         "         WHERE p.start_vid = q.start_vid AND p.node = q.pred AND p.depth = q.depth - 1\n"
-        "           AND abs(p.agg_cost + q.cost - q.agg_cost) < 1e-9))\n"
+        "           AND abs(p.agg_cost + q.cost - q.agg_cost) < 1e-9)){extra}\n"
         "FROM q\n"
         "GROUP BY start_vid\n"
         "ORDER BY start_vid;"
-    ).format(body)
+    ).format(body, extra=extra)
 
 
 def _forest_edges_rows(table: pgparse.AlignedTable, directive: str) -> List[List[str]]:
@@ -437,7 +547,8 @@ def _forest_edges_rows(table: pgparse.AlignedTable, directive: str) -> List[List
     return [[str(table.row_count), total_text]]
 
 
-def _forest_tree_rows(table: pgparse.AlignedTable, directive: str) -> List[List[str]]:
+def _forest_tree_rows(table: pgparse.AlignedTable, directive: str,
+                      include_count: bool = False) -> List[List[str]]:
     lowered = [c.lower() for c in table.columns]
     index = {name: lowered.index(name) for name in FOREST_TREE_COLUMNS}
     parsed = [
@@ -465,15 +576,18 @@ def _forest_tree_rows(table: pgparse.AlignedTable, directive: str) -> List[List[
             )
             if not linked:
                 orphans += 1
-        out.append([str(start), str(depth0), "true" if no_repeat else "false", str(orphans)])
+        cells = [str(start), str(depth0), "true" if no_repeat else "false", str(orphans)]
+        if include_count:
+            cells.append(str(len(rows)))
+        out.append(cells)
     return out
 
 
-def forest_companion_rows(table: pgparse.AlignedTable, directive: str, shape: str) -> List[List[str]]:
+def forest_companion_rows(table: pgparse.AlignedTable, directive: str, variant: str) -> List[List[str]]:
     """The forest companion's expected rows, computed in Python from upstream's table."""
-    if shape == "edges":
+    if variant == "edges":
         return _forest_edges_rows(table, directive)
-    return _forest_tree_rows(table, directive)
+    return _forest_tree_rows(table, directive, include_count=(variant == "tree_unlimited"))
 
 
 def forest_actual_rows(result: duckdbcli.QueryResult, directive: str) -> List[List[str]]:
@@ -484,7 +598,12 @@ def forest_actual_rows(result: duckdbcli.QueryResult, directive: str) -> List[Li
         for value, slt_type in zip(row, directive):
             actual = _actual(value, slt_type)
             if slt_type == "R":
-                cells.append(str(int(actual)) if actual.is_integer() else repr(actual))
+                if actual is None:
+                    cells.append("0")
+                elif actual.is_integer():
+                    cells.append(str(int(actual)))
+                else:
+                    cells.append(repr(actual))
             elif isinstance(actual, bool):
                 cells.append("true" if actual else "false")
             else:
@@ -630,9 +749,10 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Set[str
                     "{}/{}.pg {}: a spanning-forest function returned a column set the forest "
                     "invariant does not recognise: {}".format(category, stem, block.name, table.columns)
                 )
-            forest_directive = FOREST_DIRECTIVES[shape]
-            forest_sql = forest_companion_sql(sql, shape)
-            expected_forest_rows = forest_companion_rows(table, directive, shape)
+            variant = forest_variant(shape, sql)
+            forest_directive = FOREST_DIRECTIVES[variant]
+            forest_sql = forest_companion_sql(sql, variant)
+            expected_forest_rows = forest_companion_rows(table, directive, variant)
             actual_forest_rows = forest_actual_rows(db.query(forest_sql), forest_directive)
             if actual_forest_rows != expected_forest_rows:
                 raise Mismatch(
@@ -648,7 +768,7 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Set[str
             items.append(
                 Emitted(
                     block.name, forest_directive, forest_sql, expected_forest_rows,
-                    note=FOREST_NOTES[shape],
+                    note=FOREST_NOTES[variant],
                 )
             )
             continue

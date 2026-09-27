@@ -163,6 +163,17 @@ Each of these would be a change no test could observe, so none of them is made:
   generated test file.** The first is a regression script with no named blocks; the second
   documents `pgr_randomSpanTree`, which pgRouting 4.0 does not publish (it is absent from
   `sql/sigs/pgrouting--4.0.sig`).
+- **A depth- or distance-limited `pgr_kruskalBFS`/`kruskalDFS`/`kruskalDD`/`primBFS`/`primDFS`/
+  `primDD` generated block asserts only the tree structure, not which vertices are reached.**
+  Its spanning-forest invariant (each root's single depth-0 row, no repeated node, every other
+  row hanging off its predecessor one level up) holds for any equal-cost forest a `max_depth` or
+  a `distance` bound is applied to, but not which vertices fall inside that bound: which forest is
+  built among equal-cost edges depends on the C++ standard library, and a bounded walk of a
+  different forest can legitimately stop at different vertices. Only the unlimited `*BFS`/`*DFS`
+  forms (no `max_depth` given) add a fifth column asserting each root's total row count, since an
+  unlimited walk always reaches its whole connected component regardless of which forest was
+  built. `test/sql/spanning_tree.test` is the hand-written coverage for a bound's own behaviour
+  (`max_depth`/`distance` limits, negative-value errors, defaults).
 
 ## Open decision
 

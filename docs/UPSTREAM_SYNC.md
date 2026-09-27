@@ -27,8 +27,9 @@ the following checklist, in order. Every step either passes or tells you exactly
    every translated query against the build you just made, so it reports three different things
    and they must not be confused:
    - a clean run with no diff: nothing to do;
-   - a diff in `test/pgrouting_ties.json`: an equal-cost tie now falls the other way. That is a
-     Boost, vcpkg or row-order change, not a routing defect. Review it and commit it.
+   - a diff in `test/pgrouting_ties.json`: an equal-cost tie now falls the other way, or a
+     `pgr_kruskal*`/`pgr_prim*` block's spanning-forest invariant entry changed. That is a Boost,
+     vcpkg or row-order change, not a routing defect. Review it and commit it.
    - a non-zero exit with a `Mismatch`: this build's answer is not an equal-cost alternative to
      upstream's. Investigate before committing anything.
    Read the diff against upstream's release notes either way.

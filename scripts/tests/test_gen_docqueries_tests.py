@@ -361,11 +361,18 @@ class TestForestCompanion(unittest.TestCase):
 
     def test_edge_cost_companion_counts_rows_and_sums_cost(self):
         sql = gen.forest_companion_sql("SELECT * FROM pgr_kruskal('x')", "edges")
-        self.assertIn("count(*), sum(cost)", sql)
+        self.assertIn("count(*), coalesce(sum(cost), 0)", sql)
         table = self._table(self.EDGE_COLUMNS, self.EDGE_UPSTREAM)
         self.assertEqual(
             [["3", "3"]], gen.forest_companion_rows(table, self.EDGE_DIRECTIVE, "edges")
         )
+
+    def test_an_empty_forest_expects_a_zero_sum_not_null(self):
+        # No edges at all: upstream's row count is 0 and there is nothing to sum. The companion
+        # SQL's coalesce(sum(cost), 0) keeps this build's actual answer from coming back NULL for
+        # the same empty case, so the two sides can still be compared as plain text.
+        table = self._table(self.EDGE_COLUMNS, [])
+        self.assertEqual([["0", "0"]], gen.forest_companion_rows(table, self.EDGE_DIRECTIVE, "edges"))
 
     # --- tree shape (pgr_kruskalBFS/DFS/DD, pgr_primBFS/DFS/DD) ---------------------------
 
@@ -433,6 +440,84 @@ class TestForestCompanion(unittest.TestCase):
     def test_driving_distance_and_dijkstra_are_not_forest_calls(self):
         self.assertFalse(gen.is_forest_call("SELECT * FROM pgr_drivingDistance('x', 6, 3.0)"))
         self.assertFalse(gen.is_forest_call("SELECT * FROM pgr_dijkstra('x', 6, 10)"))
+
+    # --- the argument-count helper -----------------------------------------------------------
+
+    def test_two_args_is_two(self):
+        self.assertEqual(
+            2,
+            gen.top_level_arg_count(
+                "'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id', 6"
+            ),
+        )
+
+    def test_an_array_literal_and_a_named_max_depth_is_three(self):
+        self.assertEqual(
+            3,
+            gen.top_level_arg_count(
+                "'SELECT id, source, target, cost FROM edges', ARRAY[9, 6], max_depth => 3"
+            ),
+        )
+
+    def test_commas_and_parens_inside_a_quoted_sql_argument_do_not_count(self):
+        # The inner query itself calls a function and uses an IN-list: neither's commas or
+        # parentheses are a top-level separator of the outer call's own two arguments.
+        self.assertEqual(
+            2,
+            gen.top_level_arg_count(
+                "'SELECT id, foo(a, b), source, target FROM edges WHERE id IN (1, 2, 3)', 6"
+            ),
+        )
+
+    # --- unlimited vs. limited *BFS/*DFS, and the DD forms ------------------------------------
+
+    def test_bfs_with_only_the_two_required_arguments_is_unlimited(self):
+        self.assertTrue(
+            gen.is_unlimited_forest_call(
+                "SELECT * FROM pgr_kruskalBFS(\n"
+                "  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',\n"
+                "  6)"
+            )
+        )
+
+    def test_bfs_with_a_named_max_depth_is_not_unlimited(self):
+        self.assertFalse(
+            gen.is_unlimited_forest_call(
+                "SELECT * FROM pgr_kruskalBFS(\n"
+                "  'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',\n"
+                "  ARRAY[9, 6], max_depth => 3)"
+            )
+        )
+
+    def test_a_dd_call_is_never_unlimited(self):
+        self.assertFalse(gen.is_unlimited_forest_call("SELECT * FROM pgr_kruskalDD('x', 6, 3.0)"))
+
+    def test_forest_variant_picks_tree_unlimited_only_for_the_unlimited_bfs_dfs_call(self):
+        unlimited_sql = "SELECT * FROM pgr_primDFS('x', 6)"
+        limited_sql = "SELECT * FROM pgr_primDFS('x', 6, max_depth => 2)"
+        dd_sql = "SELECT * FROM pgr_kruskalDD('x', 6, 3.0)"
+        self.assertEqual("tree_unlimited", gen.forest_variant("tree", unlimited_sql))
+        self.assertEqual("tree", gen.forest_variant("tree", limited_sql))
+        self.assertEqual("tree", gen.forest_variant("tree", dd_sql))
+        self.assertEqual("edges", gen.forest_variant("edges", unlimited_sql))
+
+    # --- the five-column companion for an unlimited walk --------------------------------------
+
+    def test_tree_unlimited_sql_adds_a_row_count_column(self):
+        limited_sql = gen.forest_companion_sql("SELECT * FROM pgr_kruskalBFS('x', 6)", "tree")
+        unlimited_sql = gen.forest_companion_sql(
+            "SELECT * FROM pgr_kruskalBFS('x', 6)", "tree_unlimited"
+        )
+        self.assertEqual(3, limited_sql.count("count(*)"))
+        self.assertEqual(4, unlimited_sql.count("count(*)"))
+        self.assertIn("1e-9)),\n       count(*)\nFROM q", unlimited_sql)
+
+    def test_tree_unlimited_expects_each_roots_total_row_count(self):
+        table = self._table(self.TREE_COLUMNS, self.TREE_UPSTREAM)
+        self.assertEqual(
+            [["6", "1", "true", "0", "3"], ["9", "1", "true", "0", "2"]],
+            gen.forest_companion_rows(table, self.TREE_DIRECTIVE, "tree_unlimited"),
+        )
 
 
 class TestClassifyTextLeadingSpace(unittest.TestCase):

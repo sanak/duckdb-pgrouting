@@ -26,8 +26,10 @@ edge queries that driver derives from the edge and points SQL. The other thirtee
 their own per-family `pgr_do_*` drivers through one adapter on the pg_compat side; the two A*
 families also read each edge's end-point coordinates (`x1`, `y1`, `x2`, `y2`), and
 `pgr_withPointsDD` reads the same two derived edge queries as `pgr_withPoints`. The root-based
-families (driving distance, spanning trees, breadth- and depth-first search) take a `roots` list and
-return tree rows (`seq, depth, start_vid, pred, node, edge, cost, agg_cost`).
+families (driving distance, breadth- and depth-first search) take a `roots` list and
+return tree rows (`seq, depth, start_vid, pred, node, edge, cost, agg_cost`); the
+spanning-tree families do too, except `pgr_kruskal` and `pgr_prim` themselves, which take no
+roots and return a plain edge list (`edge, cost`) instead.
 `pgr_connectedComponents` goes through the same adapter and exec function (`_pgr_exec`), which
 returns its vertex/component pairs instead of path rows. `pgr_extractVertices` and
 `pgr_findCloseEdges`, which upstream writes in PL/pgSQL, are reimplemented as bind_replace
@@ -186,7 +188,11 @@ their `unittest` suite. The test tools read upstream's committed fixtures and dr
   function tagged `pgrouting_requires = spatial` are generated with `tags spatial` and run with
   spatial loaded, unless `PGROUTING_NO_SPATIAL=1` (set by `Checks.yml` on the next line), which
   keeps them unchecked. Upstream's WKT cells are respelled as duckdb-spatial writes them
-  (`POINT (1 2)`).
+  (`POINT (1 2)`). A driving-distance tie is asserted as each root's reached vertices and their
+  costs, since which predecessor reached one is not guaranteed. A `pgr_kruskal*`/`pgr_prim*`
+  block is always asserted through a spanning-forest invariant instead of upstream's exact rows,
+  because which minimum spanning forest is built among equal-cost edges depends on the C++
+  standard library's `std::priority_queue` order (libstdc++ vs. libc++).
 - `scripts/check_signatures.py` — compares upstream's `sql/sigs/pgrouting--<ver>.sig` against
   `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
   signature is intentionally registered as several DuckDB variants, one per number of its
@@ -210,7 +216,7 @@ Three JSON control files live under `test/`:
 | file | owner | content |
 |---|---|---|
 | `test/pgrouting_skip.json` | human | documentation blocks skipped entirely, each with a reason |
-| `test/pgrouting_ties.json` | the generator | blocks downgraded to tie-insensitive assertions, each with the observed difference — never hand-edited; regenerate instead |
+| `test/pgrouting_ties.json` | the generator | blocks downgraded to tie-insensitive assertions, each with the observed difference — a spanning-forest entry has none, since it never depended on this build's answer; never hand-edited, regenerate instead |
 | `test/pgrouting_not_ported.json` | human | upstream functions deliberately not ported, each with a reason |
 
 CI has five workflows. `MainDistributionPipeline.yml` builds every DuckDB platform through

@@ -43,7 +43,7 @@ CREATE TABLE restrictions AS
 # library's priority-queue order, so only what every such forest guarantees is asserted: edge
 # count and total cost
 query IR
-SELECT count(*), sum(cost)
+SELECT count(*), coalesce(sum(cost), 0)
 FROM (SELECT edge, cost FROM pgr_prim(
   'SELECT id, source, target, cost, reverse_cost
   FROM edges WHERE id < 14'

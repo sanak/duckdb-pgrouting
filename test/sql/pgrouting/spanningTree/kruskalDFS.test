@@ -41,9 +41,10 @@ CREATE TABLE restrictions AS
 
 # q1: which minimum spanning forest is built among equal-cost edges depends on the C++ standard
 # library's priority-queue order, so only what every such forest guarantees is asserted: each
-# root's single depth-0 row, no repeated node, and every other row hanging off its predecessor one
-# level up at the predecessor's cost plus its own
-query IITI
+# root's single depth-0 row, no repeated node, every other row hanging off its predecessor one
+# level up at the predecessor's cost plus its own, and its total row count -- an unlimited walk
+# always reaches its whole connected component, whichever equal-cost forest was built
+query IITII
 WITH q AS (SELECT * FROM pgr_kruskalDFS(
   'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
   6))
@@ -53,12 +54,13 @@ SELECT start_vid,
        count(*) FILTER (WHERE depth > 0 AND NOT EXISTS (
          SELECT 1 FROM q AS p
          WHERE p.start_vid = q.start_vid AND p.node = q.pred AND p.depth = q.depth - 1
-           AND abs(p.agg_cost + q.cost - q.agg_cost) < 1e-9))
+           AND abs(p.agg_cost + q.cost - q.agg_cost) < 1e-9)),
+       count(*)
 FROM q
 GROUP BY start_vid
 ORDER BY start_vid;
 ----
-6	1	true	0
+6	1	true	0	13
 
 # q2: which minimum spanning forest is built among equal-cost edges depends on the C++ standard
 # library's priority-queue order, so only what every such forest guarantees is asserted: each
