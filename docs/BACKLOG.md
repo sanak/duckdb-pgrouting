@@ -93,7 +93,7 @@ Each of these would be a change no test could observe, so none of them is made:
   cannot fire.
 - `getText` in `src/pg_compat/src/get_check_data.cpp` returns a `std::malloc`'d buffer with no
   owner. Unreachable on the pgr_dijkstra path, which fetches no TEXT column.
-- `seq[i] = NumericCast<int32_t>(k + 1)` in `src/exec/exec_function.cpp` throws past 2^31
+- `seq[i] = NumericCast<int32_t>(k + 1)` in `src/exec/result_emitters.cpp` throws past 2^31
   result rows. Upstream uses `int` for `seq` too, so matching it is the deliberate choice.
 - `TagFunctions` in `src/functions/shortest_path_functions.cpp` resolves the same catalog entry
   once per spec, so two specs disagreeing on `pgrouting_name` for one public name would resolve

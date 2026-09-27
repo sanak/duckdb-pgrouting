@@ -25,6 +25,9 @@ set(DUCKDB_PGROUTING_SOURCES
     src/exec/exec_common.cpp
     src/exec/exec_function.cpp
     src/exec/input_registry.cpp
+    src/exec/input_slots.cpp
+    src/exec/request_params.cpp
+    src/exec/result_emitters.cpp
     src/exec/withpoints_keys.cpp
     src/functions/function_docs.cpp
     src/functions/extract_vertices.cpp

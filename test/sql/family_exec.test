@@ -165,7 +165,8 @@ WHERE edge = -1;
 query III
 SELECT seq, component, node FROM _pgr_exec(
   (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges),
-  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false, driver := 'connected_components');
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', null_input := false,
+  driver := 'connected_components');
 ----
 1	1	1
 2	1	3
@@ -194,6 +195,34 @@ SELECT count(*) FROM _pgr_exec(
   null_input := false, driver := 'connected_components');
 ----
 0
+
+# Every named parameter but the edge query may be left out: each takes the request's default
+# (directed, the unified driver, the path columns).
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges')
+WHERE edge = -1;
+----
+6	10	5
+
+# A NULL named parameter falls back to the default as well.
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', directed := NULL,
+  driver := NULL)
+WHERE edge = -1;
+----
+6	10	5
+
+# The one required column.
+statement error
+SELECT * FROM _pgr_exec((SELECT [6]::BIGINT[] AS starts), edges_sql := '');
+----
+_pgr_exec: the input table has no 'edges' column
 
 # The output columns follow the driver's result shape (src/include/pgrouting/driver_kind.hpp), so
 # no argument exists that could disagree with it.

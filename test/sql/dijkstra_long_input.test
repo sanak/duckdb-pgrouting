@@ -30,3 +30,20 @@ FROM pgr_dijkstra('SELECT id, source, target, cost FROM long_chain', 1, 5001)
 WHERE seq = 5000;
 ----
 5000	5000
+
+# Two paths in one result, 5001 + 5000 rows: seq keeps counting across every 2048-row output chunk,
+# and path_seq restarts at 1 where the second path begins (seq 5002), then keeps counting across the
+# next chunk boundary (seq 6144 -> 6145). Both are computed from the previous row, so they are what a
+# chunk boundary would break first.
+query III
+SELECT seq, path_seq, start_vid
+FROM pgr_dijkstra('SELECT id, source, target, cost FROM long_chain', [1, 2], [5001])
+WHERE seq IN (2048, 2049, 5001, 5002, 6144, 6145)
+ORDER BY seq;
+----
+2048	2048	1
+2049	2049	1
+5001	5001	1
+5002	1	2
+6144	1143	2
+6145	1144	2
