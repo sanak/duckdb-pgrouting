@@ -30,7 +30,8 @@ enum class DriverKind : uint8_t {
 	PRIM,
 	BREADTH_FIRST_SEARCH,
 	DEPTH_FIRST_SEARCH,
-	KSP
+	KSP,
+	WITH_POINTS_KSP
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -63,7 +64,9 @@ enum class RequestCheck : uint8_t {
 	TRAVERSAL,
 	// K < 0 returns no rows, silently, before the driver is called: src/ksp/ksp.c (its "TODO
 	// return error message").
-	KSP_K
+	KSP_K,
+	// estimate_drivingSide (r, l or b in either case), then K >= 0: src/ksp/withPoints_ksp.c.
+	WITH_POINTS_KSP
 };
 
 struct DriverInfo {
@@ -93,6 +96,7 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::BREADTH_FIRST_SEARCH, "breadth_first_search", ResultShape::MST, RequestCheck::TRAVERSAL},
     {DriverKind::DEPTH_FIRST_SEARCH, "depth_first_search", ResultShape::MST, RequestCheck::TRAVERSAL},
     {DriverKind::KSP, "ksp", ResultShape::KSP, RequestCheck::KSP_K},
+    {DriverKind::WITH_POINTS_KSP, "with_points_ksp", ResultShape::KSP, RequestCheck::WITH_POINTS_KSP, true},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -107,7 +111,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::KSP) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::WITH_POINTS_KSP) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

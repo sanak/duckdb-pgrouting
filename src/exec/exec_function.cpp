@@ -50,6 +50,15 @@ struct ExecState : public LocalTableFunctionState {
 	throw InvalidInputException(hint.empty() ? msg : msg + "\nHINT: " + hint);
 }
 
+// estimate_drivingSide (src/withPoints/get_new_queries.cpp) as the withPoints C entries call it: r, l or
+// b in either case.
+void CheckDrivingSide(const duckdb_pgrouting::DriverRequest &request) {
+	const auto side = std::tolower(static_cast<unsigned char>(request.driving_side));
+	if (side != 'r' && side != 'l' && side != 'b') {
+		ThrowCheck("Invalid value of 'driving side'", "Valid value are 'r', 'l', 'b'");
+	}
+}
+
 // Upstream's C entries check some parameters before they call the driver (RequestCheck), with
 // these messages and hints, verbatim. Returns false when the C entry returns no rows without
 // calling the driver.
@@ -73,16 +82,12 @@ bool CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 			ThrowCheck("Negative value found on 'distance'", "Must be positive");
 		}
 		return true;
-	case duckdb_pgrouting::RequestCheck::WITH_POINTS_DD: {
-		const auto side = std::tolower(static_cast<unsigned char>(request.driving_side));
-		if (side != 'r' && side != 'l' && side != 'b') {
-			ThrowCheck("Invalid value of 'driving side'", "Valid value are 'r', 'l', 'b'");
-		}
+	case duckdb_pgrouting::RequestCheck::WITH_POINTS_DD:
+		CheckDrivingSide(request);
 		if (request.distance < 0) {
 			ThrowCheck("Negative value found on 'distance'", "Must be positive");
 		}
 		return true;
-	}
 	case duckdb_pgrouting::RequestCheck::SPANNING_TREE:
 		if (request.mst_suffix == "DD" && request.distance < 0) {
 			ThrowCheck("Negative value found on 'distance'", "Must be positive");
@@ -98,6 +103,12 @@ bool CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 		return true;
 	case duckdb_pgrouting::RequestCheck::KSP_K:
 		return request.k >= 0;
+	case duckdb_pgrouting::RequestCheck::WITH_POINTS_KSP:
+		CheckDrivingSide(request);
+		if (request.k < 0) {
+			ThrowCheck("Invalid value of 'K'", "Valid value are greater than 0");
+		}
+		return true;
 	}
 	throw InternalException("pgrouting: unhandled RequestCheck");
 }

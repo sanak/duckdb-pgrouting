@@ -5,6 +5,7 @@
 // drivers_*.cpp calls one group of upstream's per-family drivers, so no single file includes every
 // driver header; family_drivers.cpp asks each group in turn.
 
+#include <cctype>
 #include <cstddef>
 
 #include "pgrouting/family_drivers.hpp"
@@ -31,6 +32,12 @@ struct DriverCall {
 // branch on that pointer: "" must therefore never reach them.
 inline const char *CombinationsOrNull(const DriverRequest &request) {
 	return request.combinations_sql.empty() ? nullptr : request.combinations_sql.c_str();
+}
+
+// The withPoints C entries pass estimate_drivingSide's lowercased side; _pgr_exec has already
+// rejected anything but r, l and b.
+inline char LowerDrivingSide(const DriverRequest &request) {
+	return static_cast<char>(std::tolower(static_cast<unsigned char>(request.driving_side)));
 }
 
 // Each calls request.driver if it belongs to the group and returns false otherwise.

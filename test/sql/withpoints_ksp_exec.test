@@ -1,0 +1,133 @@
+# name: test/sql/withpoints_ksp_exec.test
+# description: _pgr_exec with the withPoints K-shortest-paths driver: points, driving side, K checks
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE pois AS SELECT pid, edge_id, side, fraction FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+# The points row and the two derived-query rows do not depend on the call's literals, so they are
+# built once (see withpoints_dd_exec.test for why the _pgr_exec calls are inlined).
+statement ok
+CREATE TABLE wpk_common AS
+SELECT (SELECT list(p) FROM (SELECT pid, edge_id, fraction, side FROM pois) p) AS points,
+       (SELECT list(e) FROM (SELECT DISTINCT edges.* FROM edges JOIN pois ON (id = edge_id)) e)
+         AS edges_of_points,
+       (SELECT list(e) FROM (SELECT * FROM edges
+                             WHERE NOT EXISTS (SELECT 1 FROM pois WHERE id = edge_id)) e)
+         AS edges_no_points;
+
+# Upstream's q1: point 1 to point 2, K = 2, left-hand driving: two paths, both of cost 5.2.
+query IR
+SELECT path_id, round(agg_cost, 6) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [-2]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points FROM wpk_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_ksp', k := 2, driving_side := 'l', directed := true, heap_paths := false,
+  details := false)
+WHERE edge = -1 ORDER BY 1;
+----
+1	5.2
+2	5.2
+
+# Review focus 5: the side in upper case is lowercased first, as estimate_drivingSide does.
+query I
+SELECT count(DISTINCT path_id) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [-2]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points FROM wpk_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_ksp', k := 2, driving_side := 'L', directed := true, heap_paths := false,
+  details := false);
+----
+2
+
+# Upstream's q2: both sides, undirected, one start and two ends; path_id counts across the pairs.
+query IIR
+SELECT path_id, end_vid, round(agg_cost, 6) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [-3, 7]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points FROM wpk_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_ksp', k := 2, driving_side := 'b', directed := false, heap_paths := false,
+  details := false)
+WHERE edge = -1 ORDER BY 1;
+----
+1	-3	3.2
+2	-3	4
+3	7	1.6
+4	7	3.6
+
+# Upstream's q3 with details: the points passed on the way are rows too (-6 on edge 4).
+query IR
+SELECT start_vid, round(agg_cost, 6) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1, 6]::BIGINT[] AS starts, [-3]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points FROM wpk_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_ksp', k := 1, driving_side := 'r', directed := true, heap_paths := false,
+  details := true)
+WHERE edge = -1 ORDER BY 1;
+----
+-1	4
+6	2.6
+
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1, 6]::BIGINT[] AS starts, [-3]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points FROM wpk_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_ksp', k := 1, driving_side := 'r', directed := true, heap_paths := false,
+  details := true)
+WHERE node = -6;
+----
+2
+
+# Review focus 1: K = 0 finds nothing, without an error.
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [-2]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points FROM wpk_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_ksp', k := 0, driving_side := 'l');
+----
+0
+
+# The .c layer's checks (src/ksp/withPoints_ksp.c), driving side first, then K, verbatim.
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [-2]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points FROM wpk_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_ksp', k := -1, driving_side := 'l');
+----
+Invalid Input Error: Invalid value of 'K'
+HINT: Valid value are greater than 0
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [-2]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points FROM wpk_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  driver := 'with_points_ksp', k := -1, driving_side := 'x');
+----
+Invalid Input Error: Invalid value of 'driving side'
+HINT: Valid value are 'r', 'l', 'b'
+
+# STRICT: nothing is checked when an argument is NULL.
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), edges_sql := '', points_sql := 'SELECT 1',
+  driver := 'with_points_ksp', k := -1, driving_side := 'x', null_input := true);
+----
+0

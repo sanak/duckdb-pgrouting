@@ -4,8 +4,6 @@
 // more roots, with its predecessor, depth and cost. Each case passes exactly the arguments its
 // upstream C entry (src/<family>/*.c) passes.
 
-#include <cctype>
-
 #include "driver_groups.hpp"
 
 #include "drivers/breadthFirstSearch/breadthFirstSearch_driver.h"
@@ -26,15 +24,14 @@ bool CallTreeDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 		                       &call.mst_rows, &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	case DriverKind::WITH_POINTS_DD: {
-		// The C entry lowercases the side (estimate_drivingSide; _pgr_exec has already rejected
-		// anything but r, l, b) and derives the two edge queries with get_new_queries
-		// (src/withPoints/get_new_queries.cpp), whose template WithPointsDerivedKeys reproduces:
-		// those strings are the keys the derived inputs are registered under.
+		// The C entry lowercases the side (LowerDrivingSide) and derives the two edge queries with
+		// get_new_queries (src/withPoints/get_new_queries.cpp), whose template WithPointsDerivedKeys
+		// reproduces: those strings are the keys the derived inputs are registered under.
 		const auto keys = WithPointsDerivedKeys(request.edges_sql, request.points_sql);
-		const auto side = static_cast<char>(std::tolower(static_cast<unsigned char>(request.driving_side)));
 		pgr_do_withPointsDD(keys.no_points.c_str(), request.points_sql.c_str(), keys.of_points.c_str(),
-		                    arrays.roots, request.distance, side, request.directed, request.details,
-		                    request.equicost, &call.mst_rows, &call.count, &call.log, &call.notice, &call.err);
+		                    arrays.roots, request.distance, LowerDrivingSide(request), request.directed,
+		                    request.details, request.equicost, &call.mst_rows, &call.count, &call.log,
+		                    &call.notice, &call.err);
 		return true;
 	}
 	case DriverKind::KRUSKAL:

@@ -55,6 +55,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/driving_distance/driving_distance_driver.cpp
     ${PGROUTING_DIR}/src/driving_distance/driving_distance_withPoints_driver.cpp
     ${PGROUTING_DIR}/src/ksp/ksp_driver.cpp
+    ${PGROUTING_DIR}/src/ksp/withPoints_ksp_driver.cpp
     ${PGROUTING_DIR}/src/spanningTree/kruskal_driver.cpp
     ${PGROUTING_DIR}/src/spanningTree/prim_driver.cpp
     ${PGROUTING_DIR}/src/traversal/depthFirstSearch_driver.cpp)

@@ -48,7 +48,8 @@ struct DriverRequest {
 	bool heap_paths = false;
 	// Which driver runs the request. Each driver reads only the fields its upstream C entry passes
 	// it; only SHORTEST_PATH reads points_sql, n_goals, global, driving_side, details and which,
-	// and WITH_POINTS_DD also reads points_sql, driving_side and details.
+	// and the other drivers that take points (DriverInfo::takes_points) also read points_sql,
+	// driving_side and details.
 	DriverKind driver = DriverKind::SHORTEST_PATH;
 };
 

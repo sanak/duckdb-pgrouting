@@ -8,6 +8,8 @@
 #include "driver_groups.hpp"
 
 #include "drivers/yen/ksp_driver.h"
+#include "drivers/yen/withPoints_ksp_driver.h"
+#include "pgrouting/withpoints_keys.hpp"
 
 namespace duckdb_pgrouting {
 
@@ -22,6 +24,18 @@ bool CallRoutesDriver(const DriverRequest &request, const DriverArrays &arrays, 
 		           static_cast<size_t>(request.k), request.directed, request.heap_paths, &call.path_rows,
 		           &call.count, &call.log, &call.notice, &call.err);
 		return true;
+	case DriverKind::WITH_POINTS_KSP: {
+		// get_new_queries (src/withPoints/get_new_queries.cpp) derives the two edge queries the
+		// driver fetches; WithPointsDerivedKeys reproduces its template, so these are the keys the
+		// derived inputs are registered under.
+		const auto keys = WithPointsDerivedKeys(request.edges_sql, request.points_sql);
+		pgr_do_withPointsKsp(keys.no_points.c_str(), request.points_sql.c_str(), keys.of_points.c_str(),
+		                     combinations, arrays.starts, arrays.ends, nullptr, nullptr,
+		                     static_cast<size_t>(request.k), request.directed, request.heap_paths,
+		                     LowerDrivingSide(request), request.details, &call.path_rows, &call.count,
+		                     &call.log, &call.notice, &call.err);
+		return true;
+	}
 	default:
 		return false;
 	}
