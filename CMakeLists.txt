@@ -41,6 +41,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/extract_vertices.cpp
     src/functions/find_close_edges.cpp
     src/functions/function_docs.cpp
+    src/functions/ksp_specs.cpp
     src/functions/meta_functions.cpp
     src/functions/spanning_tree_specs.cpp
     src/functions/spec_functions.cpp

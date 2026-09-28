@@ -156,6 +156,15 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "The part of Prim's minimum spanning forest within a cost limit of the given roots, measured "
      "along the tree.",
      "SELECT * FROM pgr_primDD('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 3.5)"},
+    {"pgr_ksp",
+     "Up to K loopless shortest paths between each start and end vertex, by Yen's algorithm, "
+     "cheapest first; path_id numbers the paths across the whole answer.",
+     "SELECT * FROM pgr_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 2)"},
+    {"pgr_withPointsKSP",
+     "K shortest loopless paths on the graph plus temporary points placed along its edges; a point "
+     "is addressed by the negative of its id.",
+     "SELECT * FROM pgr_withPointsKSP('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "'SELECT pid, edge_id, fraction, side FROM pointsofinterest', -1, -2, 2, 'l')"},
     {"pgr_breadthFirstSearch",
      "Visits the graph breadth-first from the given roots, one row per vertex reached with its "
      "predecessor and depth, optionally only to a maximum depth.",

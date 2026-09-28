@@ -58,6 +58,7 @@ pgr_kruskal	pgr_kruskal
 pgr_kruskalBFS	pgr_kruskalBFS
 pgr_kruskalDD	pgr_kruskalDD
 pgr_kruskalDFS	pgr_kruskalDFS
+pgr_ksp	pgr_ksp
 pgr_prim	pgr_prim
 pgr_primBFS	pgr_primBFS
 pgr_primDD	pgr_primDD
@@ -67,6 +68,7 @@ pgr_withPoints	pgr_withPoints
 pgr_withPointsCost	pgr_withPointsCost
 pgr_withPointsCostMatrix	pgr_withPointsCostMatrix
 pgr_withPointsDD	pgr_withPointsDD
+pgr_withPointsKSP	pgr_withPointsKSP
 
 # The GROUP BY ALL query above collapses every overload's tags to one row and so cannot catch a
 # dropped variant. PostgreSQL accepts any leading run of an overload's DEFAULT parameters

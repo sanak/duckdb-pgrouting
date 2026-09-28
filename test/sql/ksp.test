@@ -1,0 +1,123 @@
+# name: test/sql/ksp.test
+# description: pgr_ksp: variants, K, heap paths, STRICT, edge cases
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE combinations AS SELECT * FROM read_csv_auto('test/data/sampledata/combinations.csv');
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+# Five signatures, each with two defaulted parameters (directed, heap_paths): 5 x 3 variants. The
+# name is sql/ksp/ksp.sql's; upstream's documentation writes pgr_KSP, which DuckDB also resolves.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name = 'pgr_ksp' AND tags['ext'] = 'pgrouting' GROUP BY ALL;
+----
+pgr_ksp	15
+
+query T
+SELECT column_name FROM (DESCRIBE SELECT * FROM pgr_KSP(e(), 6, 17, 2));
+----
+seq
+path_id
+path_seq
+start_vid
+end_vid
+node
+edge
+cost
+agg_cost
+
+# Upstream's q1 through every variant: two paths of five rows.
+query I
+SELECT count(*) FROM pgr_ksp(e(), 6, 17, 2)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), 6, 17, 2, true)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), 6, 17, 2, true, false)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), 6, 17, 2, directed := true, heap_paths := false)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), 6, [17], 2)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), [6], 17, 2)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), [6], [17], 2);
+----
+10
+10
+10
+10
+10
+10
+10
+
+# Upstream's q3: starts are visited in ascending order, path_id counts across them.
+query IIIIR
+SELECT path_id, start_vid, end_vid, count(*), max(agg_cost) FROM pgr_ksp(e(), [6, 1], 17, 2)
+GROUP BY ALL ORDER BY 1;
+----
+1	1	17	6	5
+2	1	17	6	5
+3	6	17	5	4
+4	6	17	5	4
+
+# Upstream's q5, the combinations form.
+query IIIIR
+SELECT path_id, start_vid, end_vid, count(*), max(agg_cost)
+FROM pgr_ksp(e(), 'SELECT source, target FROM combinations', 2) GROUP BY ALL ORDER BY 1;
+----
+1	5	6	2	1
+2	5	10	7	6
+3	5	10	9	8
+4	6	5	2	1
+5	6	15	5	4
+6	6	15	7	6
+
+# heap_paths returns more than K paths (upstream's q6 has four).
+query T
+SELECT count(DISTINCT path_id) > 2 FROM pgr_ksp(e(), 6, 17, 2, directed := false, heap_paths := true);
+----
+true
+
+# K = 0 and K < 0 give no rows and no error, even with no edges.
+query I
+SELECT count(*) FROM pgr_ksp(e(), 6, 17, 0)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), 6, 17, -1)
+UNION ALL SELECT count(*) FROM pgr_ksp('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0', 6, 17, -1);
+----
+0
+0
+0
+
+# Start = end, an unreachable end (14) and an absent vertex add nothing, and leave
+# no gap in path_id.
+query IIII
+SELECT path_id, start_vid, end_vid, count(*) FROM pgr_ksp(e(), 6, [6, 14, 999, 17], 2)
+GROUP BY ALL ORDER BY 1;
+----
+1	6	17	5
+2	6	17	5
+
+query I
+SELECT count(*) FROM pgr_ksp(e(), 999, 17, 2)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), []::BIGINT[], [17], 2);
+----
+0
+0
+
+# STRICT: a NULL anywhere gives no rows.
+query I
+SELECT count(*) FROM pgr_ksp(e(), NULL::BIGINT, 17, 2)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), 6, 17, NULL::INTEGER)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), 6, 17, 2, directed := NULL)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), 6, 17, 2, heap_paths := NULL)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), NULL::VARCHAR, 2);
+----
+0
+0
+0
+0
+0

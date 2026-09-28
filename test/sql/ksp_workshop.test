@@ -1,0 +1,51 @@
+# name: test/sql/ksp_workshop.test
+# description: pgr_ksp on the workshop road network: cheapest first, distinct, the first is Dijkstra's
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# test/data/workshop-hiroshima is the pgRouting workshop's OpenStreetMap network (see its
+# NOTICE.md); its costs are way lengths in degrees. The target is the vertex farthest from 7508
+# within 0.01 by driving distance, so a path exists by construction.
+
+require pgrouting
+
+require parquet
+
+statement ok
+CREATE TABLE ways AS SELECT * EXCLUDE (geom) FROM read_parquet('test/data/workshop-hiroshima/ways.parquet');
+
+statement ok
+SET VARIABLE target = (
+  SELECT node FROM pgr_drivingDistance('SELECT id, source, target, cost, reverse_cost FROM ways', 7508, 0.01)
+  ORDER BY agg_cost DESC, node LIMIT 1);
+
+statement ok
+CREATE TABLE k AS
+SELECT * FROM pgr_ksp('SELECT id, source, target, cost, reverse_cost FROM ways', 7508, getvariable('target'), 3);
+
+statement ok
+CREATE TABLE totals AS SELECT path_id, agg_cost FROM k WHERE edge = -1;
+
+statement ok
+CREATE TABLE dj AS
+SELECT agg_cost FROM pgr_dijkstraCost('SELECT id, source, target, cost, reverse_cost FROM ways', 7508,
+                                      getvariable('target'));
+
+# Three paths, the first as cheap as Dijkstra's, never cheaper, in non-decreasing cost order.
+query TTTT
+SELECT (SELECT count(*) FROM totals) = 3,
+       (SELECT abs(agg_cost - (SELECT agg_cost FROM dj)) < 1e-12 FROM totals WHERE path_id = 1),
+       (SELECT min(agg_cost) FROM totals) >= (SELECT agg_cost FROM dj) - 1e-12,
+       (SELECT count(*) FROM (SELECT agg_cost < lag(agg_cost) OVER (ORDER BY path_id) AS down FROM totals)
+        WHERE down) = 0;
+----
+true	true	true	true
+
+# Every path runs from 7508 to the target and the three edge sequences differ.
+query TTT
+SELECT (SELECT count(*) FROM k WHERE path_seq = 1 AND node <> 7508) = 0,
+       (SELECT count(*) FROM k WHERE edge = -1 AND node <> getvariable('target')) = 0,
+       (SELECT count(DISTINCT edges) FROM (SELECT list(edge ORDER BY path_seq) AS edges FROM k GROUP BY path_id)) = 3;
+----
+true	true	true

@@ -27,7 +27,8 @@ enum class ArgKind : uint8_t {
 	VIDS,             // BIGINT[] passed as both the starts and the ends, as pgr_bdDijkstraCostMatrix does
 	ROOT,             // BIGINT, a one-element roots list
 	ROOTS,            // BIGINT[]
-	DISTANCE          // DOUBLE; upstream's FLOAT, and NUMERIC in pgr_kruskalDD / pgr_primDD
+	DISTANCE,         // DOUBLE; upstream's FLOAT, and NUMERIC in pgr_kruskalDD / pgr_primDD
+	K                 // INTEGER, the number of paths (upstream's INTEGER K)
 };
 
 enum class OptionalType : uint8_t { BOOLEAN, BIGINT, INTEGER, DOUBLE };
@@ -55,6 +56,7 @@ constexpr OptionalParam FACTOR {"factor", OptionalType::DOUBLE, "1.0", "factor"}
 constexpr OptionalParam EPSILON {"epsilon", OptionalType::DOUBLE, "1.0", "epsilon"};
 constexpr OptionalParam EQUICOST {"equicost", OptionalType::BOOLEAN, "false", "equicost"};
 constexpr OptionalParam MAX_DEPTH {"max_depth", OptionalType::BIGINT, "9223372036854775807", "max_depth"};
+constexpr OptionalParam HEAP_PATHS {"heap_paths", OptionalType::BOOLEAN, "false", "heap_paths"};
 
 // Where an overload's driving side comes from. NONE: the overload has none (which = 0 ignores it).
 // ARGUMENT: the CHAR signatures of the withPoints family take it as a required argument.
@@ -135,5 +137,6 @@ extern const duckdb::vector<FunctionSpec> BD_ASTAR_SPECS;             // bd_asta
 extern const duckdb::vector<FunctionSpec> DRIVING_DISTANCE_SPECS;     // driving_distance_specs.cpp
 extern const duckdb::vector<FunctionSpec> SPANNING_TREE_SPECS;        // spanning_tree_specs.cpp
 extern const duckdb::vector<FunctionSpec> TRAVERSAL_SPECS;            // traversal_specs.cpp
+extern const duckdb::vector<FunctionSpec> KSP_SPECS;                  // ksp_specs.cpp
 
 } // namespace duckdb_pgrouting

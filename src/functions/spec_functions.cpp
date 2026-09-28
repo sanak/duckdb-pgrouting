@@ -201,7 +201,8 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::DAG_SHORTEST_PATH_SPECS, &duckdb_pgrouting::BREADTH_FIRST_SEARCH_SPECS,
 	    &duckdb_pgrouting::COMPONENTS_SPECS,        &duckdb_pgrouting::ASTAR_SPECS,
 	    &duckdb_pgrouting::BD_ASTAR_SPECS,          &duckdb_pgrouting::DRIVING_DISTANCE_SPECS,
-	    &duckdb_pgrouting::SPANNING_TREE_SPECS,     &duckdb_pgrouting::TRAVERSAL_SPECS};
+	    &duckdb_pgrouting::SPANNING_TREE_SPECS,     &duckdb_pgrouting::TRAVERSAL_SPECS,
+	    &duckdb_pgrouting::KSP_SPECS};
 	return TABLES;
 }
 
@@ -242,6 +243,8 @@ LogicalType TypeOf(duckdb_pgrouting::ArgKind kind) {
 		return LogicalType::LIST(LogicalType::BIGINT);
 	case ArgKind::DISTANCE:
 		return LogicalType::DOUBLE;
+	case ArgKind::K:
+		return LogicalType::INTEGER;
 	}
 	throw InternalException("Unhandled ArgKind");
 }
@@ -432,6 +435,9 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 				break;
 			case duckdb_pgrouting::ArgKind::DISTANCE:
 				SetRequestParameter(request, "distance", input.inputs[i]);
+				break;
+			case duckdb_pgrouting::ArgKind::K:
+				SetRequestParameter(request, "k", input.inputs[i]);
 				break;
 			}
 		}
