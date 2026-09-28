@@ -1,0 +1,164 @@
+# name: test/sql/ksp_exec.test
+# description: _pgr_exec with the K-shortest-paths driver: the KSP shape, path_id numbering, K checks
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE combinations AS SELECT * FROM read_csv_auto('test/data/sampledata/combinations.csv');
+
+# The shape's columns: seq, path_id and path_seq are INTEGER, as upstream's _pgr_ksp_v4 declares.
+query TTTTTTTTT
+SELECT typeof(seq), typeof(path_id), typeof(path_seq), typeof(start_vid), typeof(end_vid),
+       typeof(node), typeof(edge), typeof(cost), typeof(agg_cost)
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          [6]::BIGINT[] AS starts, [17]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'ksp', k := 2)
+LIMIT 1;
+----
+INTEGER	INTEGER	INTEGER	BIGINT	BIGINT	BIGINT	BIGINT	DOUBLE	DOUBLE
+
+# Upstream's q1: two paths 6 -> 17, five rows each, both of cost 4.
+query IIIIRII
+SELECT path_id, start_vid, end_vid, count(*), max(agg_cost), min(path_seq), max(path_seq)
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          [6]::BIGINT[] AS starts, [17]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'ksp', k := 2)
+GROUP BY ALL ORDER BY 1;
+----
+1	6	17	5	4	1	5
+2	6	17	5	4	1	5
+
+# seq numbers the rows from 1; every path starts at 6 with agg_cost 0 and closes on 17 with edge -1.
+query IIIIIII
+SELECT count(*), min(seq), max(seq), count(DISTINCT seq),
+       count(*) FILTER (WHERE path_seq = 1 AND (node <> 6 OR agg_cost <> 0)),
+       count(*) FILTER (WHERE edge = -1 AND node <> 17),
+       count(*) FILTER (WHERE edge = -1)
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          [6]::BIGINT[] AS starts, [17]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'ksp', k := 2);
+----
+10	1	10	10	0	0	2
+
+# Upstream's q2: path_id keeps counting across (start, end) pairs.
+query IIIIR
+SELECT path_id, start_vid, end_vid, count(*), max(agg_cost)
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          [6]::BIGINT[] AS starts, [10, 17]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'ksp', k := 2)
+GROUP BY ALL ORDER BY 1;
+----
+1	6	10	6	5
+2	6	10	8	7
+3	6	17	5	4
+4	6	17	5	4
+
+# Upstream's q5, the combinations form. Review focus 4: 5 -> 6 and 6 -> 5 have one loopless path
+# each, so K = 2 returns one. Review focus 3: 6 -> 14 has none and leaves no gap in path_id.
+query IIIIR
+SELECT path_id, start_vid, end_vid, count(*), max(agg_cost)
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          (SELECT list(c) FROM (SELECT source, target FROM combinations) c) AS combinations),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  combinations_sql := 'SELECT source, target FROM combinations', driver := 'ksp', k := 2)
+GROUP BY ALL ORDER BY 1;
+----
+1	5	6	2	1
+2	5	10	7	6
+3	5	10	9	8
+4	6	5	2	1
+5	6	15	5	4
+6	6	15	7	6
+
+# heap_paths also returns the candidates left on Yen's heap: more than K paths here.
+query T
+SELECT count(DISTINCT path_id) > 2
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          [6]::BIGINT[] AS starts, [17]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'ksp', k := 2,
+  directed := false, heap_paths := true);
+----
+true
+
+# Review focus 1: K = 0 runs the driver and finds nothing.
+query I
+SELECT count(*)
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+          [6]::BIGINT[] AS starts, [17]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'ksp', k := 0);
+----
+0
+
+# K < 0: src/ksp/ksp.c returns before calling the driver ("TODO return error message"). With no
+# edge input registered, a driver call would fail, as the k := 1 call below shows; k := -1 never
+# gets that far.
+query I
+SELECT count(*)
+FROM _pgr_exec(
+  (SELECT NULL AS edges, [6]::BIGINT[] AS starts, [17]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'ksp', k := -1);
+----
+0
+
+statement error
+SELECT count(*)
+FROM _pgr_exec(
+  (SELECT NULL AS edges, [6]::BIGINT[] AS starts, [17]::BIGINT[] AS ends),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'ksp', k := 1);
+----
+no 'edges' input registered
+
+# STRICT: a NULL argument means the function is never entered.
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), edges_sql := '', driver := 'ksp', k := -1,
+  null_input := true);
+----
+0
+
+# More rows than one DuckDB vector, with the chunk boundary (row 2048) inside the second path: two
+# disjoint one-way chains from 0 to 1000000, the first of cost 1 per edge, the second of cost 2.
+# Each path has 1502 rows. path_id and path_seq must continue across every 2048-row chunk.
+statement ok
+CREATE TABLE ladder AS
+SELECT row_number() OVER () AS id, source, target, cost FROM (
+  SELECT 0 AS source, 1 AS target, 1.0::DOUBLE AS cost
+  UNION ALL SELECT i, i + 1, 1.0 FROM range(1, 1500) t(i)
+  UNION ALL SELECT 1500, 1000000, 1.0
+  UNION ALL SELECT 0, 2001, 2.0
+  UNION ALL SELECT i, i + 1, 2.0 FROM range(2001, 3500) t(i)
+  UNION ALL SELECT 3500, 1000000, 2.0);
+
+query IIIIII
+SELECT count(*), count(DISTINCT seq), max(seq),
+       count(*) FILTER (WHERE path_id = 1), count(*) FILTER (WHERE path_id = 2),
+       count(*) FILTER (WHERE path_seq <> seq - (path_id - 1) * 1502)
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM ladder) e) AS edges,
+          [0]::BIGINT[] AS starts, [1000000]::BIGINT[] AS ends),
+  edges_sql := 'SELECT * FROM ladder', driver := 'ksp', k := 2);
+----
+3004	3004	3004	1502	1502	0
+
+query IR
+SELECT path_id, agg_cost
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM ladder) e) AS edges,
+          [0]::BIGINT[] AS starts, [1000000]::BIGINT[] AS ends),
+  edges_sql := 'SELECT * FROM ladder', driver := 'ksp', k := 2)
+WHERE edge = -1 ORDER BY 1;
+----
+1	1501
+2	3002

@@ -47,6 +47,7 @@ void DriverResult::Release() {
 	case ResultShape::PATH:
 	case ResultShape::PAIRS:
 	case ResultShape::MST:
+	case ResultShape::KSP:
 		break; // flat rows
 	}
 	std::free(rows);

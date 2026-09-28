@@ -15,7 +15,7 @@ struct Path_rt;
 
 namespace duckdb_pgrouting {
 
-// A driver's raw outputs. One row pointer per ResultShape, so every driver writes through a
+// A driver's raw outputs. One row pointer per upstream row struct, so every driver writes through a
 // pointer of its own row type; RunFamilyDriver hands on the one its shape names.
 struct DriverCall {
 	Path_rt *path_rows = nullptr;
@@ -37,5 +37,6 @@ inline const char *CombinationsOrNull(const DriverRequest &request) {
 bool CallPathDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallGraphDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallTreeDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
+bool CallRoutesDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 
 } // namespace duckdb_pgrouting

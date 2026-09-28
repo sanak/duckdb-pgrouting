@@ -44,6 +44,8 @@ const RequestParameter REQUEST_PARAMETERS[] = {
     {"equicost", &DriverRequest::equicost},
     {"max_depth", &DriverRequest::max_depth},
     {"mst_suffix", &DriverRequest::mst_suffix},
+    {"k", &DriverRequest::k},
+    {"heap_paths", &DriverRequest::heap_paths},
     {"driver", &DriverRequest::driver},
 };
 

@@ -43,6 +43,9 @@ struct DriverRequest {
 	int64_t max_depth = std::numeric_limits<int64_t>::max();
 	// The kruskal and prim families: "" (the whole forest), "BFS", "DFS" or "DD".
 	std::string mst_suffix;
+	// The K-shortest-path families (pgr_ksp, pgr_withPointsKSP); K is upstream's INTEGER.
+	int32_t k = 0;
+	bool heap_paths = false;
 	// Which driver runs the request. Each driver reads only the fields its upstream C entry passes
 	// it; only SHORTEST_PATH reads points_sql, n_goals, global, driving_side, details and which,
 	// and WITH_POINTS_DD also reads points_sql, driving_side and details.

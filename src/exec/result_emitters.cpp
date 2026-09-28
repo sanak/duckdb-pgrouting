@@ -86,6 +86,38 @@ void EmitMst(const DriverResult &result, EmitState &state, idx_t n, DataChunk &o
 	}
 }
 
+// Upstream's K-shortest-path C entries (src/ksp/ksp.c, src/ksp/withPoints_ksp.c) number the rows
+// from 1 and the paths across the whole answer: path_id starts at 1 and grows after each row whose
+// edge is -1, path_seq restarts at 1 after each row whose edge is negative. The driver's start_id
+// and end_id are the path's own endpoints.
+void EmitKsp(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<Path_rt>();
+	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
+	auto path_id = FlatVector::GetData<int32_t>(output.data[1]);
+	auto path_seq = FlatVector::GetData<int32_t>(output.data[2]);
+	auto start_vid = FlatVector::GetData<int64_t>(output.data[3]);
+	auto end_vid = FlatVector::GetData<int64_t>(output.data[4]);
+	auto node = FlatVector::GetData<int64_t>(output.data[5]);
+	auto edge = FlatVector::GetData<int64_t>(output.data[6]);
+	auto cost = FlatVector::GetData<double>(output.data[7]);
+	auto agg_cost = FlatVector::GetData<double>(output.data[8]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		const auto &row = rows[k];
+		seq[i] = NumericCast<int32_t>(k + 1);
+		path_id[i] = NumericCast<int32_t>(state.next_path_id);
+		path_seq[i] = NumericCast<int32_t>(state.next_path_seq);
+		start_vid[i] = row.start_id;
+		end_vid[i] = row.end_id;
+		node[i] = row.node;
+		edge[i] = row.edge;
+		cost[i] = row.cost;
+		agg_cost[i] = row.agg_cost;
+		state.next_path_id = row.edge == -1 ? state.next_path_id + 1 : state.next_path_id;
+		state.next_path_seq = row.edge < 0 ? 1 : state.next_path_seq + 1;
+	}
+}
+
 } // namespace
 
 void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
@@ -106,6 +138,12 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		         LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
 		names = {"seq", "depth", "start_vid", "pred", "node", "edge", "cost", "agg_cost"};
 		return;
+	case ResultShape::KSP:
+		types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER,
+		         LogicalType::BIGINT,  LogicalType::BIGINT,  LogicalType::BIGINT,
+		         LogicalType::BIGINT,  LogicalType::DOUBLE,  LogicalType::DOUBLE};
+		names = {"seq", "path_id", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
+		return;
 	}
 	throw InternalException("pgrouting: unhandled ResultShape");
 }
@@ -123,6 +161,9 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::MST:
 		EmitMst(result, state, n, output);
+		break;
+	case ResultShape::KSP:
+		EmitKsp(result, state, n, output);
 		break;
 	}
 	state.offset += n;

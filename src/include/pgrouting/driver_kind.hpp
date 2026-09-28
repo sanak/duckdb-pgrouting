@@ -29,20 +29,23 @@ enum class DriverKind : uint8_t {
 	KRUSKAL,
 	PRIM,
 	BREADTH_FIRST_SEARCH,
-	DEPTH_FIRST_SEARCH
+	DEPTH_FIRST_SEARCH,
+	KSP
 };
 
-// The upstream result struct a driver fills, one value per struct. It decides _pgr_exec's output
-// columns (src/exec/result_emitters.cpp) and how DriverResult frees the rows.
+// The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
+// _pgr_exec's output columns (src/exec/result_emitters.cpp) and how DriverResult frees the rows.
 enum class ResultShape : uint8_t {
 	PATH,  // Path_rt
 	PAIRS, // II_t_rt
-	MST    // MST_rt
+	MST,   // MST_rt
+	KSP    // Path_rt, numbered as upstream's K-shortest-path C entries number it (path_id)
 };
 
 // A check upstream's C entry runs on the parameters before it calls the driver, even when the
 // edge query returns nothing. _pgr_exec runs it at bind time, unless an argument is NULL: a
-// STRICT function is never entered then.
+// STRICT function is never entered then. Some checks make the C entry return no rows instead of
+// raising; CheckRequest then reports that the driver is not called.
 enum class RequestCheck : uint8_t {
 	NONE,
 	// check_parameters(heuristic, factor, epsilon): src/common/check_parameters.c, called by
@@ -57,7 +60,10 @@ enum class RequestCheck : uint8_t {
 	// with BFS or DFS, nothing without a suffix (pgr_kruskal passes -1 for both).
 	SPANNING_TREE,
 	// max_depth >= 0: src/breadthFirstSearch/breadthFirstSearch.c, src/traversal/depthFirstSearch.c.
-	TRAVERSAL
+	TRAVERSAL,
+	// K < 0 returns no rows, silently, before the driver is called: src/ksp/ksp.c (its "TODO
+	// return error message").
+	KSP_K
 };
 
 struct DriverInfo {
@@ -86,6 +92,7 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::PRIM, "prim", ResultShape::MST, RequestCheck::SPANNING_TREE},
     {DriverKind::BREADTH_FIRST_SEARCH, "breadth_first_search", ResultShape::MST, RequestCheck::TRAVERSAL},
     {DriverKind::DEPTH_FIRST_SEARCH, "depth_first_search", ResultShape::MST, RequestCheck::TRAVERSAL},
+    {DriverKind::KSP, "ksp", ResultShape::KSP, RequestCheck::KSP_K},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -100,7 +107,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::DEPTH_FIRST_SEARCH) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::KSP) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

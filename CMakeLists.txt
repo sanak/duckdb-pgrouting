@@ -49,6 +49,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/withpoints_specs.cpp
     src/pg_compat/src/drivers_graph.cpp
     src/pg_compat/src/drivers_path.cpp
+    src/pg_compat/src/drivers_routes.cpp
     src/pg_compat/src/drivers_tree.cpp
     src/pg_compat/src/family_drivers.cpp
     src/pg_compat/src/get_check_data.cpp

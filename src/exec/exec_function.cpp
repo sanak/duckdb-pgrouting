@@ -29,7 +29,9 @@ namespace {
 
 struct ExecBindData : public TableFunctionData {
 	duckdb_pgrouting::DriverRequest request;
-	bool null_input = false;
+	// The driver is never called and the call returns no rows: an argument was NULL (a STRICT
+	// function is never entered), or CheckRequest found a request upstream answers with nothing.
+	bool no_rows = false;
 	BoundSlots slots;
 	// What the driver returns, and therefore which columns this call has.
 	duckdb_pgrouting::ResultShape shape = duckdb_pgrouting::ResultShape::PATH;
@@ -49,11 +51,12 @@ struct ExecState : public LocalTableFunctionState {
 }
 
 // Upstream's C entries check some parameters before they call the driver (RequestCheck), with
-// these messages and hints, verbatim.
-void CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
+// these messages and hints, verbatim. Returns false when the C entry returns no rows without
+// calling the driver.
+bool CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 	switch (duckdb_pgrouting::InfoOf(request.driver).check) {
 	case duckdb_pgrouting::RequestCheck::NONE:
-		return;
+		return true;
 	case duckdb_pgrouting::RequestCheck::ASTAR_PARAMETERS:
 		if (request.heuristic > 5 || request.heuristic < 0) {
 			ThrowCheck("Unknown heuristic", "Valid values: 0~5");
@@ -64,12 +67,12 @@ void CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 		if (request.epsilon < 1) {
 			ThrowCheck("Epsilon value out of range", "Valid values: 1 or greater than 1");
 		}
-		return;
+		return true;
 	case duckdb_pgrouting::RequestCheck::DRIVING_DISTANCE:
 		if (request.distance < 0) {
 			ThrowCheck("Negative value found on 'distance'", "Must be positive");
 		}
-		return;
+		return true;
 	case duckdb_pgrouting::RequestCheck::WITH_POINTS_DD: {
 		const auto side = std::tolower(static_cast<unsigned char>(request.driving_side));
 		if (side != 'r' && side != 'l' && side != 'b') {
@@ -78,7 +81,7 @@ void CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 		if (request.distance < 0) {
 			ThrowCheck("Negative value found on 'distance'", "Must be positive");
 		}
-		return;
+		return true;
 	}
 	case duckdb_pgrouting::RequestCheck::SPANNING_TREE:
 		if (request.mst_suffix == "DD" && request.distance < 0) {
@@ -87,13 +90,16 @@ void CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 		if ((request.mst_suffix == "BFS" || request.mst_suffix == "DFS") && request.max_depth < 0) {
 			ThrowCheck("Negative value found on 'max_depth'", "Must be positive");
 		}
-		return;
+		return true;
 	case duckdb_pgrouting::RequestCheck::TRAVERSAL:
 		if (request.max_depth < 0) {
 			ThrowCheck("Negative value found on 'max_depth'", "");
 		}
-		return;
+		return true;
+	case duckdb_pgrouting::RequestCheck::KSP_K:
+		return request.k >= 0;
 	}
+	throw InternalException("pgrouting: unhandled RequestCheck");
 }
 
 unique_ptr<FunctionData> ExecBind(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &return_types,
@@ -106,11 +112,11 @@ unique_ptr<FunctionData> ExecBind(ClientContext &, TableFunctionBindInput &input
 		                            duckdb_pgrouting::InfoOf(request.driver).name);
 	}
 	auto null_input = input.named_parameters.find("null_input");
-	data->null_input = null_input != input.named_parameters.end() && !null_input->second.IsNull() &&
-	                   BooleanValue::Get(null_input->second);
+	data->no_rows = null_input != input.named_parameters.end() && !null_input->second.IsNull() &&
+	                BooleanValue::Get(null_input->second);
 	data->slots = BindInputSlots(input);
-	if (!data->null_input) {
-		CheckRequest(request);
+	if (!data->no_rows && !CheckRequest(request)) {
+		data->no_rows = true;
 	}
 	data->shape = duckdb_pgrouting::InfoOf(request.driver).shape;
 	ShapeColumns(data->shape, return_types, names);
@@ -126,7 +132,7 @@ void RunOnce(ClientContext &context, const ExecBindData &bind, ExecState &state,
 	if (input.size() != 1) {
 		throw InvalidInputException("_pgr_exec expects exactly one input row");
 	}
-	if (bind.null_input) {
+	if (bind.no_rows) {
 		return;
 	}
 	auto request = bind.request;

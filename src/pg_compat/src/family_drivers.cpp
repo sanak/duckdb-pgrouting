@@ -32,6 +32,7 @@ std::string TakeMessage(char *message) {
 void *RowsOf(const DriverCall &call, ResultShape shape) {
 	switch (shape) {
 	case ResultShape::PATH:
+	case ResultShape::KSP:
 		return call.path_rows;
 	case ResultShape::PAIRS:
 		return call.pair_rows;
@@ -43,19 +44,19 @@ void *RowsOf(const DriverCall &call, ResultShape shape) {
 
 // Frees every row pointer a driver of this shape should never have written, and reports whether
 // there was one. A driver that writes one anyway has the wrong shape for its DriverKind, which
-// InfoOf() -- not the driver's own choice -- declares.
+// InfoOf() -- not the driver's own choice -- declares. Path_rt rows belong to two shapes.
 bool DropWrongShapeRows(DriverCall &call, ResultShape shape) {
 	bool wrong = false;
-	auto drop = [&](auto *&rows, ResultShape own) {
-		if (own != shape && rows != nullptr) {
+	auto drop = [&](auto *&rows, bool own) {
+		if (!own && rows != nullptr) {
 			std::free(rows);
 			rows = nullptr;
 			wrong = true;
 		}
 	};
-	drop(call.path_rows, ResultShape::PATH);
-	drop(call.pair_rows, ResultShape::PAIRS);
-	drop(call.mst_rows, ResultShape::MST);
+	drop(call.path_rows, shape == ResultShape::PATH || shape == ResultShape::KSP);
+	drop(call.pair_rows, shape == ResultShape::PAIRS);
+	drop(call.mst_rows, shape == ResultShape::MST);
 	return wrong;
 }
 
@@ -71,7 +72,7 @@ DriverOutput RunFamilyDriver(const DriverRequest &request, const DriverArrays &a
 	DriverCall call;
 	try {
 		if (!CallPathDriver(request, arrays, call) && !CallGraphDriver(request, arrays, call) &&
-		    !CallTreeDriver(request, arrays, call)) {
+		    !CallTreeDriver(request, arrays, call) && !CallRoutesDriver(request, arrays, call)) {
 			out.err = std::string("Internal error: no family driver for '") + InfoOf(request.driver).name + "'";
 		}
 	} catch (const std::string &message) {

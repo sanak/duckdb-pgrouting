@@ -3,8 +3,8 @@
 
 // What _pgr_exec returns for each ResultShape: the columns, and how a driver's rows become them.
 // Upstream's C layer computes some columns itself rather than taking them from the driver (seq,
-// path_seq); they are computed here, and whatever depends on the previous row is carried across
-// output chunks in EmitState.
+// path_seq, path_id); they are computed here, and whatever depends on the previous row is carried
+// across output chunks in EmitState.
 
 #include "duckdb.hpp"
 
@@ -14,7 +14,8 @@ namespace duckdb {
 
 struct EmitState {
 	idx_t offset = 0;          // rows already emitted
-	int64_t next_path_seq = 1; // PATH: path_seq of the next row
+	int64_t next_path_seq = 1; // PATH, KSP: path_seq of the next row
+	int64_t next_path_id = 1;  // KSP: path_id of the next row
 };
 
 // The columns of `shape`, in order.
