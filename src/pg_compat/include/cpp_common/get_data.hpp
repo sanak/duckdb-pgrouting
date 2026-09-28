@@ -15,6 +15,7 @@
 #include "cpp_common/get_check_data.hpp"
 #include "cpp_common/info_t.hpp"
 #include "cpp_common/point_on_edge_t.hpp"
+#include "cpp_common/restriction_t.hpp"
 #include "pgrouting/pg_types.hpp"
 
 namespace pgrouting {
@@ -47,6 +48,9 @@ template <> inline std::string InputKind<II_t_rt>() {
 }
 template <> inline std::string InputKind<Point_on_edge_t>() {
 	return duckdb_pgrouting::KIND_POINTS;
+}
+template <> inline std::string InputKind<Restriction_t>() {
+	return duckdb_pgrouting::KIND_RESTRICTIONS;
 }
 
 } // namespace detail

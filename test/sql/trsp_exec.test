@@ -1,0 +1,195 @@
+# name: test/sql/trsp_exec.test
+# description: _pgr_exec with the TRSP driver: the restrictions input, integer-array paths, PATH rows
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+statement ok
+CREATE TABLE er AS
+SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+       (SELECT list(r) FROM (SELECT path, cost FROM restrictions) r) AS restrictions;
+
+# The PATH shape, as upstream's _pgr_trspv4 declares it.
+query TTTTTTTT
+SELECT typeof(seq), typeof(path_seq), typeof(start_vid), typeof(end_vid), typeof(node), typeof(edge),
+       typeof(cost), typeof(agg_cost)
+FROM _pgr_exec((SELECT edges, restrictions, [6]::BIGINT[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp')
+LIMIT 1;
+----
+INTEGER	INTEGER	BIGINT	BIGINT	BIGINT	BIGINT	DOUBLE	DOUBLE
+
+# Upstream's q4: many to one, directed. The restricted turn 7 -> 10 carries the restriction's cost.
+query IIIIIIRR
+SELECT seq, path_seq, start_vid, end_vid, node, edge, cost, agg_cost
+FROM _pgr_exec((SELECT edges, restrictions, [6, 1]::BIGINT[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp')
+ORDER BY seq;
+----
+1	1	1	8	1	6	1	0
+2	2	1	8	3	7	1	1
+3	3	1	8	7	10	101	2
+4	4	1	8	8	-1	0	103
+5	1	6	8	6	4	1	0
+6	2	6	8	7	10	1	1
+7	3	6	8	8	-1	0	2
+
+# Upstream's q2: one to one, undirected.
+query IIIIIIRR
+SELECT seq, path_seq, start_vid, end_vid, node, edge, cost, agg_cost
+FROM _pgr_exec((SELECT edges, restrictions, [6]::BIGINT[] AS starts, [10]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp', directed := false)
+ORDER BY seq;
+----
+1	1	6	10	6	2	1	0
+2	2	6	10	10	-1	0	1
+
+# No restriction rows: the plain shortest path.
+query IR
+SELECT start_vid, agg_cost
+FROM _pgr_exec(
+  (SELECT edges, (SELECT list(r) FROM (SELECT path, cost FROM restrictions WHERE id < 0) r) AS restrictions,
+          [1]::BIGINT[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions WHERE id < 0', driver := 'trsp')
+WHERE edge = -1;
+----
+1	3
+
+# A path column of INTEGER[] (DuckDB's type for a literal [7, 10]) is read like BIGINT[]:
+# ANY-INTEGER-ARRAY.
+query IR
+SELECT start_vid, agg_cost
+FROM _pgr_exec(
+  (SELECT edges, (SELECT list(r) FROM (SELECT path::INTEGER[] AS path, cost FROM restrictions) r) AS restrictions,
+          [6, 1]::BIGINT[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path::INTEGER[] AS path, cost FROM restrictions', driver := 'trsp')
+WHERE edge = -1 ORDER BY seq;
+----
+1	103
+6	2
+
+query IR
+SELECT start_vid, agg_cost
+FROM _pgr_exec(
+  (SELECT edges, (SELECT list(r) FROM (SELECT path::SMALLINT[] AS path, cost FROM restrictions) r) AS restrictions,
+          [1]::BIGINT[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path::SMALLINT[] AS path, cost FROM restrictions', driver := 'trsp')
+WHERE edge = -1;
+----
+1	103
+
+# A NULL or empty path is no restriction at all (upstream reads both as no array and skips the row).
+query IR
+SELECT start_vid, agg_cost
+FROM _pgr_exec(
+  (SELECT edges,
+          (SELECT list(r) FROM (SELECT path, cost FROM restrictions
+                                UNION ALL SELECT NULL::BIGINT[], 5.0
+                                UNION ALL SELECT []::BIGINT[], 5.0) r) AS restrictions,
+          [6, 1]::BIGINT[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'with NULL and empty paths', driver := 'trsp')
+WHERE edge = -1 ORDER BY seq;
+----
+1	103
+6	2
+
+# A NULL element inside a path is upstream's get_array error.
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT edges,
+          (SELECT list(r) FROM (SELECT path, cost FROM restrictions
+                                UNION ALL SELECT [7, NULL]::BIGINT[], 5.0) r) AS restrictions,
+          [1]::BIGINT[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'with a NULL element', driver := 'trsp');
+----
+NULL value found in Array!
+
+# Upstream's column checks on the restrictions query (get_restrictions: cost ANY-NUMERICAL, path
+# ANY-INTEGER-ARRAY, both required).
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT edges, (SELECT list(r) FROM (SELECT 'x' AS path, 5.0 AS cost) r) AS restrictions,
+          [1]::BIGINT[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'text path', driver := 'trsp');
+----
+Unexpected Column 'path' type. Expected ANY-INTEGER-ARRAY
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT edges, (SELECT list(r) FROM (SELECT cost FROM restrictions) r) AS restrictions,
+          [1]::BIGINT[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'no path', driver := 'trsp');
+----
+Column 'path' not Found
+
+# The input row's own shape checks: restrictions is a row list; the id lists stay exactly BIGINT[]
+# even though a restriction path may be any integer list.
+statement error
+SELECT * FROM _pgr_exec((SELECT edges, 'x' AS restrictions, [1]::BIGINT[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', restrictions_sql := 'x',
+  driver := 'trsp');
+----
+_pgr_exec: column 'restrictions' must be LIST(STRUCT)
+
+statement error
+SELECT * FROM _pgr_exec((SELECT edges, restrictions, [1]::INTEGER[] AS starts, [8]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp');
+----
+_pgr_exec: column 'starts' must be LIST(BIGINT), got INTEGER[]
+
+# Start = end and an unreachable end (14 is in another component) add nothing.
+query I
+SELECT DISTINCT end_vid
+FROM _pgr_exec((SELECT edges, restrictions, [6]::BIGINT[] AS starts, [6, 14, 10]::BIGINT[] AS ends FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp', directed := false);
+----
+10
+
+# STRICT: a NULL argument means the function is never entered.
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), edges_sql := '', driver := 'trsp', null_input := true);
+----
+0
+
+# More rows than one DuckDB vector, through the restricted pass: a one-way chain 1 -> 801 whose
+# first turn (edge 1 then edge 2) is restricted at cost 100, with three starts so the answer spans
+# more than one 2048-row vector. seq and path_seq must continue across every chunk. The chain is
+# kept short because upstream's TrspHandler::construct_path recurses once per edge of a re-routed
+# path, and a much longer one overflows a worker thread's stack under ASan.
+statement ok
+CREATE TABLE chain AS SELECT i AS id, i AS source, i + 1 AS target, 1.0::DOUBLE AS cost FROM range(1, 801) t(i);
+
+statement ok
+CREATE TABLE chain_restrictions AS SELECT [1, 2]::BIGINT[] AS path, 100.0::DOUBLE AS cost;
+
+query IIIIRI
+SELECT count(*), count(DISTINCT seq), max(seq), max(path_seq), max(agg_cost), count(*) FILTER (WHERE cost = 101)
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM chain) e) AS edges,
+          (SELECT list(r) FROM (SELECT * FROM chain_restrictions) r) AS restrictions,
+          [1, 2, 3]::BIGINT[] AS starts, [801]::BIGINT[] AS ends),
+  edges_sql := 'SELECT * FROM chain', restrictions_sql := 'SELECT * FROM chain_restrictions', driver := 'trsp');
+----
+2400	2400	2400	801	900	1

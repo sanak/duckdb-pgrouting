@@ -48,6 +48,9 @@ std::string EdgesOfPointsKey(const DriverRequest &request) {
 std::string EdgesNoPointsKey(const DriverRequest &request) {
 	return duckdb_pgrouting::WithPointsDerivedKeys(request.edges_sql, request.points_sql).no_points;
 }
+std::string RestrictionsKey(const DriverRequest &request) {
+	return request.restrictions_sql;
+}
 
 // With points given, the public overloads pass 'edges' as an untyped NULL: the driver then fetches
 // the points query and the two edge queries it derives from edges_sql and points_sql, never
@@ -60,6 +63,8 @@ const InputSlot INPUT_SLOTS[] = {
     {"edges_of_points", SlotKind::ROW_LIST, false, duckdb_pgrouting::KIND_EDGES, EdgesOfPointsKey, nullptr,
      nullptr},
     {"edges_no_points", SlotKind::ROW_LIST, false, duckdb_pgrouting::KIND_EDGES, EdgesNoPointsKey, nullptr,
+     nullptr},
+    {"restrictions", SlotKind::ROW_LIST, false, duckdb_pgrouting::KIND_RESTRICTIONS, RestrictionsKey, nullptr,
      nullptr},
     {"starts", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::starts, &DriverRequest::has_starts},
     {"ends", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::ends, &DriverRequest::has_ends},
@@ -86,8 +91,9 @@ duckdb_pgrouting::ColumnClass ClassOf(const LogicalType &type) {
 	case LogicalTypeId::VARCHAR:
 		return ColumnClass::TEXT;
 	case LogicalTypeId::LIST:
-		return ListType::GetChildType(type).id() == LogicalTypeId::BIGINT ? ColumnClass::INTEGER_ARRAY
-		                                                                  : ColumnClass::UNSUPPORTED;
+		// ANY-INTEGER-ARRAY: a list of any type ANY-INTEGER accepts (a literal [7, 10] is INTEGER[]).
+		return ClassOf(ListType::GetChildType(type)) == ColumnClass::INTEGER ? ColumnClass::INTEGER_ARRAY
+		                                                                    : ColumnClass::UNSUPPORTED;
 	default:
 		return ColumnClass::UNSUPPORTED;
 	}
@@ -111,6 +117,7 @@ bool Unpack(ClientContext &context, Vector &list_column, idx_t count, idx_t row,
 	out.offset = entry.offset;
 	out.count = entry.length;
 	out.columns.resize(struct_children.size());
+	out.list_children.resize(struct_children.size());
 	for (idx_t c = 0; c < struct_children.size(); c++) {
 		out.names.push_back(StructType::GetChildName(struct_type, c));
 		auto *source = struct_children[c].get();
@@ -121,6 +128,18 @@ bool Unpack(ClientContext &context, Vector &list_column, idx_t count, idx_t row,
 			VectorOperations::Cast(context, *source, *casted, child_count);
 			out.owned.push_back(std::move(casted));
 			source = out.owned.back().get();
+		}
+		if (ClassOf(source->GetType()) == duckdb_pgrouting::ColumnClass::INTEGER_ARRAY) {
+			// Every integer list is cast to BIGINT[] once, as DECIMAL is above, so ReadInt64Array reads
+			// one element type; its elements are kept beside the list's own offsets.
+			if (ListType::GetChildType(source->GetType()).id() != LogicalTypeId::BIGINT) {
+				auto casted = make_uniq<Vector>(LogicalType::LIST(LogicalType::BIGINT), child_count);
+				VectorOperations::Cast(context, *source, *casted, child_count);
+				out.owned.push_back(std::move(casted));
+				source = out.owned.back().get();
+			}
+			auto &elements = ListVector::GetEntry(*source);
+			elements.ToUnifiedFormat(ListVector::GetListSize(*source), out.list_children[c]);
 		}
 		out.types.push_back(source->GetType());
 		out.classes.push_back(ClassOf(source->GetType()));
@@ -222,7 +241,9 @@ BoundSlots BindInputSlots(TableFunctionBindInput &input) {
 					                            type.ToString());
 				}
 				CaptureRowSchema(type, entry.schema);
-			} else if (ClassOf(type) != duckdb_pgrouting::ColumnClass::INTEGER_ARRAY) {
+			} else if (type != LogicalType::LIST(LogicalType::BIGINT)) {
+				// Exactly BIGINT[]: ReadIdList reads each element as a BIGINT Value. ClassOf's
+				// ANY-INTEGER-ARRAY is wider, for restriction paths.
 				throw InvalidInputException("_pgr_exec: column '%s' must be LIST(BIGINT), got %s", slot.column,
 				                            type.ToString());
 			}

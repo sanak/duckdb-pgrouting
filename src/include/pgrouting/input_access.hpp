@@ -28,6 +28,8 @@ constexpr const char *KIND_EDGES = "edges";
 constexpr const char *KIND_COMBINATIONS = "combinations";
 // The points query of the withPoints family (pid, edge_id, fraction, side).
 constexpr const char *KIND_POINTS = "points";
+// The restrictions query of the turn-restriction families (cost, path).
+constexpr const char *KIND_RESTRICTIONS = "restrictions";
 
 // Looks up the input registered for this exact (sql, kind) pair.
 // Throws std::string when the key is unknown: that means the driver asked for an input the
@@ -45,7 +47,15 @@ int64_t ReadInt64(const InputHandle &input, std::size_t row, int column);
 double ReadDouble(const InputHandle &input, std::size_t row, int column);
 char ReadChar(const InputHandle &input, std::size_t row, int column);
 std::string ReadText(const InputHandle &input, std::size_t row, int column);
+// Every element of the ANY-INTEGER-ARRAY cell at (row, column), which must not be NULL (check
+// IsNull first). Throws std::string "NULL value found in Array!" on a NULL element, as upstream's
+// get_array does.
 std::vector<int64_t> ReadInt64Array(const InputHandle &input, std::size_t row, int column);
+
+// Keeps `values` alive until the current call's inputs are released and returns its first
+// element. Upstream allocates a restriction's path in PostgreSQL's per-call memory context and
+// never frees it; a malloc'd copy would leak on every call.
+int64_t *KeepArray(std::vector<int64_t> values);
 
 // Raised by the driver's CHECK_FOR_INTERRUPTS(). Sets a thread-local flag, then throws, because
 // pgRouting's drivers catch every exception and the flag is how the exec layer learns why.

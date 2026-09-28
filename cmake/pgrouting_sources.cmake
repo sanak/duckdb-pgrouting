@@ -33,6 +33,8 @@ set(PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/cpp_common/messages.cpp
     ${PGROUTING_DIR}/src/cpp_common/rule.cpp
     ${PGROUTING_DIR}/src/spanningTree/details.cpp
+    ${PGROUTING_DIR}/src/trsp/edgeInfo.cpp
+    ${PGROUTING_DIR}/src/trsp/trspHandler.cpp
     ${PGROUTING_DIR}/src/withPoints/withPoints.cpp)
 
 # Sources that reach PostgreSQL only through symbols this extension replaces
@@ -61,4 +63,5 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/spanningTree/kruskal_driver.cpp
     ${PGROUTING_DIR}/src/spanningTree/prim_driver.cpp
     ${PGROUTING_DIR}/src/traversal/depthFirstSearch_driver.cpp
+    ${PGROUTING_DIR}/src/trsp/trsp_driver.cpp
     ${PGROUTING_DIR}/src/withPoints/withPointsVia_driver.cpp)

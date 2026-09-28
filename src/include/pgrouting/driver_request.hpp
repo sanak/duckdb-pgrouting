@@ -17,6 +17,8 @@ struct DriverRequest {
 	std::string edges_sql;
 	std::string points_sql;
 	std::string combinations_sql;
+	// The turn-restriction families' restrictions query (cost, path).
+	std::string restrictions_sql;
 	std::vector<int64_t> starts;
 	std::vector<int64_t> ends;
 	bool has_starts = false;

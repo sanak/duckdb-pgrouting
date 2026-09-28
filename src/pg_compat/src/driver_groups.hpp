@@ -47,5 +47,6 @@ bool CallPathDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 bool CallGraphDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallTreeDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallRoutesDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
+bool CallTrspDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 
 } // namespace duckdb_pgrouting

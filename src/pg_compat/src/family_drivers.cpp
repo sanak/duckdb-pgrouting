@@ -75,7 +75,8 @@ DriverOutput RunFamilyDriver(const DriverRequest &request, const DriverArrays &a
 	DriverCall call;
 	try {
 		if (!CallPathDriver(request, arrays, call) && !CallGraphDriver(request, arrays, call) &&
-		    !CallTreeDriver(request, arrays, call) && !CallRoutesDriver(request, arrays, call)) {
+		    !CallTreeDriver(request, arrays, call) && !CallRoutesDriver(request, arrays, call) &&
+		    !CallTrspDriver(request, arrays, call)) {
 			out.err = std::string("Internal error: no family driver for '") + InfoOf(request.driver).name + "'";
 		}
 	} catch (const std::string &message) {

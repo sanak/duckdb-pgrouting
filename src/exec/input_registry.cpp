@@ -61,6 +61,11 @@ const MaterializedInput *InputRegistry::Find(const duckdb::string &sql, const du
 	return it == inputs.end() ? nullptr : &it->second;
 }
 
+int64_t *InputRegistry::Keep(std::vector<int64_t> values) {
+	kept.push_back(std::move(values));
+	return kept.back().data();
+}
+
 ScopedRoutingContext::ScopedRoutingContext(duckdb::ClientContext &context, InputRegistry &registry)
     : saved_context(state.context), saved_registry(state.registry), saved_interrupted(state.interrupted) {
 	state.context = &context;
@@ -157,10 +162,29 @@ std::string ReadText(const InputHandle &handle, std::size_t row, int column) {
 	return value.GetString();
 }
 
-std::vector<int64_t> ReadInt64Array(const InputHandle &, std::size_t, int) {
-	// Only the restrictions and TRSP families need ANY-INTEGER-ARRAY columns, and none of them is
-	// registered yet. Until one is, failing loudly beats returning something plausible.
-	throw std::string("Internal error: ANY-INTEGER-ARRAY columns are not supported yet");
+std::vector<int64_t> ReadInt64Array(const InputHandle &handle, std::size_t row, int column) {
+	const auto c = duckdb::NumericCast<duckdb::idx_t>(column);
+	const auto entry =
+	    duckdb::UnifiedVectorFormat::GetData<duckdb::list_entry_t>(handle.columns[c])[PhysicalRow(handle, row, column)];
+	const auto &elements = handle.list_children[c];
+	const auto *values = duckdb::UnifiedVectorFormat::GetData<int64_t>(elements);
+	std::vector<int64_t> out;
+	out.reserve(entry.length);
+	for (duckdb::idx_t i = 0; i < entry.length; i++) {
+		const auto idx = elements.sel->get_index(entry.offset + i);
+		if (!elements.validity.RowIsValid(idx)) {
+			throw std::string("NULL value found in Array!");
+		}
+		out.push_back(values[idx]);
+	}
+	return out;
+}
+
+int64_t *KeepArray(std::vector<int64_t> values) {
+	if (!state.registry) {
+		throw std::string("Internal error: no pgrouting context is active");
+	}
+	return state.registry->Keep(std::move(values));
 }
 
 void CheckForInterrupts() {

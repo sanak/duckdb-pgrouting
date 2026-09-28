@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
+#include <deque>
+
 #include "duckdb.hpp"
 #include "pgrouting/input_access.hpp"
 
@@ -17,6 +19,9 @@ struct InputHandle {
 	duckdb::vector<duckdb::LogicalType> types;
 	duckdb::vector<ColumnClass> classes;
 	duckdb::vector<duckdb::UnifiedVectorFormat> columns;
+	// For an ANY-INTEGER-ARRAY column, its list's elements (BIGINT, after Unpack's cast); empty
+	// for every other column. Indexed like `columns`.
+	duckdb::vector<duckdb::UnifiedVectorFormat> list_children;
 	// DECIMAL children are cast to DOUBLE once, at unpack time, and the cast vector is owned
 	// here; `types` then reports DOUBLE for that column. Casting per cell would be the only
 	// other way to honour spec-mandated DECIMAL support without boxing every value.
@@ -35,8 +40,13 @@ public:
 	void Register(const duckdb::string &sql, const duckdb::string &kind, MaterializedInput input);
 	const MaterializedInput *Find(const duckdb::string &sql, const duckdb::string &kind) const;
 
+	// See KeepArray (input_access.hpp). A deque never moves its elements, so every pointer returned
+	// stays valid while more arrays are kept.
+	int64_t *Keep(std::vector<int64_t> values);
+
 private:
 	duckdb::unordered_map<duckdb::string, MaterializedInput> inputs;
+	std::deque<std::vector<int64_t>> kept;
 };
 
 // Makes a registry and a ClientContext visible to the pg_compat layer for the duration of one
