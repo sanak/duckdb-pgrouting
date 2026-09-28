@@ -175,6 +175,17 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "paths on the graph plus points placed along its edges.",
      "SELECT * FROM pgr_withPointsVia('SELECT id, source, target, cost, reverse_cost FROM edges', "
      "'SELECT pid, edge_id, fraction, side FROM pointsofinterest', [-1, 7, -3, 16, 15])"},
+    {"pgr_trsp",
+     "Shortest paths that honour turn restrictions: each restriction row names a sequence of edges "
+     "(path) whose traversal costs extra (cost).",
+     "SELECT * FROM pgr_trsp('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "'SELECT path, cost FROM restrictions', 1, 8)"},
+    {"pgr_trsp_withPoints",
+     "Turn-restricted shortest paths on the graph plus temporary points placed along its edges; a "
+     "point is addressed by the negative of its id.",
+     "SELECT * FROM pgr_trsp_withPoints('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "'SELECT path, cost FROM restrictions', 'SELECT pid, edge_id, fraction, side FROM pointsofinterest', "
+     "-1, 10)"},
     {"pgr_breadthFirstSearch",
      "Visits the graph breadth-first from the given roots, one row per vertex reached with its "
      "predecessor and depth, optionally only to a maximum depth.",

@@ -29,7 +29,8 @@ enum class ArgKind : uint8_t {
 	ROOTS,            // BIGINT[]
 	DISTANCE,         // DOUBLE; upstream's FLOAT, and NUMERIC in pgr_kruskalDD / pgr_primDD
 	K,                // INTEGER, the number of paths (upstream's INTEGER K)
-	VIA               // BIGINT[], the vertices a route visits in order
+	VIA,              // BIGINT[], the vertices a route visits in order
+	RESTRICTIONS_SQL  // VARCHAR, the turn restrictions query (cost, path)
 };
 
 enum class OptionalType : uint8_t { BOOLEAN, BIGINT, INTEGER, DOUBLE };
@@ -143,5 +144,6 @@ extern const duckdb::vector<FunctionSpec> DRIVING_DISTANCE_SPECS;     // driving
 extern const duckdb::vector<FunctionSpec> SPANNING_TREE_SPECS;        // spanning_tree_specs.cpp
 extern const duckdb::vector<FunctionSpec> TRAVERSAL_SPECS;            // traversal_specs.cpp
 extern const duckdb::vector<FunctionSpec> KSP_SPECS;                  // ksp_specs.cpp
+extern const duckdb::vector<FunctionSpec> TRSP_SPECS;                 // trsp_specs.cpp
 
 } // namespace duckdb_pgrouting

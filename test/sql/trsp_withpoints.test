@@ -1,0 +1,120 @@
+# name: test/sql/trsp_withpoints.test
+# description: pgr_trsp_withPoints: variants, driving side, details, STRICT
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id';
+
+statement ok
+CREATE MACRO r() AS 'SELECT id, path, cost FROM restrictions';
+
+statement ok
+CREATE MACRO p() AS 'SELECT pid, edge_id, fraction, side FROM pointsofinterest';
+
+# Ten signatures, each with two defaulted parameters (directed, details): 10 x 3.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name = 'pgr_trsp_withPoints' AND tags['ext'] = 'pgrouting' GROUP BY ALL;
+----
+pgr_trsp_withPoints	30
+
+# Upstream's q1: side-less, so 'r' from directed; details add the points passed on the way.
+query IR
+SELECT count(*), round(max(agg_cost), 6) FROM pgr_trsp_withPoints(e(), r(), p(), -1, 10, details := true);
+----
+12	8.4
+
+# Upstream's q2, the side in upper case.
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 6) FROM pgr_trsp_withPoints(e(), r(), p(), -1, [-3, 7], 'B', directed := false)
+WHERE edge = -1 ORDER BY seq;
+----
+-1	-3	3.2
+-1	7	1.6
+
+# Upstream's q3 and q4.
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 6) FROM pgr_trsp_withPoints(e(), r(), p(), [-1, 6], -3)
+WHERE edge = -1 ORDER BY seq;
+----
+-1	-3	4
+6	-3	2.6
+
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 6) FROM pgr_trsp_withPoints(e(), r(), p(), [-1, 6], [-3, 1], 'L')
+WHERE edge = -1 ORDER BY seq;
+----
+-1	-3	3.2
+-1	1	9.6
+6	-3	2.6
+6	1	9
+
+# Upstream's q5, the combinations form.
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 6)
+FROM pgr_trsp_withPoints(e(), r(), p(), 'SELECT * FROM (VALUES (-1, 10), (6, -3)) AS combinations(source, target)',
+                         'r', details := true)
+WHERE edge = -1 ORDER BY seq;
+----
+-1	10	8.4
+6	-3	2.6
+
+# Every variant of the one-to-one signatures answers the same: upstream's q1 path without details -
+# the points -6 and -3 and the vertex 5 on the point's own edge are not rows.
+query I
+SELECT count(*) FROM pgr_trsp_withPoints(e(), r(), p(), -1, 10)
+UNION ALL SELECT count(*) FROM pgr_trsp_withPoints(e(), r(), p(), -1, 10, true)
+UNION ALL SELECT count(*) FROM pgr_trsp_withPoints(e(), r(), p(), -1, 10, true, false)
+UNION ALL SELECT count(*) FROM pgr_trsp_withPoints(e(), r(), p(), -1, 10, 'r')
+UNION ALL SELECT count(*) FROM pgr_trsp_withPoints(e(), r(), p(), -1, 10, 'r', true)
+UNION ALL SELECT count(*) FROM pgr_trsp_withPoints(e(), r(), p(), -1, 10, 'r', true, false);
+----
+9
+9
+9
+9
+9
+9
+
+# Without a side argument the side follows directed, as upstream's wrapper passes
+# (CASE WHEN directed THEN 'r' ELSE 'b' END).
+query I
+SELECT count(*) FROM (
+  (SELECT * FROM pgr_trsp_withPoints(e(), r(), p(), [-1, 6], [-3, 1])
+   EXCEPT SELECT * FROM pgr_trsp_withPoints(e(), r(), p(), [-1, 6], [-3, 1], 'r'))
+  UNION ALL
+  (SELECT * FROM pgr_trsp_withPoints(e(), r(), p(), [-1, 6], [-3, 1], false)
+   EXCEPT SELECT * FROM pgr_trsp_withPoints(e(), r(), p(), [-1, 6], [-3, 1], 'b', false)));
+----
+0
+
+statement error
+SELECT * FROM pgr_trsp_withPoints(e(), r(), p(), -1, 10, 'x');
+----
+Invalid Input Error: Invalid value of 'driving side'
+HINT: Valid value are 'r', 'l', 'b'
+
+# STRICT: a NULL anywhere gives no rows, and no check runs.
+query I
+SELECT count(*) FROM pgr_trsp_withPoints(e(), r(), p(), -1, 10, NULL::VARCHAR)
+UNION ALL SELECT count(*) FROM pgr_trsp_withPoints(e(), NULL::VARCHAR, p(), -1, 10, 'x')
+UNION ALL SELECT count(*) FROM pgr_trsp_withPoints(e(), r(), p(), -1, 10, details := NULL);
+----
+0
+0
+0

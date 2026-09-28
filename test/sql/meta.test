@@ -64,6 +64,8 @@ pgr_prim	pgr_prim
 pgr_primBFS	pgr_primBFS
 pgr_primDD	pgr_primDD
 pgr_primDFS	pgr_primDFS
+pgr_trsp	pgr_trsp
+pgr_trsp_withPoints	pgr_trsp_withPoints
 pgr_version	pgr_version
 pgr_withPoints	pgr_withPoints
 pgr_withPointsCost	pgr_withPointsCost

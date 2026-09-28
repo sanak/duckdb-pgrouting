@@ -1,0 +1,93 @@
+# name: test/sql/trsp.test
+# description: pgr_trsp: variants, restrictions as any integer list, STRICT
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+statement ok
+CREATE MACRO r() AS 'SELECT path, cost FROM restrictions';
+
+# Five signatures, each with one defaulted parameter (directed): 5 x 2 variants.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name = 'pgr_trsp' AND tags['ext'] = 'pgrouting' GROUP BY ALL;
+----
+pgr_trsp	10
+
+query T
+SELECT column_name FROM (DESCRIBE SELECT * FROM pgr_trsp(e(), r(), 6, 10));
+----
+seq
+path_seq
+start_vid
+end_vid
+node
+edge
+cost
+agg_cost
+
+# Upstream's q2 to q6, one per form, by their row counts.
+query TI
+SELECT 'q2', count(*) FROM pgr_trsp(e(), r(), 6, 10, false)
+UNION ALL SELECT 'q2 named', count(*) FROM pgr_trsp(e(), r(), 6, 10, directed := false)
+UNION ALL SELECT 'q3', count(*) FROM pgr_trsp('SELECT id, source, target, cost FROM edges',
+                                               'SELECT * FROM restrictions', 6, [10, 1], false)
+UNION ALL SELECT 'q4', count(*) FROM pgr_trsp(e(), r(), [6, 1], 8)
+UNION ALL SELECT 'q5', count(*) FROM pgr_trsp(e(), r(), [6, 1], [10, 8], false)
+UNION ALL SELECT 'q6', count(*) FROM pgr_trsp(e(), r(),
+  'SELECT * FROM (VALUES (6, 10), (6, 1), (6, 8), (1, 8)) AS combinations (source, target)')
+ORDER BY 1;
+----
+q2	2
+q2 named	2
+q3	12
+q4	7
+q5	18
+q6	25
+
+query IIR
+SELECT start_vid, end_vid, agg_cost FROM pgr_trsp(e(), r(), [6, 1], 8) WHERE edge = -1 ORDER BY seq;
+----
+1	8	103
+6	8	2
+
+# A restriction written inline: [7, 10] is INTEGER[] and 100 an INTEGER, which ANY-INTEGER-ARRAY
+# and ANY-NUMERICAL accept; with this one restriction the route detours round 11, 16, 15, 10 and 6
+# (cost 9) - the table's [9, 16] is what forbids that - and 9 rather than the unrestricted 3 shows
+# both the path and the cost were read.
+query R
+SELECT agg_cost FROM pgr_trsp(e(), 'SELECT * FROM (VALUES ([7, 10], 100)) AS r(path, cost)', 1, 8)
+WHERE edge = -1;
+----
+9
+
+# No restriction rows: the plain shortest path.
+query R
+SELECT agg_cost FROM pgr_trsp(e(), 'SELECT path, cost FROM restrictions WHERE id < 0', 1, 8) WHERE edge = -1;
+----
+3
+
+# STRICT: a NULL anywhere gives no rows.
+query I
+SELECT count(*) FROM pgr_trsp(e(), NULL::VARCHAR, 6, 10)
+UNION ALL SELECT count(*) FROM pgr_trsp(e(), r(), NULL::BIGINT, 10)
+UNION ALL SELECT count(*) FROM pgr_trsp(e(), r(), 6, 10, directed := NULL)
+UNION ALL SELECT count(*) FROM pgr_trsp(e(), r(), NULL::VARCHAR);
+----
+0
+0
+0
+0

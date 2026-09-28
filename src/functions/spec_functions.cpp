@@ -202,7 +202,7 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::COMPONENTS_SPECS,        &duckdb_pgrouting::ASTAR_SPECS,
 	    &duckdb_pgrouting::BD_ASTAR_SPECS,          &duckdb_pgrouting::DRIVING_DISTANCE_SPECS,
 	    &duckdb_pgrouting::SPANNING_TREE_SPECS,     &duckdb_pgrouting::TRAVERSAL_SPECS,
-	    &duckdb_pgrouting::KSP_SPECS};
+	    &duckdb_pgrouting::KSP_SPECS,                &duckdb_pgrouting::TRSP_SPECS};
 	return TABLES;
 }
 
@@ -231,6 +231,7 @@ LogicalType TypeOf(duckdb_pgrouting::ArgKind kind) {
 	case ArgKind::COMBINATIONS_SQL:
 	case ArgKind::POINTS_SQL:
 	case ArgKind::DRIVING_SIDE:
+	case ArgKind::RESTRICTIONS_SQL:
 		return LogicalType::VARCHAR;
 	case ArgKind::START_VID:
 	case ArgKind::END_VID:
@@ -365,8 +366,9 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	bool has_points = false;
 
 	// One row carrying every input the driver needs, as a column each, so the exec function always
-	// sees at least these six columns (an overload with points adds 'points', 'edges_of_points'
-	// and 'edges_no_points'; 'edges' is then NULL). A column this overload does not use gets either
+	// sees at least these six columns (an overload with restrictions adds 'restrictions'; one with
+	// points adds 'points', 'edges_of_points' and 'edges_no_points', and 'edges' is then NULL). A
+	// column this overload does not use gets either
 	// an untyped NULL constant ('edges'/'combinations') or an empty but LIST(BIGINT)-typed id list
 	// ('starts'/'ends'/'roots'/'via' default to EmptyIdList() below, never a bare NULL). That typing
 	// is load-bearing: _pgr_exec's own bind rejects 'starts'/'ends'/'roots'/'via' unless they are
@@ -383,6 +385,8 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	unique_ptr<ParsedExpression> roots_expr =
 	    Named(spec.flags.root_zero ? IdList(Value::BIGINT(0)) : EmptyIdList(), "roots");
 	unique_ptr<ParsedExpression> via_expr = Named(EmptyIdList(), "via");
+	// Only an overload with a restrictions argument emits this one.
+	unique_ptr<ParsedExpression> restrictions_expr;
 	// Only an overload with a points argument emits these three; see the loop below.
 	unique_ptr<ParsedExpression> points_expr;
 	unique_ptr<ParsedExpression> edges_of_points_expr;
@@ -444,6 +448,10 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 			case duckdb_pgrouting::ArgKind::VIA:
 				via_expr = Named(IdListCast(input.inputs[i]), "via");
 				break;
+			case duckdb_pgrouting::ArgKind::RESTRICTIONS_SQL:
+				request.restrictions_sql = StringValue::Get(input.inputs[i]);
+				restrictions_expr = Named(ListOfRows(context, request.restrictions_sql), "restrictions");
+				break;
 			}
 		}
 		if (has_points) {
@@ -465,6 +473,9 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	row->select_list.push_back(std::move(ends_expr));
 	row->select_list.push_back(std::move(roots_expr));
 	row->select_list.push_back(std::move(via_expr));
+	if (restrictions_expr) {
+		row->select_list.push_back(std::move(restrictions_expr));
+	}
 	if (points_expr) {
 		row->select_list.push_back(std::move(points_expr));
 		row->select_list.push_back(std::move(edges_of_points_expr));

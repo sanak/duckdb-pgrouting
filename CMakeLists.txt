@@ -47,6 +47,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/spec_functions.cpp
     src/functions/sql_template.cpp
     src/functions/traversal_specs.cpp
+    src/functions/trsp_specs.cpp
     src/functions/withpoints_specs.cpp
     src/pg_compat/src/drivers_graph.cpp
     src/pg_compat/src/drivers_path.cpp
