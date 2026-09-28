@@ -92,6 +92,14 @@ UNION ALL SELECT count(*) FROM pgr_ksp('SELECT id, source, target, cost, reverse
 0
 0
 
+# K = 0 returns nothing even with heap_paths.
+query I
+SELECT count(*) FROM pgr_ksp(e(), 6, 17, 0, heap_paths := true)
+UNION ALL SELECT count(*) FROM pgr_ksp(e(), 6, 17, 0, directed := false, heap_paths := true);
+----
+0
+0
+
 # Start = end, an unreachable end (14) and an absent vertex add nothing, and leave
 # no gap in path_id.
 query IIII

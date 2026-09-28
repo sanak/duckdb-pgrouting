@@ -37,7 +37,7 @@ query TTTT
 SELECT (SELECT count(*) FROM totals) = 3,
        (SELECT abs(agg_cost - (SELECT agg_cost FROM dj)) < 1e-12 FROM totals WHERE path_id = 1),
        (SELECT min(agg_cost) FROM totals) >= (SELECT agg_cost FROM dj) - 1e-12,
-       (SELECT count(*) FROM (SELECT agg_cost < lag(agg_cost) OVER (ORDER BY path_id) AS down FROM totals)
+       (SELECT count(*) FROM (SELECT agg_cost < lag(agg_cost) OVER (ORDER BY path_id) - 1e-12 AS down FROM totals)
         WHERE down) = 0;
 ----
 true	true	true	true

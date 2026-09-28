@@ -109,7 +109,9 @@ Functions deliberately not ported are listed, each with its reason, in
   pgRouting the same property. `pgr_kruskal*` may also return a different, equally minimal
   spanning forest on macOS or Wasm than on Linux, since the C++ standard library's tie-break among
   equal-cost edges differs (libstdc++ vs. libc++); `pgr_prim*` uses Boost's own heap instead, but
-  its ties are asserted the same way for uniformity.
+  its ties are asserted the same way for uniformity. With `heap_paths := true`, `pgr_ksp` and
+  `pgr_withPointsKSP` also return the candidate paths left on Yen's heap, and which candidates
+  those are — and their costs — depend on the input order too.
 - **Memory.** pgRouting's own allocations are not counted against DuckDB's `memory_limit`.
 - **Geometry needs the spatial extension.** `pgr_findCloseEdges`, and `pgr_extractVertices` on
   geometry, call [duckdb-spatial](https://duckdb.org/docs/stable/core_extensions/spatial/overview):

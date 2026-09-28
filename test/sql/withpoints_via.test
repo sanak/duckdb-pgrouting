@@ -81,6 +81,28 @@ SELECT * FROM pgr_withPointsVia(e(), p(), [-1, 7], 'x');
 Invalid Input Error: Invalid value of 'driving side'
 HINT: Valid value are 'r', 'l', 'b'
 
+# An unreachable leg: 4 cannot be reached from 7. Without strict, the other legs come back and
+# the missing leg's path_id (2) is skipped; strict := true gives no rows.
+query IIIRR
+SELECT path_id, start_vid, end_vid, round(agg_cost, 6), round(route_agg_cost, 6)
+FROM pgr_withPointsVia(e(), p(), [5, 7, 4, 2]) WHERE edge < 0 ORDER BY seq;
+----
+1	5	7	2	2
+3	4	2	1	3
+
+# One vertex is no leg at all; no vertex at all is upstream's error.
+query I
+SELECT count(*) FROM pgr_withPointsVia(e(), p(), [5, 7, 4, 2], strict := true)
+UNION ALL SELECT count(*) FROM pgr_withPointsVia(e(), p(), [-1]);
+----
+0
+0
+
+statement error
+SELECT * FROM pgr_withPointsVia(e(), p(), []::BIGINT[]);
+----
+No elements found
+
 query I
 SELECT count(*) FROM pgr_withPointsVia(e(), p(), [-1, 7], NULL::VARCHAR)
 UNION ALL SELECT count(*) FROM pgr_withPointsVia(e(), p(), [-1, 7], details := NULL)
