@@ -4,7 +4,8 @@
 // required arguments, its DEFAULT parameters in declaration order, and the constant flags its body
 // passes to _pgr_dijkstra_v4 (edges, starts, ends, directed, only_cost, normal, n_goals, global)
 // or, for a combinations signature, (edges, combinations, directed, only_cost, n_goals, global)
-// with normal = true.
+// with normal = true. pgr_dijkstraVia calls _pgr_dijkstraVia(edges, via, directed, strict,
+// U_turn_on_edge), a per-family driver of its own.
 
 #include "function_spec.hpp"
 
@@ -76,6 +77,9 @@ const duckdb::vector<FunctionSpec> DIJKSTRA_SPECS = {
      {DIRECTED, CAP, GLOBAL}, Flags(false, true, true, Projection::COST_OF_PATH)},
     {"pgr_dijkstraNearCost", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED, CAP, GLOBAL},
      Flags(false, true, true, Projection::COST_OF_PATH)},
+
+    {"pgr_dijkstraVia", {ArgKind::EDGES_SQL, ArgKind::VIA}, {DIRECTED, VIA_STRICT, VIA_U_TURN_ON_EDGE},
+     FamilyFlags(DriverKind::DIJKSTRA_VIA, false, Projection::ALL)},
 };
 
 } // namespace duckdb_pgrouting

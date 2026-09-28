@@ -1,0 +1,103 @@
+# name: test/sql/dijkstra_via.test
+# description: pgr_dijkstraVia: variants, strict, U-turns, STRICT, edge cases
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id';
+
+# One signature with three defaulted parameters (directed, strict, U_turn_on_edge): 4 variants.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name = 'pgr_dijkstraVia' AND tags['ext'] = 'pgrouting' GROUP BY ALL;
+----
+pgr_dijkstraVia	4
+
+query T
+SELECT column_name FROM (DESCRIBE SELECT * FROM pgr_dijkstraVia(e(), [5, 7, 1, 8, 15]));
+----
+seq
+path_id
+path_seq
+start_vid
+end_vid
+node
+edge
+cost
+agg_cost
+route_agg_cost
+
+# Upstream's q1 through every variant: 15 rows.
+query I
+SELECT count(*) FROM pgr_dijkstraVia(e(), [5, 7, 1, 8, 15])
+UNION ALL SELECT count(*) FROM pgr_dijkstraVia(e(), [5, 7, 1, 8, 15], true)
+UNION ALL SELECT count(*) FROM pgr_dijkstraVia(e(), [5, 7, 1, 8, 15], true, false)
+UNION ALL SELECT count(*) FROM pgr_dijkstraVia(e(), [5, 7, 1, 8, 15], true, false, true)
+UNION ALL SELECT count(*) FROM pgr_dijkstraVia(e(), [5, 7, 1, 8, 15], directed := true, strict := false,
+                                               U_turn_on_edge := true);
+----
+15
+15
+15
+15
+15
+
+query IIIRR
+SELECT path_id, start_vid, end_vid, agg_cost, route_agg_cost FROM pgr_dijkstraVia(e(), [5, 7, 1, 8, 15])
+WHERE edge < 0 ORDER BY seq;
+----
+1	5	7	2	2
+2	7	1	2	4
+3	1	8	3	7
+4	8	15	4	11
+
+# The parameter keeps upstream's spelling and, like every DuckDB named parameter, any case.
+query IR
+SELECT path_id, agg_cost FROM pgr_dijkstraVia(e(), [6, 7, 6], U_turn_on_edge := false) WHERE edge < 0 ORDER BY seq;
+----
+1	1
+2	5
+
+query IR
+SELECT path_id, agg_cost FROM pgr_dijkstraVia(e(), [6, 7, 6], true, false, false) WHERE edge < 0 ORDER BY seq;
+----
+1	1
+2	5
+
+# An unreachable leg is skipped (and its path_id with it) unless strict.
+query IIIRR
+SELECT path_id, start_vid, end_vid, agg_cost, route_agg_cost FROM pgr_dijkstraVia(e(), [5, 7, 4, 2])
+WHERE edge < 0 ORDER BY seq;
+----
+1	5	7	2	2
+3	4	2	1	3
+
+query I
+SELECT count(*) FROM pgr_dijkstraVia(e(), [5, 7, 4, 2], strict := true)
+UNION ALL SELECT count(*) FROM pgr_dijkstraVia(e(), [5]);
+----
+0
+0
+
+statement error
+SELECT * FROM pgr_dijkstraVia(e(), []::BIGINT[]);
+----
+No elements found
+
+# STRICT: a NULL anywhere gives no rows.
+query I
+SELECT count(*) FROM pgr_dijkstraVia(e(), NULL::BIGINT[])
+UNION ALL SELECT count(*) FROM pgr_dijkstraVia(e(), [5, 7], directed := NULL)
+UNION ALL SELECT count(*) FROM pgr_dijkstraVia(e(), [5, 7], strict := NULL)
+UNION ALL SELECT count(*) FROM pgr_dijkstraVia(e(), [5, 7], U_turn_on_edge := NULL);
+----
+0
+0
+0
+0

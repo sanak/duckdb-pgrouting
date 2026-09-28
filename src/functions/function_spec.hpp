@@ -28,7 +28,8 @@ enum class ArgKind : uint8_t {
 	ROOT,             // BIGINT, a one-element roots list
 	ROOTS,            // BIGINT[]
 	DISTANCE,         // DOUBLE; upstream's FLOAT, and NUMERIC in pgr_kruskalDD / pgr_primDD
-	K                 // INTEGER, the number of paths (upstream's INTEGER K)
+	K,                // INTEGER, the number of paths (upstream's INTEGER K)
+	VIA               // BIGINT[], the vertices a route visits in order
 };
 
 enum class OptionalType : uint8_t { BOOLEAN, BIGINT, INTEGER, DOUBLE };
@@ -57,6 +58,10 @@ constexpr OptionalParam EPSILON {"epsilon", OptionalType::DOUBLE, "1.0", "epsilo
 constexpr OptionalParam EQUICOST {"equicost", OptionalType::BOOLEAN, "false", "equicost"};
 constexpr OptionalParam MAX_DEPTH {"max_depth", OptionalType::BIGINT, "9223372036854775807", "max_depth"};
 constexpr OptionalParam HEAP_PATHS {"heap_paths", OptionalType::BOOLEAN, "false", "heap_paths"};
+// The Via families' parameters. Not named STRICT: windows.h defines that as a macro.
+constexpr OptionalParam VIA_STRICT {"strict", OptionalType::BOOLEAN, "false", "strict"};
+// Upstream's spelling; DuckDB matches named parameters case-insensitively.
+constexpr OptionalParam VIA_U_TURN_ON_EDGE {"U_turn_on_edge", OptionalType::BOOLEAN, "true", "u_turn_on_edge"};
 
 // Where an overload's driving side comes from. NONE: the overload has none (which = 0 ignores it).
 // ARGUMENT: the CHAR signatures of the withPoints family take it as a required argument.

@@ -240,6 +240,7 @@ LogicalType TypeOf(duckdb_pgrouting::ArgKind kind) {
 	case ArgKind::END_VIDS:
 	case ArgKind::VIDS:
 	case ArgKind::ROOTS:
+	case ArgKind::VIA:
 		return LogicalType::LIST(LogicalType::BIGINT);
 	case ArgKind::DISTANCE:
 		return LogicalType::DOUBLE;
@@ -364,11 +365,11 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	bool has_points = false;
 
 	// One row carrying every input the driver needs, as a column each, so the exec function always
-	// sees at least these five columns (an overload with points adds 'points', 'edges_of_points'
+	// sees at least these six columns (an overload with points adds 'points', 'edges_of_points'
 	// and 'edges_no_points'; 'edges' is then NULL). A column this overload does not use gets either
 	// an untyped NULL constant ('edges'/'combinations') or an empty but LIST(BIGINT)-typed id list
-	// ('starts'/'ends'/'roots' default to EmptyIdList() below, never a bare NULL). That typing is
-	// load-bearing: _pgr_exec's own bind rejects 'starts'/'ends'/'roots' unless they are
+	// ('starts'/'ends'/'roots'/'via' default to EmptyIdList() below, never a bare NULL). That typing
+	// is load-bearing: _pgr_exec's own bind rejects 'starts'/'ends'/'roots'/'via' unless they are
 	// SQLNULL or LIST(BIGINT), so emitting an untyped NULL there instead would break every
 	// NULL-input call.
 	auto row = make_uniq<SelectNode>();
@@ -381,6 +382,7 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	unique_ptr<ParsedExpression> ends_expr = Named(EmptyIdList(), "ends");
 	unique_ptr<ParsedExpression> roots_expr =
 	    Named(spec.flags.root_zero ? IdList(Value::BIGINT(0)) : EmptyIdList(), "roots");
+	unique_ptr<ParsedExpression> via_expr = Named(EmptyIdList(), "via");
 	// Only an overload with a points argument emits these three; see the loop below.
 	unique_ptr<ParsedExpression> points_expr;
 	unique_ptr<ParsedExpression> edges_of_points_expr;
@@ -439,6 +441,9 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 			case duckdb_pgrouting::ArgKind::K:
 				SetRequestParameter(request, "k", input.inputs[i]);
 				break;
+			case duckdb_pgrouting::ArgKind::VIA:
+				via_expr = Named(IdListCast(input.inputs[i]), "via");
+				break;
 			}
 		}
 		if (has_points) {
@@ -459,6 +464,7 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	row->select_list.push_back(std::move(starts_expr));
 	row->select_list.push_back(std::move(ends_expr));
 	row->select_list.push_back(std::move(roots_expr));
+	row->select_list.push_back(std::move(via_expr));
 	if (points_expr) {
 		row->select_list.push_back(std::move(points_expr));
 		row->select_list.push_back(std::move(edges_of_points_expr));

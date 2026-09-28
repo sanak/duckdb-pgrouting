@@ -43,6 +43,11 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "Total cost of each path pgr_dijkstraNear keeps, one row per path.",
      "SELECT * FROM pgr_dijkstraNearCost('SELECT id, source, target, cost, reverse_cost FROM edges', 6, "
      "[10, 11, 1])"},
+    {"pgr_dijkstraVia",
+     "A route that visits the given vertices in order, as consecutive Dijkstra shortest paths; each "
+     "row also carries the cost accumulated along the whole route.",
+     "SELECT * FROM pgr_dijkstraVia('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "[5, 7, 1, 8, 15])"},
     {"pgr_withPoints",
      "Dijkstra shortest paths on the graph plus temporary points placed along its edges; a point is "
      "addressed by the negative of its id.",
@@ -165,6 +170,11 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "is addressed by the negative of its id.",
      "SELECT * FROM pgr_withPointsKSP('SELECT id, source, target, cost, reverse_cost FROM edges', "
      "'SELECT pid, edge_id, fraction, side FROM pointsofinterest', -1, -2, 2, 'l')"},
+    {"pgr_withPointsVia",
+     "A route through the given vertices and temporary points, in order, as consecutive shortest "
+     "paths on the graph plus points placed along its edges.",
+     "SELECT * FROM pgr_withPointsVia('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "'SELECT pid, edge_id, fraction, side FROM pointsofinterest', [-1, 7, -3, 16, 15])"},
     {"pgr_breadthFirstSearch",
      "Visits the graph breadth-first from the given roots, one row per vertex reached with its "
      "predecessor and depth, optionally only to a maximum depth.",

@@ -5,6 +5,9 @@
 // Every public pgr_withPoints* function calls _pgr_withPoints_v4, whose C entry
 // (src/withPoints/withPoints.c) passes which = 1 for the array and the combinations forms alike,
 // and hardcodes n_goals = 0, global = true whatever the SQL wrapper passes.
+//
+// pgr_withPointsVia is the exception: it calls _pgr_withPointsVia_v4(edges, points, via, directed,
+// strict, U_turn_on_edge, driving_side, details), a per-family driver of its own.
 
 #include "function_spec.hpp"
 
@@ -29,6 +32,12 @@ DriverFlags WithPointsFlags(bool only_cost, bool normal, DrivingSideSource side,
 
 constexpr auto CHAR_SIDE = DrivingSideSource::ARGUMENT;
 constexpr auto SIDE_OF_DIRECTED = DrivingSideSource::FROM_DIRECTED;
+
+DriverFlags WithPointsViaFlags(DrivingSideSource side) {
+	auto flags = FamilyFlags(DriverKind::WITH_POINTS_VIA, false, Projection::ALL);
+	flags.driving_side = side;
+	return flags;
+}
 
 } // namespace
 
@@ -94,6 +103,12 @@ const duckdb::vector<FunctionSpec> WITH_POINTS_SPECS = {
      {DIRECTED}, WithPointsFlags(true, true, CHAR_SIDE, Projection::COST)},
     {"pgr_withPointsCostMatrix", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::START_VIDS},
      {DIRECTED}, WithPointsFlags(true, true, SIDE_OF_DIRECTED, Projection::COST)},
+
+    // pgr_withPointsVia: the side follows the via array; details defaults to false.
+    {"pgr_withPointsVia", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::VIA, ArgKind::DRIVING_SIDE},
+     {DIRECTED, VIA_STRICT, VIA_U_TURN_ON_EDGE, DETAILS}, WithPointsViaFlags(CHAR_SIDE)},
+    {"pgr_withPointsVia", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::VIA},
+     {DIRECTED, VIA_STRICT, VIA_U_TURN_ON_EDGE, DETAILS}, WithPointsViaFlags(SIDE_OF_DIRECTED)},
 };
 
 } // namespace duckdb_pgrouting

@@ -29,10 +29,6 @@ decision rather than an oversight.
   that is 268 process starts; each call now has a 120-second timeout. Acceptable for a tool that
   only runs at regeneration time, not in any inner loop a developer waits on repeatedly. Measured
   with all fifteen MVP functions implemented: 9.53 s for the whole argument-free run.
-- **`pgr_dijkstravia` is listed in `test/pgrouting_not_ported.json`** although it is only outside
-  the MVP, not meaningless in DuckDB; `pgr_withPointsVia`, `pgr_withPointsDD` and
-  `pgr_withPointsKSP` are treated as merely unimplemented instead. Revisit when the MVP is
-  complete.
 - **`pgr_dijkstraNearCost` runs pgRouting's driver in path mode (`only_cost = false`) and keeps each
   path's closing row (`edge = -1`)**, because the pinned release's only_cost `Path` constructor in
   `include/cpp_common/path.hpp` leaves `m_tot_cost` uninitialized, which `post_process` then sorts
