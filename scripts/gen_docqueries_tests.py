@@ -47,6 +47,12 @@ ROUTE_COLUMNS = ("node", "edge")
 TREE_TIE_FUNCTIONS = frozenset({"pgr_drivingdistance", "pgr_withpointsdd"})
 TREE_TIE_COLUMNS = ("start_vid", "node", "agg_cost")
 
+# K-shortest-path results: which K of several equal-cost paths come back depends on the order in
+# which Yen's algorithm explores them, and the per-endpoint row count and maximum cost that settle
+# a route tie cannot see that choice. A block calling one of these that differs from upstream
+# stays a defect until a person decides an invariant for it.
+KSP_FUNCTIONS = frozenset({"pgr_ksp", "pgr_withpointsksp"})
+
 # Kruskal/Prim results: which minimum spanning forest (or which walk of one) comes back among
 # equal-cost edges is never guaranteed, unlike a route or a driving-distance tree. Boost's
 # kruskal_minimum_spanning_tree pops equal-weight edges from a std::priority_queue whose tie order
@@ -305,6 +311,9 @@ def classify(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directi
     actual = [[_actual(v, t, float_digits) for v, t in zip(row, directive)] for row in result.rows]
     if expected == actual:
         return "match"
+    called = {match.group(1).lower() for match in CALL_RE.finditer(sql)}
+    if called & KSP_FUNCTIONS:
+        return "defect"
     upstream_shape = tie_shape(table.columns, table.rows, directive, float_digits)
     ours_shape = tie_shape(result.columns, result.rows, directive, float_digits)
     if upstream_shape is not None and ours_shape is not None:
