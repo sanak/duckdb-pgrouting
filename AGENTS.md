@@ -16,20 +16,25 @@ Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_
 `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`, `pgr_aStar`, `pgr_aStarCost`,
 `pgr_aStarCostMatrix`, `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix`, `pgr_bellmanFord`,
 `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch`, `pgr_drivingDistance`,
-`pgr_withPointsDD`, `pgr_ksp`, `pgr_withPointsKSP`, `pgr_kruskal`, `pgr_kruskalBFS`,
+`pgr_withPointsDD`, `pgr_ksp`, `pgr_withPointsKSP`, `pgr_turnRestrictedPath`, `pgr_trsp`,
+`pgr_trsp_withPoints`, `pgr_trspVia`, `pgr_trspVia_withPoints`, `pgr_kruskal`, `pgr_kruskalBFS`,
 `pgr_kruskalDFS`, `pgr_kruskalDD`, `pgr_prim`, `pgr_primBFS`, `pgr_primDFS`, `pgr_primDD`,
 `pgr_breadthFirstSearch`, `pgr_depthFirstSearch`, `pgr_connectedComponents`, `pgr_extractVertices`
-and `pgr_findCloseEdges` — pgRouting's one hundred and forty-four corresponding signatures, each
+and `pgr_findCloseEdges` — pgRouting's one hundred and sixty-three corresponding signatures, each
 registered once per number of its defaulted parameters passed positionally — and `pgr_version()`.
 The `pgr_dijkstra` and `pgr_withPoints` families call pgRouting's unified `do_shortestPath` driver;
 with points given, DuckDB also materializes the two edge queries that driver derives from the edge
-and points SQL. The other seventeen families call their own per-family `pgr_do_*` drivers through
+and points SQL. The other twenty-two families call their own per-family `pgr_do_*` drivers through
 one adapter on the pg_compat side; the two A* families also read each edge's end-point coordinates
 (`x1`, `y1`, `x2`, `y2`), and `pgr_withPointsDD` reads the same two derived edge queries as
-`pgr_withPoints`. So do `pgr_withPointsKSP` and `pgr_withPointsVia`. The K-shortest-path families
+`pgr_withPoints`. So do `pgr_withPointsKSP`, `pgr_withPointsVia`, `pgr_trsp_withPoints` and
+`pgr_trspVia_withPoints`. The K-shortest-path families
 (`pgr_ksp`, `pgr_withPointsKSP`) number their paths with a `path_id` that runs across the whole
 answer, and the Via families (`pgr_dijkstraVia`, `pgr_withPointsVia`) add `route_agg_cost`, the cost
-along the whole route. The root-based families (driving distance, breadth- and depth-first search)
+along the whole route. The turn-restriction families (`pgr_trsp`, `pgr_trsp_withPoints`,
+`pgr_trspVia`, `pgr_trspVia_withPoints`, `pgr_turnRestrictedPath`) also read a restrictions query
+(`cost`, and `path` as a list of any integer type); they return the path, route and K-shortest-path
+rows of the families above. The root-based families (driving distance, breadth- and depth-first search)
 take a `roots` list and return tree rows (`seq, depth, start_vid, pred, node, edge, cost,
 agg_cost`); the spanning-tree families do too, except `pgr_kruskal` and `pgr_prim` themselves, which
 take no roots and return a plain edge list (`edge, cost`) instead. `pgr_connectedComponents` goes
@@ -267,7 +272,10 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
   upstream result struct adds a `ResultShape` value with its columns and emitter
   (`src/exec/result_emitters.cpp`) and, when its rows own arrays, a case in `DriverResult`'s
   release. Every public function the family adds also needs its row in
-  `src/functions/function_docs.cpp`; registration throws without it.
+  `src/functions/function_docs.cpp`; registration throws without it. A new kind of input query adds
+  a `KIND_*` constant (`input_access.hpp`), its `InputKind` specialization
+  (`src/pg_compat/include/cpp_common/get_data.hpp`) and an `INPUT_SLOTS` row
+  (`src/exec/input_slots.cpp`).
 - The order in which an input query's rows reach pgRouting is not guaranteed stable: DuckDB's
   `list()` does not preserve scan order once the scan runs on several threads, and `ORDER BY` in
   the caller's own SQL does not change that. Boost breaks an equal-cost predecessor tie by

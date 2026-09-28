@@ -246,5 +246,12 @@
       "reason": "equal-cost tie",
       "upstream_rows": 18
     }
+  },
+  "trsp/trsp.pg": {
+    "q5": {
+      "differing_rows": 5,
+      "reason": "equal-cost tie",
+      "upstream_rows": 18
+    }
   }
 }

@@ -74,7 +74,7 @@ WHERE function_name LIKE 'pgr\_%' ESCAPE '\' ORDER BY ALL;
 
 ## Functions
 
-Forty pgRouting functions — one hundred and forty-four of pgRouting 4.0's signatures — plus
+Forty-five pgRouting functions — one hundred and sixty-three of pgRouting 4.0's signatures — plus
 `pgr_version()`.
 The [pgRouting documentation](https://docs.pgrouting.org/4.0/en/) describes each algorithm, its
 parameters and its result columns, all of which this extension keeps.
@@ -88,6 +88,7 @@ parameters and its result columns, all of which this extension keeps.
 | Other shortest paths | `pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch` |
 | K shortest paths | `pgr_ksp`, `pgr_withPointsKSP` |
 | Via | `pgr_dijkstraVia`, `pgr_withPointsVia` |
+| Turn restrictions | `pgr_trsp`, `pgr_trsp_withPoints`, `pgr_trspVia`, `pgr_trspVia_withPoints`, `pgr_turnRestrictedPath` |
 | Components | `pgr_connectedComponents` |
 | Driving distance | `pgr_drivingDistance`, `pgr_withPointsDD` |
 | Spanning trees | `pgr_kruskal`, `pgr_kruskalBFS`, `pgr_kruskalDFS`, `pgr_kruskalDD`, `pgr_prim`, `pgr_primBFS`, `pgr_primDFS`, `pgr_primDD` |

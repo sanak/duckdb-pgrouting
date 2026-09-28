@@ -13,8 +13,9 @@ the following checklist, in order. Every step either passes or tells you exactly
    If upstream moved one of the per-family drivers (pgr_aStar, pgr_bdAstar, pgr_bdDijkstra,
    pgr_bellmanFord, pgr_edwardMoore, pgr_dagShortestPath, pgr_binaryBreadthFirstSearch,
    pgr_drivingDistance, pgr_withPointsDD, pgr_kruskal, pgr_prim, pgr_breadthFirstSearch,
-   pgr_depthFirstSearch, pgr_ksp, pgr_withPointsKSP, pgr_dijkstraVia, pgr_withPointsVia) onto
-   `do_shortestPath`, delete its case in its
+   pgr_depthFirstSearch, pgr_ksp, pgr_withPointsKSP, pgr_dijkstraVia, pgr_withPointsVia,
+   pgr_trsp, pgr_trsp_withPoints, pgr_trspVia, pgr_trspVia_withPoints, pgr_turnRestrictedPath)
+   onto `do_shortestPath`, delete its case in its
    `src/pg_compat/src/drivers_*.cpp` file, switch that family's rows in its
    `src/functions/*_specs.cpp` table to `DriverKind::SHORTEST_PATH` with the flags its new SQL
    wrapper passes, and drop its driver file from `cmake/pgrouting_sources.cmake`.
@@ -46,6 +47,12 @@ the following checklist, in order. Every step either passes or tells you exactly
    A* request check in `src/exec/exec_function.cpp`, and the A* SQL wrappers' constant flags
    (`normal := false` in the many-to-one forms, astarCost's `ORDER BY`, bdAstar's `NUMERIC`
    defaults): their wording and flags are pinned only by hand-written tests, not by the generator.
+
+   `src/pg_compat/src/drivers_trsp.cpp` refuses a NULL or empty restriction path for
+   pgr_turnRestrictedPath because `Rule::Rule` (`src/cpp_common/rule.cpp`) takes the path's last
+   element and `turnRestrictedPath_driver.cpp` builds a Rule from every row. Re-read both at a
+   bump: if upstream skips such rows there (as its TRSP drivers do with `if (r.via)`) or guards
+   `Rule`, delete the guard.
 6. Run `python3 scripts/check_signatures.py`. It reports signatures that upstream added, removed or
    retyped. Adapt the overload tables (`src/functions/*_specs.cpp`) for new, changed or
    removed overloads. For a new upstream function whose name collides with a DuckDB name, or which
@@ -60,9 +67,10 @@ the following checklist, in order. Every step either passes or tells you exactly
    pgr_withPoints query failing with "no 'edges' input registered for query". Upstream keeps a
    second copy of the same template in `third_party/pgrouting/src/withPoints/get_new_queries.cpp`,
    which pgr_withPointsDD's C entry calls; `src/pg_compat/src/drivers_tree.cpp` passes the driver
-   the same `WithPointsDerivedKeys` strings, so diff that copy too. pgr_withPointsKSP's and
-   pgr_withPointsVia's C entries call it as well, and `src/pg_compat/src/drivers_routes.cpp`
-   passes their drivers the same strings.
+   the same `WithPointsDerivedKeys` strings, so diff that copy too. pgr_withPointsKSP's,
+   pgr_withPointsVia's, pgr_trsp_withPoints's and pgr_trspVia_withPoints's C entries call it as
+   well, and `src/pg_compat/src/drivers_routes.cpp` and `drivers_trsp.cpp` pass their drivers the
+   same strings.
 7. Run the full suite: `make test_debug`, then push and let CI cover the remaining eight native
    platforms and the three Wasm variants.
 8. The bump lands on `main` only. The `v2.0-cyanoptera` next line picks it up at its next

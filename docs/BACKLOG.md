@@ -48,6 +48,27 @@ decision rather than an oversight.
   unlike `pgr_bellmanFord`, `pgr_edwardMoore` and `pgr_dagShortestPath`, whose headers do poll it
   inside their main loop. PostgreSQL runs the same unmodified algorithm bodies and is equally
   uncancellable there, so this is not a regression introduced by the shared interrupt path.
+- **`pgr_trsp`, `pgr_trsp_withPoints`, `pgr_trspVia` and `pgr_trspVia_withPoints` cannot be
+  cancelled while their restricted pass runs.** Each first finds plain shortest paths through
+  `algorithms::dijkstra`, which polls `CHECK_FOR_INTERRUPTS` once per run, and then re-routes the
+  paths a restriction applies to through upstream's `TrspHandler` (`src/trsp/trspHandler.cpp`),
+  which never polls it. PostgreSQL runs the same code and is equally uncancellable there.
+  `pgr_turnRestrictedPath` runs Yen's algorithm like `pgr_ksp` and is cancellable between its
+  Dijkstra runs.
+- **`pgr_turnRestrictedPath` refuses a restriction whose `path` is NULL or empty**
+  (`Unexpected NULL or empty array in column path`). Upstream builds a `Rule` from every
+  restriction row, and `Rule`'s constructor takes the path's last element, which is undefined
+  behaviour for an empty path; the other four turn-restriction functions skip such a row, as
+  upstream's `if (r.via)` does. The check (`src/pg_compat/src/drivers_trsp.cpp`) runs before the
+  driver, so it fires even on an empty edge set.
+- **A turn-restricted path that must be re-routed over thousands of edges can exhaust a thread's
+  stack.** Upstream's `TrspHandler::construct_path` (`src/trsp/trspHandler.cpp`) recurses once per
+  edge of the path it rebuilds. PostgreSQL runs it on a backend's main thread (8 MB of stack by
+  default); DuckDB runs table functions on worker threads, whose stack is much smaller on some
+  platforms (512 KB on macOS), and Wasm's stack is small too. An overflow aborts the process
+  rather than raising an error. Under the ASan build a re-routed path of 1500 edges already
+  overflows a macOS worker; the tests keep re-routed paths below 1000 edges. Fixing it would mean
+  changing upstream's recursion.
 - **`pgr_ksp` with a negative `K` returns no rows instead of an error.** Upstream's C entry
   (`src/ksp/ksp.c`) returns before calling its driver when `K < 0`, under a "TODO return error
   message" comment, while `pgr_withPointsKSP` raises `Invalid value of 'K'` for the same input.
@@ -157,8 +178,6 @@ Each of these would be a change no test could observe, so none of them is made:
   generated test file.** The first is a regression script with no named blocks; the second
   documents `pgr_randomSpanTree`, which pgRouting 4.0 does not publish (it is absent from
   `sql/sigs/pgrouting--4.0.sig`).
-- **`ksp/turnRestrictedPath.pg` produces no generated test file** until `pgr_turnRestrictedPath`
-  is ported: its page is selected by stem, and no implemented function has that name.
 - **A depth- or distance-limited `pgr_kruskalBFS`/`kruskalDFS`/`kruskalDD`/`primBFS`/`primDFS`/
   `primDD` generated block asserts only the tree structure, not which vertices are reached.**
   Its spanning-forest invariant (each root's single depth-0 row, no repeated node, every other
@@ -170,6 +189,10 @@ Each of these would be a change no test could observe, so none of them is made:
   unlimited walk always reaches its whole connected component regardless of which forest was
   built. `test/sql/spanning_tree.test` is the hand-written coverage for a bound's own behaviour
   (`max_depth`/`distance` limits, negative-value errors, defaults).
+- **`trsp/trspVia.pg` and `trsp/trspVia_withPoints.pg` q9 are skipped**
+  (`test/pgrouting_skip.json`): their final `SELECT`, a `UNION` feeding a `LEFT JOIN`, has no
+  `ORDER BY`, so its row order is not defined; this build returns upstream's own rows, just in
+  another order.
 
 ## Open decision
 

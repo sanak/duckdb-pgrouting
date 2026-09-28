@@ -24,6 +24,24 @@
       "reason": "heap_paths also returns the candidates left on Yen's heap, and which candidates are left depends on the order the edges are fetched in (the same query with the edges in reverse id order returns another set), so upstream's own answer is one of several; the first K paths still match upstream, and test/sql/ksp.test covers heap_paths"
     }
   },
+  "trsp/trspVia.pg": {
+    "q9": {
+      "reason": "a UNION without ORDER BY has no defined row order"
+    }
+  },
+  "trsp/trspVia_withPoints.pg": {
+    "q14": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    },
+    "q9": {
+      "reason": "a UNION without ORDER BY has no defined row order"
+    }
+  },
+  "trsp/trsp_withPoints.pg": {
+    "q9": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    }
+  },
   "utilities/extractVertices.pg": {
     "q3.3": {
       "reason": "reads vertices_table, which block q3.2 creates with SELECT ... INTO; the generator runs only blocks that return a result set, so that table never exists here"
