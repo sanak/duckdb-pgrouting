@@ -215,8 +215,10 @@ Each of these would be a change no test could observe, so none of them is made:
 - **`tsp/TSPeuclidean.pg` produces no generated test file, and `tsp/TSP.pg` only its q3.**
   `TSPeuclidean.pg` q1 reads a `vertices.geom` column the sample data does not carry and q2–q4
   read upstream's `wi29` table; `TSP.pg` q1, q2, q4 and q5 pass a scalar subquery. Besides, most
-  of those tours depend on the row order. `test/sql/tsp.test` runs the same matrices through
-  `getvariable()` and asserts what every valid tour shares; `test/sql/tsp_exec.test` and
+  of those tours depend on the row order. `test/sql/tsp.test` runs only the q1/q2 matrix
+  (`pgr_dijkstraCostMatrix` over the sample vertices other than 2, 4, 13 and 14) through
+  `getvariable()` and asserts what every valid tour over it shares; q4's six-vertex directed
+  matrix, and q5's tour of it, have no counterpart there. `test/sql/tsp_exec.test` and
   `test/sql/tsp_euclidean_exec.test` pin the tours of inputs small enough to have one answer.
 - **No test crosses a 2048-row output chunk for `pgr_TSP` or `pgr_TSPeuclidean`.** A tour that
   long has more than 2047 stops, which upstream's improvement pass would take about an hour on

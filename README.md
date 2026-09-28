@@ -117,9 +117,10 @@ Functions deliberately not ported are listed, each with its reason, in
 - **TSP tours depend on the input order.** `pgr_TSP` and `pgr_TSPeuclidean` approximate the
   shortest round trip, and which tour they find — and its total cost — depends on the order the
   inner query's rows reach the algorithm, which DuckDB does not fix (an `ORDER BY` in the inner
-  query does not either). `pgr_TSPeuclidean` without `start_id` also starts from whichever row
-  arrives first. Every answer is still a valid tour; see `docs/BACKLOG.md` for upstream's other
-  TSP behaviours this extension keeps.
+  query does not either). `pgr_TSPeuclidean` without `start_id` or `end_id` also starts from
+  whichever row arrives first (with `end_id` alone, the tour starts at `end_id`). Every answer is
+  still a valid tour; see `docs/BACKLOG.md` for upstream's other TSP behaviours this extension
+  keeps.
 - **Memory.** pgRouting's own allocations are not counted against DuckDB's `memory_limit`.
 - **A turn-restricted route re-routed over more than about ten thousand edges** can overflow a
   worker thread's stack and end the process on macOS (upstream's recursion); see

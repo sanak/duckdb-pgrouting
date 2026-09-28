@@ -281,8 +281,11 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
   release. Every public function the family adds also needs its row in
   `src/functions/function_docs.cpp`; registration throws without it. A new kind of input query adds
   a `KIND_*` constant (`input_access.hpp`), its `InputKind` specialization
-  (`src/pg_compat/include/cpp_common/get_data.hpp`) and an `INPUT_SLOTS` row
-  (`src/exec/input_slots.cpp`).
+  (`src/pg_compat/include/cpp_common/get_data.hpp`), an `INPUT_SLOTS` row
+  (`src/exec/input_slots.cpp`), and its `*_sql` row in `REQUEST_PARAMETERS`
+  (`src/exec/request_params.cpp`). A public function that takes it also needs an `ArgKind` value
+  (`src/functions/function_spec.hpp`), with its `TypeOf` case and its case in `SpecBindReplace`
+  that emits the input-row column (`src/functions/spec_functions.cpp`).
 - The order in which an input query's rows reach pgRouting is not guaranteed stable: DuckDB's
   `list()` does not preserve scan order once the scan runs on several threads, and `ORDER BY` in
   the caller's own SQL does not change that. Boost breaks an equal-cost predecessor tie by
