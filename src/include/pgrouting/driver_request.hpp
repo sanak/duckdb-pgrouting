@@ -46,6 +46,12 @@ struct DriverRequest {
 	// The K-shortest-path families (pgr_ksp, pgr_withPointsKSP); K is upstream's INTEGER.
 	int32_t k = 0;
 	bool heap_paths = false;
+	// The Via families (pgr_dijkstraVia, pgr_withPointsVia). via travels in the input row like
+	// starts.
+	std::vector<int64_t> via;
+	bool has_via = false;
+	bool strict = false;
+	bool u_turn_on_edge = true;
 	// Which driver runs the request. Each driver reads only the fields its upstream C entry passes
 	// it; only SHORTEST_PATH reads points_sql, n_goals, global, driving_side, details and which,
 	// and the other drivers that take points (DriverInfo::takes_points) also read points_sql,

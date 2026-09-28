@@ -7,6 +7,8 @@
 
 #include "driver_groups.hpp"
 
+#include "drivers/dijkstra/dijkstraVia_driver.h"
+#include "drivers/withPoints/withPointsVia_driver.h"
 #include "drivers/yen/ksp_driver.h"
 #include "drivers/yen/withPoints_ksp_driver.h"
 #include "pgrouting/withpoints_keys.hpp"
@@ -33,6 +35,20 @@ bool CallRoutesDriver(const DriverRequest &request, const DriverArrays &arrays, 
 		                     combinations, arrays.starts, arrays.ends, nullptr, nullptr,
 		                     static_cast<size_t>(request.k), request.directed, request.heap_paths,
 		                     LowerDrivingSide(request), request.details, &call.path_rows, &call.count,
+		                     &call.log, &call.notice, &call.err);
+		return true;
+	}
+	case DriverKind::DIJKSTRA_VIA:
+		pgr_do_dijkstraVia(edges, arrays.via, request.directed, request.strict, request.u_turn_on_edge,
+		                   &call.route_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::WITH_POINTS_VIA: {
+		// The same derived edge queries as WITH_POINTS_KSP; the side comes before details, strict and
+		// U_turn_on_edge in this driver's argument list.
+		const auto keys = WithPointsDerivedKeys(request.edges_sql, request.points_sql);
+		pgr_do_withPointsVia(keys.no_points.c_str(), request.points_sql.c_str(), keys.of_points.c_str(),
+		                     arrays.via, request.directed, LowerDrivingSide(request), request.details,
+		                     request.strict, request.u_turn_on_edge, &call.route_rows, &call.count,
 		                     &call.log, &call.notice, &call.err);
 		return true;
 	}

@@ -38,6 +38,8 @@ void *RowsOf(const DriverCall &call, ResultShape shape) {
 		return call.pair_rows;
 	case ResultShape::MST:
 		return call.mst_rows;
+	case ResultShape::ROUTES:
+		return call.route_rows;
 	}
 	return nullptr;
 }
@@ -57,6 +59,7 @@ bool DropWrongShapeRows(DriverCall &call, ResultShape shape) {
 	drop(call.path_rows, shape == ResultShape::PATH || shape == ResultShape::KSP);
 	drop(call.pair_rows, shape == ResultShape::PAIRS);
 	drop(call.mst_rows, shape == ResultShape::MST);
+	drop(call.route_rows, shape == ResultShape::ROUTES);
 	return wrong;
 }
 

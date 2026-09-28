@@ -48,6 +48,7 @@ void DriverResult::Release() {
 	case ResultShape::PAIRS:
 	case ResultShape::MST:
 	case ResultShape::KSP:
+	case ResultShape::ROUTES:
 		break; // flat rows
 	}
 	std::free(rows);
@@ -65,10 +66,12 @@ DriverResult RunDriver(duckdb::ClientContext &context, InputRegistry &registry, 
 	ScopedIntArray starts(request.starts);
 	ScopedIntArray ends(request.ends);
 	ScopedIntArray roots(request.roots);
+	ScopedIntArray via(request.via);
 	DriverArrays arrays;
 	arrays.starts = request.has_starts ? starts.get() : nullptr;
 	arrays.ends = request.has_ends ? ends.get() : nullptr;
 	arrays.roots = request.has_roots ? roots.get() : nullptr;
+	arrays.via = request.has_via ? via.get() : nullptr;
 
 	{
 		ScopedRoutingContext scope(context, registry);

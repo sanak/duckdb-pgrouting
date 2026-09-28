@@ -50,7 +50,9 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/cpp_common/combinations.cpp
     ${PGROUTING_DIR}/src/cpp_common/pgdata_fetchers.cpp
     ${PGROUTING_DIR}/src/cpp_common/pgdata_getters.cpp
+    ${PGROUTING_DIR}/src/cpp_common/to_postgres.cpp
     ${PGROUTING_DIR}/src/dagShortestPath/dagShortestPath_driver.cpp
+    ${PGROUTING_DIR}/src/dijkstra/dijkstraVia_driver.cpp
     ${PGROUTING_DIR}/src/dijkstra/shortestPath_driver.cpp
     ${PGROUTING_DIR}/src/driving_distance/driving_distance_driver.cpp
     ${PGROUTING_DIR}/src/driving_distance/driving_distance_withPoints_driver.cpp
@@ -58,4 +60,5 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/ksp/withPoints_ksp_driver.cpp
     ${PGROUTING_DIR}/src/spanningTree/kruskal_driver.cpp
     ${PGROUTING_DIR}/src/spanningTree/prim_driver.cpp
-    ${PGROUTING_DIR}/src/traversal/depthFirstSearch_driver.cpp)
+    ${PGROUTING_DIR}/src/traversal/depthFirstSearch_driver.cpp
+    ${PGROUTING_DIR}/src/withPoints/withPointsVia_driver.cpp)

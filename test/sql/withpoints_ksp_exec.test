@@ -37,7 +37,7 @@ WHERE edge = -1 ORDER BY 1;
 1	5.2
 2	5.2
 
-# Review focus 5: the side in upper case is lowercased first, as estimate_drivingSide does.
+# The side in upper case is lowercased first, as estimate_drivingSide does.
 query I
 SELECT count(DISTINCT path_id) FROM _pgr_exec(
   (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [-2]::BIGINT[] AS ends, points, edges_of_points,
@@ -91,7 +91,7 @@ WHERE node = -6;
 ----
 2
 
-# Review focus 1: K = 0 finds nothing, without an error.
+# K = 0 finds nothing, without an error.
 query I
 SELECT count(*) FROM _pgr_exec(
   (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [-2]::BIGINT[] AS ends, points, edges_of_points,

@@ -63,8 +63,8 @@ GROUP BY ALL ORDER BY 1;
 3	6	17	5	4
 4	6	17	5	4
 
-# Upstream's q5, the combinations form. Review focus 4: 5 -> 6 and 6 -> 5 have one loopless path
-# each, so K = 2 returns one. Review focus 3: 6 -> 14 has none and leaves no gap in path_id.
+# Upstream's q5, the combinations form. 5 -> 6 and 6 -> 5 have one loopless path
+# each, so K = 2 returns one. 6 -> 14 has none and leaves no gap in path_id.
 query IIIIR
 SELECT path_id, start_vid, end_vid, count(*), max(agg_cost)
 FROM _pgr_exec(
@@ -92,7 +92,7 @@ FROM _pgr_exec(
 ----
 true
 
-# Review focus 1: K = 0 runs the driver and finds nothing.
+# K = 0 runs the driver and finds nothing.
 query I
 SELECT count(*)
 FROM _pgr_exec(

@@ -1,0 +1,181 @@
+# name: test/sql/via_exec.test
+# description: _pgr_exec with the two Via drivers: the ROUTES shape, the via slot, strict, U-turns
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE pois AS SELECT pid, edge_id, side, fraction FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE ev AS
+SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges;
+
+# The shape's columns: upstream's _pgr_dijkstraVia, route_agg_cost last.
+query TTTTTTTTTT
+SELECT typeof(seq), typeof(path_id), typeof(path_seq), typeof(start_vid), typeof(end_vid),
+       typeof(node), typeof(edge), typeof(cost), typeof(agg_cost), typeof(route_agg_cost)
+FROM _pgr_exec((SELECT edges, [5, 7, 1, 8, 15]::BIGINT[] AS via FROM ev),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via')
+LIMIT 1;
+----
+INTEGER	INTEGER	INTEGER	BIGINT	BIGINT	BIGINT	BIGINT	DOUBLE	DOUBLE	DOUBLE
+
+# Upstream's q1: four legs; each closing row carries the leg's cost and the route's cost so far.
+query IIIRR
+SELECT path_id, start_vid, end_vid, agg_cost, route_agg_cost
+FROM _pgr_exec((SELECT edges, [5, 7, 1, 8, 15]::BIGINT[] AS via FROM ev),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via')
+WHERE edge < 0 ORDER BY seq;
+----
+1	5	7	2	2
+2	7	1	2	4
+3	1	8	3	7
+4	8	15	4	11
+
+# seq numbers the rows, path_seq starts every leg at 1 (the driver's is zero-based), and only the
+# route's last row carries edge -2.
+query IIIII
+SELECT count(*), max(seq), count(*) FILTER (WHERE path_seq = 1),
+       count(*) FILTER (WHERE edge = -2), max(seq) FILTER (WHERE edge = -2)
+FROM _pgr_exec((SELECT edges, [5, 7, 1, 8, 15]::BIGINT[] AS via FROM ev),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via');
+----
+15	15	4	1	15
+
+# U-turns: after arriving at 7 over edge 4, U_turn_on_edge = false removes edge 4 out of 7 for the
+# next leg, so 7 -> 6 goes round through 11, 16, 15 and 10 (cost 5) instead of straight back (1).
+query IR
+SELECT path_id, agg_cost
+FROM _pgr_exec((SELECT edges, [6, 7, 6]::BIGINT[] AS via FROM ev),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via',
+  u_turn_on_edge := true)
+WHERE edge < 0 ORDER BY seq;
+----
+1	1
+2	1
+
+query IR
+SELECT path_id, agg_cost
+FROM _pgr_exec((SELECT edges, [6, 7, 6]::BIGINT[] AS via FROM ev),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via',
+  u_turn_on_edge := false)
+WHERE edge < 0 ORDER BY seq;
+----
+1	1
+2	5
+
+# 4 cannot be reached from 7. Without strict, the other legs come back and the
+# missing leg's path_id (2) is skipped; the route cost runs on through the legs that exist.
+query IIIRR
+SELECT path_id, start_vid, end_vid, agg_cost, route_agg_cost
+FROM _pgr_exec((SELECT edges, [5, 7, 4, 2]::BIGINT[] AS via FROM ev),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via')
+WHERE edge < 0 ORDER BY seq;
+----
+1	5	7	2	2
+3	4	2	1	3
+
+query I
+SELECT count(*)
+FROM _pgr_exec((SELECT edges, [5, 7, 4, 2]::BIGINT[] AS via FROM ev),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via',
+  strict := true);
+----
+0
+
+# One vertex is no leg at all; no vertex is upstream's get_intArray(..., false) error.
+query I
+SELECT count(*)
+FROM _pgr_exec((SELECT edges, [5]::BIGINT[] AS via FROM ev),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via');
+----
+0
+
+statement error
+SELECT count(*)
+FROM _pgr_exec((SELECT edges, []::BIGINT[] AS via FROM ev),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via');
+----
+No elements found
+
+# The via column must be an id list, like starts, ends and roots.
+statement error
+SELECT * FROM _pgr_exec((SELECT edges, 'x' AS via FROM ev),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via');
+----
+_pgr_exec: column 'via' must be LIST(BIGINT)
+
+# More rows than one DuckDB vector: 1 -> 1500 -> 3001 along a chain is 1500 + 1502 rows. seq and
+# the leg-relative path_seq continue across every 2048-row chunk.
+statement ok
+CREATE TABLE long_chain AS
+SELECT i AS id, i AS source, i + 1 AS target, 1.0::DOUBLE AS cost FROM range(1, 3001) t(i);
+
+query IIIIIR
+SELECT count(*), count(DISTINCT seq), max(seq), count(*) FILTER (WHERE path_id = 2),
+       count(*) FILTER (WHERE path_seq <> node - CASE WHEN path_id = 1 THEN 0 ELSE 1499 END),
+       max(route_agg_cost)
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM long_chain) e) AS edges, [1, 1500, 3001]::BIGINT[] AS via),
+  edges_sql := 'SELECT * FROM long_chain', driver := 'dijkstra_via');
+----
+3002	3002	3002	1502	0	3000
+
+# pgr_withPointsVia's driver: upstream's q1 (the side-less signature passes 'r' when directed).
+statement ok
+CREATE TABLE wpv_common AS
+SELECT (SELECT list(p) FROM (SELECT pid, edge_id, side, fraction FROM pois) p) AS points,
+       (SELECT list(e) FROM (SELECT DISTINCT edges.* FROM edges JOIN pois ON (id = edge_id)) e)
+         AS edges_of_points,
+       (SELECT list(e) FROM (SELECT * FROM edges
+                             WHERE NOT EXISTS (SELECT 1 FROM pois WHERE id = edge_id)) e)
+         AS edges_no_points;
+
+query IIIRR
+SELECT path_id, start_vid, end_vid, round(agg_cost, 6), round(route_agg_cost, 6) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1, 7, -3, 16, 15]::BIGINT[] AS via, points, edges_of_points, edges_no_points
+     FROM wpv_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, side, fraction FROM pois',
+  driver := 'with_points_via', driving_side := 'r', directed := true, details := false)
+WHERE edge < 0 ORDER BY seq;
+----
+1	-1	7	2.4	2.4
+2	7	-3	1.6	4
+3	-3	16	2.4	6.4
+4	16	15	1	7.4
+
+# The side in upper case; the check is estimate_drivingSide's (src/withPoints/withPointsVia.c).
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1, 7, -3, 16, 15]::BIGINT[] AS via, points, edges_of_points, edges_no_points
+     FROM wpv_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, side, fraction FROM pois',
+  driver := 'with_points_via', driving_side := 'R', directed := true, details := false);
+----
+12
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1, 7]::BIGINT[] AS via, points, edges_of_points, edges_no_points
+     FROM wpv_common),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  points_sql := 'SELECT pid, edge_id, side, fraction FROM pois',
+  driver := 'with_points_via', driving_side := 'x');
+----
+Invalid Input Error: Invalid value of 'driving side'
+HINT: Valid value are 'r', 'l', 'b'
+
+# STRICT: nothing is checked when an argument is NULL.
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), edges_sql := '', points_sql := 'SELECT 1',
+  driver := 'with_points_via', driving_side := 'x', null_input := true);
+----
+0

@@ -13,6 +13,7 @@
 struct II_t_rt;
 struct MST_rt;
 struct Path_rt;
+struct Routes_t;
 
 namespace duckdb_pgrouting {
 
@@ -22,6 +23,7 @@ struct DriverCall {
 	Path_rt *path_rows = nullptr;
 	II_t_rt *pair_rows = nullptr;
 	MST_rt *mst_rows = nullptr;
+	Routes_t *route_rows = nullptr;
 	std::size_t count = 0;
 	char *log = nullptr;
 	char *notice = nullptr;

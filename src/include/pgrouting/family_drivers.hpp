@@ -21,6 +21,7 @@ struct DriverArrays {
 	ArrayType *starts = nullptr;
 	ArrayType *ends = nullptr;
 	ArrayType *roots = nullptr;
+	ArrayType *via = nullptr;
 };
 
 struct DriverOutput {
