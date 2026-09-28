@@ -30,6 +30,7 @@ const RequestParameter REQUEST_PARAMETERS[] = {
     {"points_sql", &DriverRequest::points_sql},
     {"combinations_sql", &DriverRequest::combinations_sql},
     {"restrictions_sql", &DriverRequest::restrictions_sql},
+    {"matrix_sql", &DriverRequest::matrix_sql},
     {"directed", &DriverRequest::directed},
     {"only_cost", &DriverRequest::only_cost},
     {"normal", &DriverRequest::normal},
@@ -50,6 +51,8 @@ const RequestParameter REQUEST_PARAMETERS[] = {
     {"stop_on_first", &DriverRequest::stop_on_first},
     {"strict", &DriverRequest::strict},
     {"u_turn_on_edge", &DriverRequest::u_turn_on_edge},
+    {"start_id", &DriverRequest::start_id},
+    {"end_id", &DriverRequest::end_id},
     {"driver", &DriverRequest::driver},
 };
 

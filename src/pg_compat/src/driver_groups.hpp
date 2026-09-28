@@ -14,6 +14,7 @@ struct II_t_rt;
 struct MST_rt;
 struct Path_rt;
 struct Routes_t;
+struct TSP_tour_rt;
 
 namespace duckdb_pgrouting {
 
@@ -24,6 +25,7 @@ struct DriverCall {
 	II_t_rt *pair_rows = nullptr;
 	MST_rt *mst_rows = nullptr;
 	Routes_t *route_rows = nullptr;
+	TSP_tour_rt *tour_rows = nullptr;
 	std::size_t count = 0;
 	char *log = nullptr;
 	char *notice = nullptr;
@@ -48,5 +50,6 @@ bool CallGraphDriver(const DriverRequest &request, const DriverArrays &arrays, D
 bool CallTreeDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallRoutesDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallTrspDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
+bool CallTspDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 
 } // namespace duckdb_pgrouting

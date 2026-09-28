@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "c_types/ii_t_rt.h"
+#include "c_types/iid_t_rt.h"
 #include "cpp_common/edge_t.hpp"
 #include "cpp_common/edge_xy_t.hpp"
 #include "cpp_common/get_check_data.hpp"
@@ -51,6 +52,10 @@ template <> inline std::string InputKind<Point_on_edge_t>() {
 }
 template <> inline std::string InputKind<Restriction_t>() {
 	return duckdb_pgrouting::KIND_RESTRICTIONS;
+}
+// pgr_TSP's cost matrix (get_matrixRows).
+template <> inline std::string InputKind<IID_t_rt>() {
+	return duckdb_pgrouting::KIND_MATRIX;
 }
 
 } // namespace detail

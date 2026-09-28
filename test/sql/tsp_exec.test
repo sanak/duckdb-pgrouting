@@ -1,0 +1,235 @@
+# name: test/sql/tsp_exec.test
+# description: _pgr_exec with the TSP driver: the matrix input, start_id and end_id, TSP_TOUR rows
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+# The undirected cost matrix of upstream's pgr_TSP documentation (pgr_withPointsCostMatrix over the
+# vertices 7, 10, 11 and the points -1, -6), rounded to one decimal. These rows give the same tour
+# whatever order they arrive in; the tours of larger matrices depend on that order
+# (test/sql/tsp.test).
+statement ok
+CREATE TABLE tsp_matrix AS SELECT * FROM (VALUES
+  (-6, -1, 1.3), (-6, 7, 0.3), (-6, 10, 4.3), (-6, 11, 1.3),
+  (-1, -6, 1.3), (-1, 7, 1.6), (-1, 10, 5.6), (-1, 11, 2.6),
+  (7, -6, 0.3), (7, -1, 1.6), (7, 10, 4.0), (7, 11, 1.0),
+  (10, -6, 1.7), (10, -1, 1.6), (10, 7, 2.0), (10, 11, 1.0),
+  (11, -6, 1.3), (11, -1, 2.6), (11, 7, 1.0), (11, 10, 3.0)) AS m(start_vid, end_vid, agg_cost);
+
+statement ok
+CREATE TABLE mx AS SELECT (SELECT list(m) FROM (SELECT start_vid, end_vid, agg_cost FROM tsp_matrix) m) AS matrix;
+
+statement ok
+CREATE MACRO m() AS 'SELECT start_vid, end_vid, agg_cost FROM tsp_matrix';
+
+# The TSP_TOUR shape, as upstream's _pgr_TSP_v4 declares it.
+query TTTT
+SELECT typeof(seq), typeof(node), typeof(cost), typeof(agg_cost)
+FROM _pgr_exec((SELECT NULL AS edges, matrix FROM mx), matrix_sql := m(), driver := 'tsp')
+LIMIT 1;
+----
+INTEGER	BIGINT	DOUBLE	DOUBLE
+
+query T
+SELECT column_name FROM (DESCRIBE SELECT * FROM _pgr_exec((SELECT NULL AS edges, matrix FROM mx),
+  matrix_sql := m(), driver := 'tsp'));
+----
+seq
+node
+cost
+agg_cost
+
+# Upstream's q3: start 7, end 11 visited last before the return to 7.
+query IIRR
+SELECT seq, node, round(cost, 4), round(agg_cost, 4)
+FROM _pgr_exec((SELECT NULL AS edges, matrix FROM mx), matrix_sql := m(), driver := 'tsp',
+  start_id := 7, end_id := 11)
+ORDER BY seq;
+----
+1	7	0	0
+2	-6	0.3	0.3
+3	-1	1.3	1.6
+4	10	1.6	3.2
+5	11	1	4.2
+6	7	1	5.2
+
+# No start: the tour starts at the smallest id. end_id alone becomes the start; start_id = end_id
+# is one start.
+query TTR
+SELECT 'none', string_agg(node::VARCHAR, ' ' ORDER BY seq), round(max(agg_cost), 4)
+FROM _pgr_exec((SELECT NULL AS edges, matrix FROM mx), matrix_sql := m(), driver := 'tsp')
+UNION ALL
+SELECT 'start 7', string_agg(node::VARCHAR, ' ' ORDER BY seq), round(max(agg_cost), 4)
+FROM _pgr_exec((SELECT NULL AS edges, matrix FROM mx), matrix_sql := m(), driver := 'tsp', start_id := 7)
+UNION ALL
+SELECT 'start 7 end 7', string_agg(node::VARCHAR, ' ' ORDER BY seq), round(max(agg_cost), 4)
+FROM _pgr_exec((SELECT NULL AS edges, matrix FROM mx), matrix_sql := m(), driver := 'tsp',
+  start_id := 7, end_id := 7)
+UNION ALL
+SELECT 'end 11', string_agg(node::VARCHAR, ' ' ORDER BY seq), round(max(agg_cost), 4)
+FROM _pgr_exec((SELECT NULL AS edges, matrix FROM mx), matrix_sql := m(), driver := 'tsp', end_id := 11)
+UNION ALL
+SELECT 'start 10 end -6', string_agg(node::VARCHAR, ' ' ORDER BY seq), round(max(agg_cost), 4)
+FROM _pgr_exec((SELECT NULL AS edges, matrix FROM mx), matrix_sql := m(), driver := 'tsp',
+  start_id := 10, end_id := -6)
+ORDER BY 1;
+----
+end 11	11 7 -6 -1 10 11	5.2
+none	-6 -1 10 11 7 -6	5.2
+start 10 end -6	10 11 7 -1 -6 10	6.6
+start 7	7 11 10 -1 -6 7	5.2
+start 7 end 7	7 11 10 -1 -6 7	5.2
+
+# Upstream's graph rules: a pair keeps its cheaper direction; self-loops and negative costs are
+# dropped; a disconnected matrix is toured only within the start's component, silently.
+query TTR
+SELECT 'pair', string_agg(node::VARCHAR, ' ' ORDER BY seq), max(agg_cost)
+FROM _pgr_exec((SELECT NULL AS edges,
+  (SELECT list(r) FROM (SELECT * FROM (VALUES (1, 2, 5.0)) AS t(start_vid, end_vid, agg_cost)) r) AS matrix),
+  matrix_sql := 'pair', driver := 'tsp')
+UNION ALL
+SELECT 'cheaper direction', string_agg(node::VARCHAR, ' ' ORDER BY seq), max(agg_cost)
+FROM _pgr_exec((SELECT NULL AS edges,
+  (SELECT list(r) FROM (SELECT * FROM (VALUES (1, 2, 1.0), (2, 1, 3.0), (2, 3, 2.0), (3, 1, 4.0))
+                        AS t(start_vid, end_vid, agg_cost)) r) AS matrix),
+  matrix_sql := 'cheaper direction', driver := 'tsp')
+UNION ALL
+SELECT 'self-loop only', string_agg(node::VARCHAR, ' ' ORDER BY seq), max(agg_cost)
+FROM _pgr_exec((SELECT NULL AS edges,
+  (SELECT list(r) FROM (SELECT * FROM (VALUES (1, 1, 0.0)) AS t(start_vid, end_vid, agg_cost)) r) AS matrix),
+  matrix_sql := 'self-loop only', driver := 'tsp')
+UNION ALL
+SELECT 'negative only', string_agg(node::VARCHAR, ' ' ORDER BY seq), max(agg_cost)
+FROM _pgr_exec((SELECT NULL AS edges,
+  (SELECT list(r) FROM (SELECT * FROM (VALUES (1, 2, -1.0)) AS t(start_vid, end_vid, agg_cost)) r) AS matrix),
+  matrix_sql := 'negative only', driver := 'tsp')
+UNION ALL
+SELECT 'disconnected', string_agg(node::VARCHAR, ' ' ORDER BY seq), max(agg_cost)
+FROM _pgr_exec((SELECT NULL AS edges,
+  (SELECT list(r) FROM (SELECT * FROM (VALUES (1, 2, 1.0), (3, 4, 1.0)) AS t(start_vid, end_vid, agg_cost)) r) AS matrix),
+  matrix_sql := 'disconnected', driver := 'tsp')
+UNION ALL
+SELECT 'disconnected from 3', string_agg(node::VARCHAR, ' ' ORDER BY seq), max(agg_cost)
+FROM _pgr_exec((SELECT NULL AS edges,
+  (SELECT list(r) FROM (SELECT * FROM (VALUES (1, 2, 1.0), (3, 4, 1.0)) AS t(start_vid, end_vid, agg_cost)) r) AS matrix),
+  matrix_sql := 'disconnected', driver := 'tsp', start_id := 3)
+ORDER BY 1;
+----
+cheaper direction	1 2 3 1	7
+disconnected	1 2 1	2
+disconnected from 3	3 4 3	2
+negative only	1 1	0
+pair	1 2 1	10
+self-loop only	1 1	0
+
+# Two consecutive stops without a direct entry: upstream's get_min_cost sums the predecessors'
+# distances rather than the edge weights, so 1 -> 3 over 1-2 (1) and 2-3 (10) reports 1, not 11.
+# With start 1 and end 3, the return 3 -> 1 runs through upstream's temporary vertex and costs 0.
+# Reproduced as upstream answers.
+query IIR
+SELECT seq, node, cost
+FROM _pgr_exec((SELECT NULL AS edges,
+  (SELECT list(r) FROM (SELECT * FROM (VALUES (1, 2, 1.0), (2, 3, 10.0)) AS t(start_vid, end_vid, agg_cost)) r) AS matrix),
+  matrix_sql := 'path', driver := 'tsp')
+ORDER BY seq;
+----
+1	1	0
+2	3	1
+3	2	10
+4	1	1
+
+query IIR
+SELECT seq, node, cost
+FROM _pgr_exec((SELECT NULL AS edges,
+  (SELECT list(r) FROM (SELECT * FROM (VALUES (1, 2, 1.0), (2, 3, 10.0)) AS t(start_vid, end_vid, agg_cost)) r) AS matrix),
+  matrix_sql := 'path', driver := 'tsp', start_id := 1, end_id := 3)
+ORDER BY seq;
+----
+1	1	0
+2	2	1
+3	3	10
+4	1	0
+
+# Vertex 0: with both start_id and end_id given, upstream's temporary vertex takes id 0, so a real
+# vertex 0 drops out of the tour. Without them it is toured like any other.
+query TT
+SELECT 'start 1 end 2', string_agg(node::VARCHAR, ' ' ORDER BY seq)
+FROM _pgr_exec((SELECT NULL AS edges,
+  (SELECT list(r) FROM (SELECT * FROM (VALUES (0, 1, 1.0), (0, 2, 1.0), (1, 2, 1.0), (0, 3, 1.0), (1, 3, 1.0),
+                        (2, 3, 1.0)) AS t(start_vid, end_vid, agg_cost)) r) AS matrix),
+  matrix_sql := 'k4', driver := 'tsp', start_id := 1, end_id := 2)
+UNION ALL
+SELECT 'none', string_agg(node::VARCHAR, ' ' ORDER BY seq)
+FROM _pgr_exec((SELECT NULL AS edges,
+  (SELECT list(r) FROM (SELECT * FROM (VALUES (0, 1, 1.0), (0, 2, 1.0), (1, 2, 1.0), (0, 3, 1.0), (1, 3, 1.0),
+                        (2, 3, 1.0)) AS t(start_vid, end_vid, agg_cost)) r) AS matrix),
+  matrix_sql := 'k4', driver := 'tsp')
+ORDER BY 1;
+----
+none	0 1 2 3 0
+start 1 end 2	1 3 2 1
+
+# An id that is not in the data is upstream's error ...
+statement error
+SELECT * FROM _pgr_exec((SELECT NULL AS edges, matrix FROM mx), matrix_sql := m(), driver := 'tsp', start_id := 99);
+----
+Parameter 'start_id' do not exist on the data
+
+statement error
+SELECT * FROM _pgr_exec((SELECT NULL AS edges, matrix FROM mx), matrix_sql := m(), driver := 'tsp', end_id := 99,
+  start_id := 7);
+----
+Parameter 'end_id' do not exist on the data
+
+# ... but an empty matrix returns nothing before any id is checked.
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT NULL AS edges, (SELECT list(r) FROM (SELECT start_vid, end_vid, agg_cost FROM tsp_matrix WHERE start_vid > 100) r) AS matrix),
+  matrix_sql := 'empty', driver := 'tsp', start_id := 99);
+----
+0
+
+# Upstream's column checks on the matrix query (get_matrixRows: start_vid, end_vid ANY-INTEGER,
+# agg_cost ANY-NUMERICAL, all required).
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, (SELECT list(r) FROM (SELECT start_vid, end_vid FROM tsp_matrix) r) AS matrix),
+  matrix_sql := 'no agg_cost', driver := 'tsp');
+----
+Column 'agg_cost' not Found
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges,
+          (SELECT list(r) FROM (SELECT start_vid::VARCHAR AS start_vid, end_vid, agg_cost FROM tsp_matrix) r) AS matrix),
+  matrix_sql := 'text start_vid', driver := 'tsp');
+----
+Unexpected Column 'start_vid' type. Expected ANY-INTEGER
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges,
+          (SELECT list(r) FROM (SELECT start_vid, end_vid, agg_cost::DOUBLE AS agg_cost FROM tsp_matrix
+                                UNION ALL SELECT 1, 2, NULL::DOUBLE) r) AS matrix),
+  matrix_sql := 'NULL agg_cost', driver := 'tsp');
+----
+Unexpected Null value in column agg_cost
+
+# The input row's own shape check, and a TSP call whose row carries no matrix at all.
+statement error
+SELECT * FROM _pgr_exec((SELECT NULL AS edges, 'x' AS matrix), matrix_sql := 'x', driver := 'tsp');
+----
+_pgr_exec: column 'matrix' must be LIST(STRUCT)
+
+statement error
+SELECT * FROM _pgr_exec((SELECT NULL AS edges), matrix_sql := m(), driver := 'tsp');
+----
+no 'matrix' input registered
+
+# STRICT: a NULL argument means the function is never entered.
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), matrix_sql := '', driver := 'tsp', null_input := true);
+----
+0

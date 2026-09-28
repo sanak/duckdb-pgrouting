@@ -19,6 +19,8 @@ struct DriverRequest {
 	std::string combinations_sql;
 	// The turn-restriction families' restrictions query (cost, path).
 	std::string restrictions_sql;
+	// pgr_TSP's cost-matrix query (start_vid, end_vid, agg_cost). The TSP families read no edges_sql.
+	std::string matrix_sql;
 	std::vector<int64_t> starts;
 	std::vector<int64_t> ends;
 	bool has_starts = false;
@@ -57,6 +59,10 @@ struct DriverRequest {
 	bool has_via = false;
 	bool strict = false;
 	bool u_turn_on_edge = true;
+	// The TSP families: the tour's first vertex, and the vertex visited last before returning to it.
+	// 0 means "not given", upstream's default.
+	int64_t start_id = 0;
+	int64_t end_id = 0;
 	// Which driver runs the request. Each driver reads only the fields its upstream C entry passes
 	// it; only SHORTEST_PATH reads points_sql, n_goals, global, driving_side, details and which,
 	// and the other drivers that take points (DriverInfo::takes_points) also read points_sql,

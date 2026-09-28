@@ -9,6 +9,7 @@
 #include "c_types/mst_rt.h"
 #include "c_types/path_rt.h"
 #include "c_types/routes_t.h"
+#include "c_types/tsp_tour_rt.h"
 
 namespace duckdb {
 
@@ -153,6 +154,23 @@ void EmitRoutes(const DriverResult &result, EmitState &state, idx_t n, DataChunk
 	}
 }
 
+// Upstream's TSP C entries (src/tsp/TSP.c, src/tsp/euclideanTSP.c) number the rows from 1 and pass
+// node, cost and agg_cost through.
+void EmitTspTour(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<TSP_tour_rt>();
+	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
+	auto node = FlatVector::GetData<int64_t>(output.data[1]);
+	auto cost = FlatVector::GetData<double>(output.data[2]);
+	auto agg_cost = FlatVector::GetData<double>(output.data[3]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		seq[i] = NumericCast<int32_t>(k + 1);
+		node[i] = rows[k].node;
+		cost[i] = rows[k].cost;
+		agg_cost[i] = rows[k].agg_cost;
+	}
+}
+
 } // namespace
 
 void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
@@ -186,6 +204,10 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		names = {"seq",  "path_id", "path_seq", "start_vid", "end_vid",
 		         "node", "edge",    "cost",     "agg_cost",  "route_agg_cost"};
 		return;
+	case ResultShape::TSP_TOUR:
+		types = {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
+		names = {"seq", "node", "cost", "agg_cost"};
+		return;
 	}
 	throw InternalException("pgrouting: unhandled ResultShape");
 }
@@ -209,6 +231,9 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::ROUTES:
 		EmitRoutes(result, state, n, output);
+		break;
+	case ResultShape::TSP_TOUR:
+		EmitTspTour(result, state, n, output);
 		break;
 	}
 	state.offset += n;

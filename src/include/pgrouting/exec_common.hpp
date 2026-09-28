@@ -24,7 +24,7 @@ public:
 	DriverResult &operator=(const DriverResult &) = delete;
 
 	// The rows as the upstream struct `shape` names: Path_rt for PATH and KSP, II_t_rt for PAIRS,
-	// MST_rt for MST, Routes_t for ROUTES.
+	// MST_rt for MST, Routes_t for ROUTES, TSP_tour_rt for TSP_TOUR.
 	template <class T>
 	const T *Rows() const {
 		return static_cast<const T *>(rows);
