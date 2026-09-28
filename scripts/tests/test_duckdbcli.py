@@ -18,6 +18,20 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 BINARY = REPO / "build/release/duckdb"
 
 
+class TestNonFiniteJson(unittest.TestCase):
+    def test_bare_non_finite_numbers_become_python_json_spellings(self):
+        self.assertEqual('[{"a":Infinity,"b":-Infinity,"c":NaN,"d":[1.5, Infinity]}]',
+                         duckdbcli.json_with_non_finite('[{"a":inf,"b":-inf,"c":nan,"d":[1.5, inf]}]'))
+
+    def test_strings_are_left_alone(self):
+        text = '[{"s":"inf","t":"x\\"inf nan","u":"-inf"}]'
+        self.assertEqual(text, duckdbcli.json_with_non_finite(text))
+
+    def test_words_that_merely_contain_inf_are_left_alone(self):
+        text = '[{"info":1,"nano":2}]'
+        self.assertEqual(text, duckdbcli.json_with_non_finite(text))
+
+
 @unittest.skipUnless(BINARY.exists(), "build/release/duckdb not built")
 class TestDuckDB(unittest.TestCase):
     def setUp(self):
@@ -47,6 +61,10 @@ class TestDuckDB(unittest.TestCase):
             "SELECT count(*) AS n FROM duckdb_functions() WHERE tags['ext'] = 'pgrouting'"
         ).rows
         self.assertGreater(rows[0][0], 0)
+
+    def test_reads_non_finite_doubles(self):
+        result = self.db.query("SELECT 'inf'::DOUBLE AS a, '-inf'::DOUBLE AS b, 'inf' AS s")
+        self.assertEqual([[float("inf"), float("-inf"), "inf"]], result.rows)
 
     def test_script_returns_everything_it_printed(self):
         out = self.db.script(".print hello\nSELECT 42 AS answer;\n")

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from typing import Any, List, Optional, Sequence, Tuple
@@ -19,6 +20,17 @@ DEFAULT_BINARY = "build/release/duckdb"
 # One query against the sample fixtures takes well under a second; a hung binary must fail the
 # run (and CI) instead of stalling it until the job's own limit.
 TIMEOUT_SECONDS = 120
+
+# DuckDB's JSON mode writes a non-finite DOUBLE as a bare inf, -inf or nan, which is not JSON;
+# Python's json module reads Infinity, -Infinity and NaN instead. A token is rewritten only outside
+# a string and only when it stands alone (not inside a word such as "info").
+_NON_FINITE_RE = re.compile(r'("(?:[^"\\]|\\.)*")|(?<![\w.])(-?inf|nan)(?![\w.])')
+_NON_FINITE = {"inf": "Infinity", "-inf": "-Infinity", "nan": "NaN"}
+
+
+def json_with_non_finite(text: str) -> str:
+    """``text`` with DuckDB's bare non-finite numbers respelled for ``json.loads``."""
+    return _NON_FINITE_RE.sub(lambda m: m.group(1) or _NON_FINITE[m.group(2)], text)
 
 
 class DuckDBError(RuntimeError):
@@ -71,7 +83,7 @@ class DuckDB:
         if not out:
             return []
         try:
-            return json.loads(out)
+            return json.loads(json_with_non_finite(out))
         except json.JSONDecodeError as exc:
             raise DuckDBError("not JSON: {}\n{}".format(out[:200], exc))
 

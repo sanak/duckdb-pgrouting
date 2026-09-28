@@ -80,6 +80,9 @@ class TestCoerce(unittest.TestCase):
         # (e.g. "  7" for a wide column); coerce() knows the type and strips the rest of it.
         self.assertEqual(7, gen.coerce("  7", "I"))
 
+    def test_infinity_cells_read_as_floats(self):
+        self.assertEqual(float("inf"), gen.coerce("Infinity", "R"))
+
 
 class TestActual(unittest.TestCase):
     def test_leaves_a_value_alone_when_no_page_setting_is_given(self):
@@ -167,6 +170,18 @@ class TestExpectedCells(unittest.TestCase):
 
         table = pgparse.AlignedTable(["i"], [["  7"]], 1)
         self.assertEqual([["7"]], gen.expected_cells(table, "I"))
+
+    def test_non_finite_numbers_are_written_as_duckdb_prints_them(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["r"], [["Infinity"], ["-Infinity"], ["NaN"], ["1.5"]], 4)
+        self.assertEqual([["inf"], ["-inf"], ["nan"], ["1.5"]], gen.expected_cells(table, "R"))
+
+    def test_infinity_in_a_text_column_is_untouched(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["s"], [["Infinity"]], 1)
+        self.assertEqual([["Infinity"]], gen.expected_cells(table, "T"))
 
 
 class TestRender(unittest.TestCase):
@@ -404,6 +419,11 @@ class TestKspTieClassification(unittest.TestCase):
         sql = self.SQL.replace("pgr_KSP", "pgr_dijkstraVia")
         self.assertEqual("tie", gen.classify(self._table(self.UPSTREAM), self._result(self.OTHER),
                                              self.DIRECTIVE, None, sql))
+
+    def test_turnrestrictedpath_is_guarded_too(self):
+        sql = self.SQL.replace("pgr_KSP", "pgr_turnRestrictedPath")
+        self.assertEqual("defect", gen.classify(self._table(self.UPSTREAM), self._result(self.OTHER),
+                                                self.DIRECTIVE, None, sql))
 
 
 class TestForestCompanion(unittest.TestCase):

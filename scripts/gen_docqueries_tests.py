@@ -47,11 +47,12 @@ ROUTE_COLUMNS = ("node", "edge")
 TREE_TIE_FUNCTIONS = frozenset({"pgr_drivingdistance", "pgr_withpointsdd"})
 TREE_TIE_COLUMNS = ("start_vid", "node", "agg_cost")
 
-# K-shortest-path results: which K of several equal-cost paths come back depends on the order in
-# which Yen's algorithm explores them, and the per-endpoint row count and maximum cost that settle
-# a route tie cannot see that choice. A block calling one of these that differs from upstream
-# stays a defect until a person decides an invariant for it.
-KSP_FUNCTIONS = frozenset({"pgr_ksp", "pgr_withpointsksp"})
+# K-shortest-path results (pgr_turnRestrictedPath runs Yen's algorithm too): which K of several
+# equal-cost paths come back depends on the order in which Yen's algorithm explores them, and the
+# per-endpoint row count and maximum cost that settle a route tie cannot see that choice. A block
+# calling one of these that differs from upstream stays a defect until a person decides an
+# invariant for it.
+KSP_FUNCTIONS = frozenset({"pgr_ksp", "pgr_withpointsksp", "pgr_turnrestrictedpath"})
 
 # Kruskal/Prim results: which minimum spanning forest (or which walk of one) comes back among
 # equal-cost edges is never guaranteed, unlike a route or a driving-distance tree. Boost's
@@ -690,6 +691,11 @@ def render(category: str, stem: str, items: Sequence[Item], spatial: bool = Fals
     return "".join(parts)
 
 
+# psql prints a non-finite float8 as Infinity, -Infinity or NaN; DuckDB's sqllogictest runner
+# compares against DuckDB's own spelling.
+_NON_FINITE_CELLS = {"Infinity": "inf", "-Infinity": "-inf", "NaN": "nan"}
+
+
 def expected_cells(table: pgparse.AlignedTable, directive: str) -> List[List[str]]:
     """Upstream's own cells, normalised only where sqllogictest needs it.
 
@@ -701,8 +707,9 @@ def expected_cells(table: pgparse.AlignedTable, directive: str) -> List[List[str
     place; a plain "T" cell is written out exactly as parse_aligned produced it (DuckDB's
     sqllogictest runner splits an expected row on tabs without trimming, so a leading space
     written into the generated file here survives), which is what lets a value like ' visits'
-    round-trip into the emitted test. A WKT geometry cell is written in duckdb-spatial's spelling
-    (duckdb_wkt); that respelling is the one edit made to a text value.
+    round-trip into the emitted test. A WKT geometry cell is written in duckdb-spatial's
+    spelling (duckdb_wkt), and a non-finite "R" cell in DuckDB's (``inf``); those are the only
+    respellings.
     """
     out = []
     for row in table.rows:
@@ -715,6 +722,8 @@ def expected_cells(table: pgparse.AlignedTable, directive: str) -> List[List[str
                 cells.append("true" if stripped == "t" else "false")
             elif slt_type == "T":
                 cells.append(duckdb_wkt(cell))
+            elif slt_type == "R" and stripped in _NON_FINITE_CELLS:
+                cells.append(_NON_FINITE_CELLS[stripped])
             else:
                 cells.append(stripped)
         out.append(cells)
