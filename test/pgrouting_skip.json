@@ -2,20 +2,32 @@
   "astar/aStarCostMatrix.pg": {
     "q2": {
       "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    },
+    "q3": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
     }
   },
   "bdAstar/bdAstarCostMatrix.pg": {
     "q2": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    },
+    "q3": {
       "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
     }
   },
   "bdDijkstra/bdDijkstraCostMatrix.pg": {
     "q2": {
       "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    },
+    "q3": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
     }
   },
   "dijkstra/dijkstraCostMatrix.pg": {
     "q1": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    },
+    "q2": {
       "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
     }
   },
@@ -40,6 +52,34 @@
   "trsp/trsp_withPoints.pg": {
     "q9": {
       "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    }
+  },
+  "tsp/TSP.pg": {
+    "q1": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    },
+    "q2": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    },
+    "q4": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    },
+    "q5": {
+      "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
+    }
+  },
+  "tsp/TSPeuclidean.pg": {
+    "q1": {
+      "reason": "reads vertices.geom through ST_X and ST_Y; the sample-data vertices table carries x and y and no geometry column, and test/sql/tsp.test tours those coordinates instead"
+    },
+    "q2": {
+      "reason": "reads wi29, the TSPLIB table upstream's docqueries/tsp/wi29.pg creates, which the sample-data fixtures do not include"
+    },
+    "q3": {
+      "reason": "reads wi29, the TSPLIB table upstream's docqueries/tsp/wi29.pg creates, which the sample-data fixtures do not include"
+    },
+    "q4": {
+      "reason": "reads wi29, the TSPLIB table upstream's docqueries/tsp/wi29.pg creates, which the sample-data fixtures do not include"
     }
   },
   "utilities/extractVertices.pg": {

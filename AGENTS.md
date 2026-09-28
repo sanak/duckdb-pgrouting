@@ -10,21 +10,23 @@ algorithms with pgRouting's own SQL API, function names included (`pgr_dijkstra`
 tag) is compiled **unmodified** and statically linked; only its PostgreSQL-specific layers are
 replaced. License: GPL-2.0-or-later.
 
-Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_dijkstraCostMatrix`,
-`pgr_dijkstraNear`, `pgr_dijkstraNearCost`, `pgr_dijkstraVia`, `pgr_withPoints`,
-`pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_withPointsVia`, `pgr_bdDijkstra`,
-`pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`, `pgr_aStar`, `pgr_aStarCost`,
-`pgr_aStarCostMatrix`, `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix`, `pgr_bellmanFord`,
-`pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch`, `pgr_drivingDistance`,
-`pgr_withPointsDD`, `pgr_ksp`, `pgr_withPointsKSP`, `pgr_turnRestrictedPath`, `pgr_trsp`,
-`pgr_trsp_withPoints`, `pgr_trspVia`, `pgr_trspVia_withPoints`, `pgr_kruskal`, `pgr_kruskalBFS`,
+Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`,
+`pgr_dijkstraCostMatrix`, `pgr_dijkstraNear`, `pgr_dijkstraNearCost`, `pgr_dijkstraVia`,
+`pgr_withPoints`, `pgr_withPointsCost`, `pgr_withPointsCostMatrix`, `pgr_withPointsVia`,
+`pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix`, `pgr_aStar`, `pgr_aStarCost`,
+`pgr_aStarCostMatrix`, `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix`,
+`pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch`,
+`pgr_drivingDistance`, `pgr_withPointsDD`, `pgr_ksp`, `pgr_withPointsKSP`,
+`pgr_turnRestrictedPath`, `pgr_trsp`, `pgr_trsp_withPoints`, `pgr_trspVia`,
+`pgr_trspVia_withPoints`, `pgr_TSP`, `pgr_TSPeuclidean`, `pgr_kruskal`, `pgr_kruskalBFS`,
 `pgr_kruskalDFS`, `pgr_kruskalDD`, `pgr_prim`, `pgr_primBFS`, `pgr_primDFS`, `pgr_primDD`,
-`pgr_breadthFirstSearch`, `pgr_depthFirstSearch`, `pgr_connectedComponents`, `pgr_extractVertices`
-and `pgr_findCloseEdges` — pgRouting's one hundred and sixty-three corresponding signatures, each
-registered once per number of its defaulted parameters passed positionally — and `pgr_version()`.
+`pgr_breadthFirstSearch`, `pgr_depthFirstSearch`, `pgr_connectedComponents`,
+`pgr_extractVertices` and `pgr_findCloseEdges` — pgRouting's one hundred and sixty-five
+corresponding signatures, each registered once per number of its defaulted parameters passed
+positionally — and `pgr_version()`.
 The `pgr_dijkstra` and `pgr_withPoints` families call pgRouting's unified `do_shortestPath` driver;
 with points given, DuckDB also materializes the two edge queries that driver derives from the edge
-and points SQL. The other twenty-two families call their own per-family `pgr_do_*` drivers through
+and points SQL. The other twenty-four families call their own per-family `pgr_do_*` drivers through
 one adapter on the pg_compat side; the two A* families also read each edge's end-point coordinates
 (`x1`, `y1`, `x2`, `y2`), and `pgr_withPointsDD` reads the same two derived edge queries as
 `pgr_withPoints`. So do `pgr_withPointsKSP`, `pgr_withPointsVia`, `pgr_trsp_withPoints` and
@@ -33,8 +35,11 @@ paths with a `path_id` that runs across the whole answer, and the Via families (
 `pgr_withPointsVia`) add `route_agg_cost`, the cost along the whole route. The turn-restriction
 families (`pgr_trsp`, `pgr_trsp_withPoints`, `pgr_trspVia`, `pgr_trspVia_withPoints`,
 `pgr_turnRestrictedPath`) also read a restrictions query (`cost`, and `path` as a list of any
-integer type); they return the path, route and K-shortest-path rows of the families above. The
-root-based families (driving distance, breadth- and depth-first search) take a `roots` list and
+integer type); they return the path, route and K-shortest-path rows of the families above. The two
+TSP functions read no edge query: `pgr_TSP` reads a cost-matrix query (`start_vid`, `end_vid`,
+`agg_cost`) and `pgr_TSPeuclidean` a coordinates query (`id`, `x`, `y`); both return a tour
+(`seq, node, cost, agg_cost`).
+The root-based families (driving distance, breadth- and depth-first search) take a `roots` list and
 return tree rows (`seq, depth, start_vid, pred, node, edge, cost, agg_cost`); the spanning-tree
 families do too, except `pgr_kruskal` and `pgr_prim` themselves, which take no roots and return a
 plain edge list (`edge, cost`) instead. `pgr_connectedComponents` goes through the same adapter and
@@ -204,7 +209,9 @@ their `unittest` suite. The test tools read upstream's committed fixtures and dr
   `pgr_ksp`/`pgr_withPointsKSP`/`pgr_turnRestrictedPath` block never takes the equal-cost
   route-tie verdict, because which K of several equal-cost paths Yen's algorithm returns depends
   on its exploration order and the route invariant cannot see that choice; such a block that
-  differs from upstream stays a failure for a human to decide.
+  differs from upstream stays a failure for a human to decide. No TSP block takes a tie verdict
+  either (its rows carry no endpoints to compare); one whose tour depends on the row order is
+  skip-listed by a human.
 - `scripts/check_signatures.py` — compares upstream's `sql/sigs/pgrouting--<ver>.sig` against
   `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
   signature is intentionally registered as several DuckDB variants, one per number of its

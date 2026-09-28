@@ -14,7 +14,8 @@ the following checklist, in order. Every step either passes or tells you exactly
    pgr_bellmanFord, pgr_edwardMoore, pgr_dagShortestPath, pgr_binaryBreadthFirstSearch,
    pgr_drivingDistance, pgr_withPointsDD, pgr_kruskal, pgr_prim, pgr_breadthFirstSearch,
    pgr_depthFirstSearch, pgr_ksp, pgr_withPointsKSP, pgr_dijkstraVia, pgr_withPointsVia,
-   pgr_trsp, pgr_trsp_withPoints, pgr_trspVia, pgr_trspVia_withPoints, pgr_turnRestrictedPath)
+   pgr_trsp, pgr_trsp_withPoints, pgr_trspVia, pgr_trspVia_withPoints, pgr_turnRestrictedPath,
+   pgr_TSP, pgr_TSPeuclidean)
    onto `do_shortestPath`, delete its case in its
    `src/pg_compat/src/drivers_*.cpp` file, switch that family's rows in its
    `src/functions/*_specs.cpp` table to `DriverKind::SHORTEST_PATH` with the flags its new SQL

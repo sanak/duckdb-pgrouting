@@ -61,6 +61,21 @@ decision rather than an oversight.
   behaviour for an empty path; the other four turn-restriction functions skip such a row, as
   upstream's `if (r.via)` does. The check (`src/pg_compat/src/drivers_trsp.cpp`) runs before the
   driver, so it fires even on an empty edge set.
+- **`pgr_TSP` and `pgr_TSPeuclidean` keep upstream's tour rules, including the surprising ones.**
+  A matrix whose vertices do not form one connected graph is toured only within the start's
+  component, silently; self-loops and negative costs are dropped. `start_id := 0` means "not
+  given", and with both `start_id` and `end_id` given a real vertex 0 disappears from the tour,
+  because upstream adds its temporary vertex under id 0 (`do_tsp`, `src/tsp/tsp.cpp`). Where two
+  consecutive stops have no direct matrix entry, `get_min_cost` sums the distances of the path's
+  predecessors instead of its edge weights and under-reports the cost (over `1-2` of cost 1 and
+  `2-3` of cost 10, `1 → 3` is reported as 1). All of it runs unmodified here as under PostgreSQL;
+  `test/sql/tsp_exec.test` pins each case. The last one is a candidate to report upstream.
+- **`pgr_TSP` and `pgr_TSPeuclidean` cannot be cancelled during their improvement pass, and its
+  time grows with about the fourth power of the number of stops.** `crossover_optimize`
+  (`src/tsp/tsp.cpp`) re-evaluates the whole tour for every pair of positions; upstream polls
+  `CHECK_FOR_INTERRUPTS` only before the approximation and inside the Dijkstra run of a missing
+  matrix entry, which a complete matrix never needs. Upstream's code built on its own took 3.8 s
+  for 400 random points and 68 s for 800 (macOS arm64). PostgreSQL runs the same code.
 - **A turn-restricted path that must be re-routed over thousands of edges can exhaust a thread's
   stack.** Upstream's `TrspHandler::construct_path` (`src/trsp/trspHandler.cpp`) recurses once per
   edge of the path it rebuilds. PostgreSQL runs it on a backend's main thread (8 MB of stack by
@@ -159,24 +174,25 @@ Each of these would be a change no test could observe, so none of them is made:
   without fault injection. The rest of that mapping is pinned by `test/sql/dijkstra_errors.test`,
   but any claim that the mapping is covered has to carry this qualifier — it is never true
   unqualified.
-- **`dijkstra/dijkstraCostMatrix.pg` produces no generated test file.** Its only runnable block,
-  q1, passes a scalar subquery (`(SELECT array_agg(id) FROM vertices WHERE id IN (...))`) as the
-  vertex array, which DuckDB rejects in the argument of a table function that is not in-out
-  (`Table function cannot contain subqueries`), so it is skipped in `test/pgrouting_skip.json`; q2
-  calls `pgr_TSP`, which this extension does not implement. Coverage for `pgr_dijkstraCostMatrix`
-  instead comes from the hand-written `test/sql/dijkstra_cost.test`. The workaround for the
-  scalar-subquery shape, used there and available to any caller: `SET VARIABLE ids = (SELECT
-  list(id) FROM vertices WHERE ...);` then pass `getvariable('ids')` as the vertex-array
-  argument. Every other stem of the category has a generated file. `pgr_TSP` surfaces solely
-  through `check_signatures.py`'s unimplemented-function list.
+- **`dijkstra/dijkstraCostMatrix.pg` produces no generated test file.** Its only runnable
+  block, q1, passes a scalar subquery (`(SELECT array_agg(id) FROM vertices WHERE id IN (...))`)
+  as the vertex array, which DuckDB rejects in the argument of a table function that is not
+  in-out (`Table function cannot contain subqueries`), so it is skipped in
+  `test/pgrouting_skip.json`; q2 nests the same subquery inside `pgr_TSP`'s matrix query and is
+  skipped for the same reason. Coverage for `pgr_dijkstraCostMatrix` instead comes from the
+  hand-written `test/sql/dijkstra_cost.test`. The workaround for the scalar-subquery shape, used
+  there and available to any caller: `SET VARIABLE ids = (SELECT list(id) FROM vertices WHERE
+  ...);` then pass `getvariable('ids')` as the vertex-array argument. Every other stem of the
+  category has a generated file.
 - **`bdDijkstra/bdDijkstraCostMatrix.pg` produces no generated test file either**, for the same
-  reason: its only runnable block, q2, passes a scalar subquery as the vertex array and is skipped
-  in `test/pgrouting_skip.json`; q3 calls `pgr_TSP`. Coverage for `pgr_bdDijkstraCostMatrix` comes
-  from the hand-written `test/sql/bd_dijkstra.test`, which also pins upstream's q2 rows.
-- **`astar/aStarCostMatrix.pg` and `bdAstar/bdAstarCostMatrix.pg` produce no generated test file
-  either**, for the same reason: q2 passes a scalar subquery and is skipped in
-  `test/pgrouting_skip.json`, and q3 calls `pgr_TSP`. `test/sql/astar.test` and
-  `test/sql/bd_astar.test` pin both q2 results.
+  reason: its only runnable block, q2, passes a scalar subquery as the vertex array and is
+  skipped in `test/pgrouting_skip.json`; q3 nests it inside `pgr_TSP`'s matrix query and is
+  skipped too. Coverage for `pgr_bdDijkstraCostMatrix` comes from the hand-written
+  `test/sql/bd_dijkstra.test`, which also pins upstream's q2 rows.
+- **`astar/aStarCostMatrix.pg` and `bdAstar/bdAstarCostMatrix.pg` produce no generated test
+  file either**, for the same reason: q2 passes a scalar subquery and is skipped in
+  `test/pgrouting_skip.json`, and q3, which nests the same subquery inside `pgr_TSP`'s matrix
+  query, is skipped too. `test/sql/astar.test` and `test/sql/bd_astar.test` pin both q2 results.
 - **`driving_distance/dijksraDD-issue729.pg` and `spanningTree/randomSpanTree.pg` produce no
   generated test file.** The first is a regression script with no named blocks; the second
   documents `pgr_randomSpanTree`, which pgRouting 4.0 does not publish (it is absent from
@@ -196,6 +212,16 @@ Each of these would be a change no test could observe, so none of them is made:
   (`test/pgrouting_skip.json`): their final `SELECT`, a `UNION` feeding a `LEFT JOIN`, has no
   `ORDER BY`, so its row order is not defined; this build returns upstream's own rows, just in
   another order.
+- **`tsp/TSPeuclidean.pg` produces no generated test file, and `tsp/TSP.pg` only its q3.**
+  `TSPeuclidean.pg` q1 reads a `vertices.geom` column the sample data does not carry and q2–q4
+  read upstream's `wi29` table; `TSP.pg` q1, q2, q4 and q5 pass a scalar subquery. Besides, most
+  of those tours depend on the row order. `test/sql/tsp.test` runs the same matrices through
+  `getvariable()` and asserts what every valid tour shares; `test/sql/tsp_exec.test` and
+  `test/sql/tsp_euclidean_exec.test` pin the tours of inputs small enough to have one answer.
+- **No test crosses a 2048-row output chunk for `pgr_TSP` or `pgr_TSPeuclidean`.** A tour that
+  long has more than 2047 stops, which upstream's improvement pass would take about an hour on
+  (see "Accepted as it is"). Their emitter numbers `seq` from the chunk offset exactly as the
+  tree emitter does, which `test/sql/driving_distance_exec.test` crosses chunks with.
 
 ## Open decision
 

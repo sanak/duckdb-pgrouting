@@ -74,7 +74,7 @@ WHERE function_name LIKE 'pgr\_%' ESCAPE '\' ORDER BY ALL;
 
 ## Functions
 
-Forty-five pgRouting functions — one hundred and sixty-three of pgRouting 4.0's signatures — plus
+Forty-seven pgRouting functions — one hundred and sixty-five of pgRouting 4.0's signatures — plus
 `pgr_version()`.
 The [pgRouting documentation](https://docs.pgrouting.org/4.0/en/) describes each algorithm, its
 parameters and its result columns, all of which this extension keeps.
@@ -89,6 +89,7 @@ parameters and its result columns, all of which this extension keeps.
 | K shortest paths | `pgr_ksp`, `pgr_withPointsKSP` |
 | Via | `pgr_dijkstraVia`, `pgr_withPointsVia` |
 | Turn restrictions | `pgr_trsp`, `pgr_trsp_withPoints`, `pgr_trspVia`, `pgr_trspVia_withPoints`, `pgr_turnRestrictedPath` |
+| Traveling salesperson | `pgr_TSP`, `pgr_TSPeuclidean` |
 | Components | `pgr_connectedComponents` |
 | Driving distance | `pgr_drivingDistance`, `pgr_withPointsDD` |
 | Spanning trees | `pgr_kruskal`, `pgr_kruskalBFS`, `pgr_kruskalDFS`, `pgr_kruskalDD`, `pgr_prim`, `pgr_primBFS`, `pgr_primDFS`, `pgr_primDD` |
@@ -113,6 +114,12 @@ Functions deliberately not ported are listed, each with its reason, in
   its ties are asserted the same way for uniformity. With `heap_paths := true`, `pgr_ksp`,
   `pgr_withPointsKSP` and `pgr_turnRestrictedPath` also return the candidate paths left on Yen's
   heap, and which candidates those are — and their costs — depend on the input order too.
+- **TSP tours depend on the input order.** `pgr_TSP` and `pgr_TSPeuclidean` approximate the
+  shortest round trip, and which tour they find — and its total cost — depends on the order the
+  inner query's rows reach the algorithm, which DuckDB does not fix (an `ORDER BY` in the inner
+  query does not either). `pgr_TSPeuclidean` without `start_id` also starts from whichever row
+  arrives first. Every answer is still a valid tour; see `docs/BACKLOG.md` for upstream's other
+  TSP behaviours this extension keeps.
 - **Memory.** pgRouting's own allocations are not counted against DuckDB's `memory_limit`.
 - **A turn-restricted route re-routed over more than about ten thousand edges** can overflow a
   worker thread's stack and end the process on macOS (upstream's recursion); see
