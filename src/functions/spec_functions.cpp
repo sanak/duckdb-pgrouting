@@ -202,7 +202,8 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::COMPONENTS_SPECS,        &duckdb_pgrouting::ASTAR_SPECS,
 	    &duckdb_pgrouting::BD_ASTAR_SPECS,          &duckdb_pgrouting::DRIVING_DISTANCE_SPECS,
 	    &duckdb_pgrouting::SPANNING_TREE_SPECS,     &duckdb_pgrouting::TRAVERSAL_SPECS,
-	    &duckdb_pgrouting::KSP_SPECS,               &duckdb_pgrouting::TRSP_SPECS};
+	    &duckdb_pgrouting::KSP_SPECS,               &duckdb_pgrouting::TRSP_SPECS,
+	    &duckdb_pgrouting::TSP_SPECS};
 	return TABLES;
 }
 
@@ -232,6 +233,8 @@ LogicalType TypeOf(duckdb_pgrouting::ArgKind kind) {
 	case ArgKind::POINTS_SQL:
 	case ArgKind::DRIVING_SIDE:
 	case ArgKind::RESTRICTIONS_SQL:
+	case ArgKind::MATRIX_SQL:
+	case ArgKind::COORDINATES_SQL:
 		return LogicalType::VARCHAR;
 	case ArgKind::START_VID:
 	case ArgKind::END_VID:
@@ -364,10 +367,14 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	}
 
 	bool has_points = false;
+	// Whether this overload takes an edge query at all: the TSP overloads read a matrix or
+	// coordinates query instead, and leave 'edges' an untyped NULL.
+	bool has_edges = false;
 
 	// One row carrying every input the driver needs, as a column each, so the exec function always
-	// sees at least these six columns (an overload with restrictions adds 'restrictions'; one with
-	// points adds 'points', 'edges_of_points' and 'edges_no_points', and 'edges' is then NULL). A
+	// sees at least these six columns (an overload with restrictions adds 'restrictions', one with a
+	// matrix or coordinates query adds 'matrix' or 'coordinates' and leaves 'edges' NULL, and one
+	// with points adds 'points', 'edges_of_points' and 'edges_no_points', and 'edges' is then NULL). A
 	// column this overload does not use gets either
 	// an untyped NULL constant ('edges'/'combinations') or an empty but LIST(BIGINT)-typed id list
 	// ('starts'/'ends'/'roots'/'via' default to EmptyIdList() below, never a bare NULL). That typing
@@ -387,6 +394,9 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	unique_ptr<ParsedExpression> via_expr = Named(EmptyIdList(), "via");
 	// Only an overload with a restrictions argument emits this one.
 	unique_ptr<ParsedExpression> restrictions_expr;
+	// Only an overload with a matrix or coordinates argument emits that one.
+	unique_ptr<ParsedExpression> matrix_expr;
+	unique_ptr<ParsedExpression> coordinates_expr;
 	// Only an overload with a points argument emits these three; see the loop below.
 	unique_ptr<ParsedExpression> points_expr;
 	unique_ptr<ParsedExpression> edges_of_points_expr;
@@ -399,6 +409,7 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 				// Materialized after the loop: with points given, the driver never fetches the
 				// edge query itself, only the two it derives from it and the points query.
 				request.edges_sql = StringValue::Get(input.inputs[i]);
+				has_edges = true;
 				break;
 			case duckdb_pgrouting::ArgKind::COMBINATIONS_SQL:
 				request.combinations_sql = StringValue::Get(input.inputs[i]);
@@ -452,6 +463,14 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 				request.restrictions_sql = StringValue::Get(input.inputs[i]);
 				restrictions_expr = Named(ListOfRows(context, request.restrictions_sql), "restrictions");
 				break;
+			case duckdb_pgrouting::ArgKind::MATRIX_SQL:
+				request.matrix_sql = StringValue::Get(input.inputs[i]);
+				matrix_expr = Named(ListOfRows(context, request.matrix_sql), "matrix");
+				break;
+			case duckdb_pgrouting::ArgKind::COORDINATES_SQL:
+				request.coordinates_sql = StringValue::Get(input.inputs[i]);
+				coordinates_expr = Named(ListOfRows(context, request.coordinates_sql), "coordinates");
+				break;
 			}
 		}
 		if (has_points) {
@@ -462,7 +481,7 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 			    ListOfRows(EdgesOfPoints(context, request.edges_sql, request.points_sql)), "edges_of_points");
 			edges_no_points_expr = Named(
 			    ListOfRows(EdgesWithoutPoints(context, request.edges_sql, request.points_sql)), "edges_no_points");
-		} else {
+		} else if (has_edges) {
 			edges_expr = Named(ListOfRows(context, request.edges_sql), "edges");
 		}
 	}
@@ -475,6 +494,12 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	row->select_list.push_back(std::move(via_expr));
 	if (restrictions_expr) {
 		row->select_list.push_back(std::move(restrictions_expr));
+	}
+	if (matrix_expr) {
+		row->select_list.push_back(std::move(matrix_expr));
+	}
+	if (coordinates_expr) {
+		row->select_list.push_back(std::move(coordinates_expr));
 	}
 	if (points_expr) {
 		row->select_list.push_back(std::move(points_expr));

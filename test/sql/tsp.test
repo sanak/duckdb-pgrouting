@@ -1,0 +1,172 @@
+# name: test/sql/tsp.test
+# description: pgr_TSP and pgr_TSPeuclidean: variants, nested cost matrices, tour invariants, STRICT
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE vertices AS SELECT id, x, y FROM read_csv_auto('test/data/sampledata/vertices.csv');
+
+statement ok
+CREATE TABLE tsp_matrix AS SELECT * FROM (VALUES
+  (-6, -1, 1.3), (-6, 7, 0.3), (-6, 10, 4.3), (-6, 11, 1.3),
+  (-1, -6, 1.3), (-1, 7, 1.6), (-1, 10, 5.6), (-1, 11, 2.6),
+  (7, -6, 0.3), (7, -1, 1.6), (7, 10, 4.0), (7, 11, 1.0),
+  (10, -6, 1.7), (10, -1, 1.6), (10, 7, 2.0), (10, 11, 1.0),
+  (11, -6, 1.3), (11, -1, 2.6), (11, 7, 1.0), (11, 10, 3.0)) AS m(start_vid, end_vid, agg_cost);
+
+statement ok
+CREATE TABLE coords AS SELECT * FROM (VALUES (1, 0, 0), (2, 3, 0), (3, 3, 4), (4, 0, 4), (5, 1, 2)) AS c(id, x, y);
+
+# One signature each, with two defaulted parameters (start_id, end_id): 3 variants each.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name IN ('pgr_TSP', 'pgr_TSPeuclidean') AND tags['ext'] = 'pgrouting' GROUP BY ALL ORDER BY 1;
+----
+pgr_TSP	3
+pgr_TSPeuclidean	3
+
+query T
+SELECT column_name FROM (DESCRIBE SELECT * FROM pgr_TSP('SELECT * FROM tsp_matrix'));
+----
+seq
+node
+cost
+agg_cost
+
+# Every way of passing start_id and end_id answers the same.
+query TT
+SELECT 'positional', string_agg(node::VARCHAR, ' ' ORDER BY seq) FROM pgr_TSP('SELECT * FROM tsp_matrix', 7, 11)
+UNION ALL SELECT 'named', string_agg(node::VARCHAR, ' ' ORDER BY seq)
+  FROM pgr_TSP('SELECT * FROM tsp_matrix', start_id := 7, end_id := 11)
+UNION ALL SELECT 'mixed', string_agg(node::VARCHAR, ' ' ORDER BY seq)
+  FROM pgr_TSP('SELECT * FROM tsp_matrix', 7, end_id := 11)
+UNION ALL SELECT 'arrow', string_agg(node::VARCHAR, ' ' ORDER BY seq)
+  FROM pgr_TSP('SELECT * FROM tsp_matrix', start_id => 7, end_id => 11)
+UNION ALL SELECT 'start only', string_agg(node::VARCHAR, ' ' ORDER BY seq) FROM pgr_TSP('SELECT * FROM tsp_matrix', 7)
+UNION ALL SELECT 'none', string_agg(node::VARCHAR, ' ' ORDER BY seq) FROM pgr_TSP('SELECT * FROM tsp_matrix')
+ORDER BY 1;
+----
+arrow	7 -6 -1 10 11 7
+mixed	7 -6 -1 10 11 7
+named	7 -6 -1 10 11 7
+none	-6 -1 10 11 7 -6
+positional	7 -6 -1 10 11 7
+start only	7 11 10 -1 -6 7
+
+query TR
+SELECT string_agg(node::VARCHAR, ' ' ORDER BY seq), round(max(agg_cost), 4)
+FROM pgr_TSPeuclidean('SELECT id, x, y FROM coords', 1, 3);
+----
+1 2 5 4 3 1	16.0645
+
+query TR
+SELECT string_agg(node::VARCHAR, ' ' ORDER BY seq), round(max(agg_cost), 4)
+FROM pgr_TSPeuclidean('SELECT id, x, y FROM coords', start_id := 2, end_id := 5);
+----
+2 1 4 3 5 2	15.6569
+
+# Upstream's q2 matrix, nesting pgr_dijkstraCostMatrix. Its vertex list is a scalar subquery
+# upstream; DuckDB takes it through a variable instead (see the error below).
+statement ok
+SET VARIABLE vids = (SELECT list(id ORDER BY id) FROM vertices WHERE id NOT IN (2, 4, 13, 14));
+
+statement ok
+CREATE TABLE matrix AS SELECT * FROM pgr_dijkstraCostMatrix(
+    'SELECT id, source, target, cost, reverse_cost FROM edges', getvariable('vids'), directed => false);
+
+statement ok
+CREATE TABLE tour AS SELECT * FROM pgr_TSP(
+    $$SELECT * FROM pgr_dijkstraCostMatrix('SELECT id, source, target, cost, reverse_cost FROM edges',
+        getvariable('vids'), directed => false)$$,
+    start_id => 1);
+
+# A closed tour of the 13 vertices: 14 rows numbered 1..14, starting and ending at 1, every vertex
+# once.
+query IIIIII
+SELECT count(*), min(seq), max(seq), count(DISTINCT node),
+       min(node) FILTER (WHERE seq = 1), min(node) FILTER (WHERE seq = 14)
+FROM tour;
+----
+14	1	14	13	1	1
+
+query T
+SELECT list(DISTINCT node ORDER BY node) = getvariable('vids') FROM tour;
+----
+true
+
+# cost is 0 on the first row and the matrix cost between consecutive stops afterwards; agg_cost is
+# their running sum.
+query I
+SELECT count(*) FROM (
+  SELECT seq, node, cost, agg_cost, lag(node) OVER (ORDER BY seq) AS prev,
+         sum(cost) OVER (ORDER BY seq) AS running
+  FROM tour) t
+LEFT JOIN matrix m ON m.start_vid = t.prev AND m.end_vid = t.node
+WHERE abs(t.agg_cost - t.running) > 1e-9 OR (t.seq = 1 AND t.cost <> 0)
+   OR (t.seq > 1 AND (m.agg_cost IS NULL OR abs(t.cost - m.agg_cost) > 1e-9));
+----
+0
+
+# Without start_id the matrix tour starts at the smallest id; end_id is visited last before the
+# return; end_id alone becomes the start.
+query III
+SELECT (SELECT min(node) FILTER (WHERE seq = 1) FROM pgr_TSP($$SELECT * FROM matrix$$)),
+       (SELECT min(node) FILTER (WHERE seq = 13) FROM pgr_TSP($$SELECT * FROM matrix$$, 1, 8)),
+       (SELECT min(node) FILTER (WHERE seq = 1) FROM pgr_TSP($$SELECT * FROM matrix$$, end_id := 8));
+----
+1	8	8
+
+# The same tour rules for pgr_TSPeuclidean over the sample vertices' coordinates: 17 points, 18 rows,
+# straight-line costs.
+statement ok
+CREATE TABLE etour AS SELECT * FROM pgr_TSPeuclidean('SELECT id, x, y FROM vertices', 6, 12);
+
+query IIIIII
+SELECT count(*), count(DISTINCT node), min(node) FILTER (WHERE seq = 1), min(node) FILTER (WHERE seq = 17),
+       min(node) FILTER (WHERE seq = 18), count(*) FILTER (WHERE seq = 1 AND cost <> 0)
+FROM etour;
+----
+18	17	6	12	6	0
+
+query I
+SELECT count(*) FROM (
+  SELECT seq, node, cost, agg_cost, lag(node) OVER (ORDER BY seq) AS prev,
+         sum(cost) OVER (ORDER BY seq) AS running
+  FROM etour) t
+JOIN vertices a ON a.id = t.prev JOIN vertices b ON b.id = t.node
+WHERE abs(t.agg_cost - t.running) > 1e-9 OR abs(t.cost - sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2)) > 1e-9;
+----
+0
+
+# Upstream's own q1 form, with the scalar subquery inside the matrix query: DuckDB's binder refuses
+# it, as it does outside pgr_TSP.
+statement error
+SELECT * FROM pgr_TSP($$SELECT * FROM pgr_dijkstraCostMatrix('SELECT id, source, target, cost, reverse_cost FROM edges',
+  (SELECT list(id) FROM vertices WHERE id NOT IN (2, 4, 13, 14)), directed => false)$$);
+----
+Table function cannot contain subqueries
+
+statement error
+SELECT * FROM pgr_TSP('SELECT * FROM tsp_matrix', 99);
+----
+Parameter 'start_id' do not exist on the data
+
+# STRICT: a NULL anywhere gives no rows.
+query I
+SELECT count(*) FROM pgr_TSP(NULL::VARCHAR)
+UNION ALL SELECT count(*) FROM pgr_TSP('SELECT * FROM tsp_matrix', NULL::BIGINT)
+UNION ALL SELECT count(*) FROM pgr_TSP('SELECT * FROM tsp_matrix', end_id := NULL)
+UNION ALL SELECT count(*) FROM pgr_TSPeuclidean(NULL::VARCHAR)
+UNION ALL SELECT count(*) FROM pgr_TSPeuclidean('SELECT id, x, y FROM coords', 1, NULL::BIGINT);
+----
+0
+0
+0
+0
+0

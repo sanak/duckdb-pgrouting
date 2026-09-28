@@ -202,6 +202,16 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "SELECT * FROM pgr_trspVia_withPoints('SELECT id, source, target, cost, reverse_cost FROM edges', "
      "'SELECT path, cost FROM restrictions', 'SELECT pid, edge_id, side, fraction FROM pointsofinterest', "
      "[-6, 15, -5])"},
+    {"pgr_TSP",
+     "An approximate shortest round trip through every vertex of a cost matrix (start_vid, end_vid, "
+     "agg_cost), optionally from start_id and visiting end_id last; the tour found can depend on the "
+     "order the matrix rows are read in.",
+     "SELECT * FROM pgr_TSP('SELECT * FROM pgr_dijkstraCostMatrix(''SELECT id, source, target, cost, "
+     "reverse_cost FROM edges'', [5, 6, 10, 15], directed := false)', start_id := 5)"},
+    {"pgr_TSPeuclidean",
+     "An approximate shortest round trip through points given by their coordinates (id, x, y), with "
+     "straight-line distances as costs, optionally from start_id and visiting end_id last.",
+     "SELECT * FROM pgr_TSPeuclidean('SELECT id, x, y FROM vertices', start_id := 1)"},
     {"pgr_breadthFirstSearch",
      "Visits the graph breadth-first from the given roots, one row per vertex reached with its "
      "predecessor and depth, optionally only to a maximum depth.",

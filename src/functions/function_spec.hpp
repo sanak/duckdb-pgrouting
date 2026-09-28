@@ -30,7 +30,9 @@ enum class ArgKind : uint8_t {
 	DISTANCE,         // DOUBLE; upstream's FLOAT, and NUMERIC in pgr_kruskalDD / pgr_primDD
 	K,                // INTEGER, the number of paths (upstream's INTEGER K)
 	VIA,              // BIGINT[], the vertices a route visits in order
-	RESTRICTIONS_SQL  // VARCHAR, the turn restrictions query (cost, path)
+	RESTRICTIONS_SQL, // VARCHAR, the turn restrictions query (cost, path)
+	MATRIX_SQL,       // VARCHAR, pgr_TSP's cost-matrix query (start_vid, end_vid, agg_cost)
+	COORDINATES_SQL   // VARCHAR, pgr_TSPeuclidean's coordinates query (id, x, y)
 };
 
 enum class OptionalType : uint8_t { BOOLEAN, BIGINT, INTEGER, DOUBLE };
@@ -65,6 +67,9 @@ constexpr OptionalParam STOP_ON_FIRST {"stop_on_first", OptionalType::BOOLEAN, "
 constexpr OptionalParam VIA_STRICT {"strict", OptionalType::BOOLEAN, "false", "strict"};
 // Upstream's spelling; DuckDB matches named parameters case-insensitively.
 constexpr OptionalParam VIA_U_TURN_ON_EDGE {"U_turn_on_edge", OptionalType::BOOLEAN, "true", "u_turn_on_edge"};
+// start_id and end_id, as the TSP functions declare them: 0 means "not given".
+constexpr OptionalParam START_ID {"start_id", OptionalType::BIGINT, "0", "start_id"};
+constexpr OptionalParam END_ID {"end_id", OptionalType::BIGINT, "0", "end_id"};
 
 // Where an overload's driving side comes from. NONE: the overload has none (which = 0 ignores it).
 // ARGUMENT: the CHAR signatures of the withPoints family take it as a required argument.
@@ -147,5 +152,6 @@ extern const duckdb::vector<FunctionSpec> SPANNING_TREE_SPECS;        // spannin
 extern const duckdb::vector<FunctionSpec> TRAVERSAL_SPECS;            // traversal_specs.cpp
 extern const duckdb::vector<FunctionSpec> KSP_SPECS;                  // ksp_specs.cpp
 extern const duckdb::vector<FunctionSpec> TRSP_SPECS;                 // trsp_specs.cpp
+extern const duckdb::vector<FunctionSpec> TSP_SPECS;                  // tsp_specs.cpp
 
 } // namespace duckdb_pgrouting
