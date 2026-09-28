@@ -47,6 +47,7 @@ const RequestParameter REQUEST_PARAMETERS[] = {
     {"mst_suffix", &DriverRequest::mst_suffix},
     {"k", &DriverRequest::k},
     {"heap_paths", &DriverRequest::heap_paths},
+    {"stop_on_first", &DriverRequest::stop_on_first},
     {"strict", &DriverRequest::strict},
     {"u_turn_on_edge", &DriverRequest::u_turn_on_edge},
     {"driver", &DriverRequest::driver},

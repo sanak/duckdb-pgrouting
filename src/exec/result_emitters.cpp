@@ -87,10 +87,10 @@ void EmitMst(const DriverResult &result, EmitState &state, idx_t n, DataChunk &o
 	}
 }
 
-// Upstream's K-shortest-path C entries (src/ksp/ksp.c, src/ksp/withPoints_ksp.c) number the rows
-// from 1 and the paths across the whole answer: path_id starts at 1 and grows after each row whose
-// edge is -1, path_seq restarts at 1 after each row whose edge is negative. The driver's start_id
-// and end_id are the path's own endpoints.
+// Upstream's K-shortest-path C entries (src/ksp/ksp.c, src/ksp/withPoints_ksp.c,
+// src/ksp/turnRestrictedPath.c) number the rows from 1 and the paths across the whole answer:
+// path_id starts at 1 and grows after each row whose edge is -1, path_seq restarts at 1 after each
+// row whose edge is negative. The driver's start_id and end_id are the path's own endpoints.
 void EmitKsp(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<Path_rt>();
 	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
@@ -120,8 +120,9 @@ void EmitKsp(const DriverResult &result, EmitState &state, idx_t n, DataChunk &o
 }
 
 // Upstream's Via C entries (src/dijkstra/dijkstraVia.c, src/withPoints/withPointsVia.c, src/trsp/trspVia.c,
-// src/trsp/trspVia_withPoints.c) number the rows from 1, pass path_id (one per leg, counted even for a leg with no path) through, and add 1
-// to the driver's zero-based path_seq. The route's last row carries edge -2, as the driver writes it.
+// src/trsp/trspVia_withPoints.c) number the rows from 1, pass path_id (one per leg, counted even for a leg with no
+// path) through, and add 1 to the driver's zero-based path_seq. The route's last row carries edge -2, as the driver
+// writes it.
 void EmitRoutes(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<Routes_t>();
 	auto seq = FlatVector::GetData<int32_t>(output.data[0]);

@@ -112,6 +112,11 @@ bool CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 	case duckdb_pgrouting::RequestCheck::DRIVING_SIDE:
 		CheckDrivingSide(request);
 		return true;
+	case duckdb_pgrouting::RequestCheck::TURN_RESTRICTED_PATH:
+		if (request.k < 0) {
+			ThrowCheck("Invalid value of 'K'", "Valid value are greater than 0");
+		}
+		return true;
 	}
 	throw InternalException("pgrouting: unhandled RequestCheck");
 }

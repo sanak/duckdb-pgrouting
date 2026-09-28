@@ -8,13 +8,41 @@
 
 #include "driver_groups.hpp"
 
+#include <cstddef>
+#include <string>
+
 #include "drivers/trsp/trsp_driver.h"
 #include "drivers/trsp/trsp_withPoints_driver.h"
 #include "drivers/trsp/trspVia_driver.h"
 #include "drivers/trsp/trspVia_withPoints_driver.h"
+#include "drivers/yen/turnRestrictedPath_driver.h"
+#include "pgrouting/input_access.hpp"
 #include "pgrouting/withpoints_keys.hpp"
 
 namespace duckdb_pgrouting {
+
+namespace {
+
+// pgr_do_turnRestrictedPath builds a Rule from every restriction row, and Rule's constructor
+// (src/cpp_common/rule.cpp) takes the path's last element: a NULL or empty path, which
+// getBigIntArr reads as no array, is undefined behaviour there. The other turn-restriction drivers
+// skip such a row (`if (r.via)`); this one is refused before the driver runs, even where the
+// driver would have stopped earlier on an empty edge set. A missing or wrong-typed path column is
+// left to the driver's own column check.
+void RefuseEmptyRestrictionPaths(const DriverRequest &request) {
+	const auto &input = LookupInput(request.restrictions_sql, KIND_RESTRICTIONS);
+	const int path = FindColumn(input, "path");
+	if (path == -1 || ColumnClassOf(input, path) != ColumnClass::INTEGER_ARRAY) {
+		return;
+	}
+	for (std::size_t row = 0; row < InputRowCount(input); row++) {
+		if (IsNull(input, row, path) || ReadInt64Array(input, row, path).empty()) {
+			throw std::string("Unexpected NULL or empty array in column path");
+		}
+	}
+}
+
+} // namespace
 
 bool CallTrspDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call) {
 	const char *edges = request.edges_sql.c_str();
@@ -51,6 +79,15 @@ bool CallTrspDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 		                          &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	}
+	case DriverKind::TURN_RESTRICTED_PATH:
+		// _pgr_turnRestrictedPath_v4 passes the id arrays and no combinations query. A negative K never
+		// gets here (CheckRequest raises upstream's error), so the cast is safe.
+		RefuseEmptyRestrictionPaths(request);
+		pgr_do_turnRestrictedPath(edges, restrictions, nullptr, arrays.starts, arrays.ends,
+		                          static_cast<size_t>(request.k), request.directed, request.heap_paths,
+		                          request.stop_on_first, request.strict, &call.path_rows, &call.count,
+		                          &call.log, &call.notice, &call.err);
+		return true;
 	default:
 		return false;
 	}

@@ -45,11 +45,14 @@ struct DriverRequest {
 	int64_t max_depth = std::numeric_limits<int64_t>::max();
 	// The kruskal and prim families: "" (the whole forest), "BFS", "DFS" or "DD".
 	std::string mst_suffix;
-	// The K-shortest-path families (pgr_ksp, pgr_withPointsKSP); K is upstream's INTEGER.
+	// The K-shortest-path families (pgr_ksp, pgr_withPointsKSP) and pgr_turnRestrictedPath; K is
+	// upstream's INTEGER.
 	int32_t k = 0;
 	bool heap_paths = false;
-	// The Via families (pgr_dijkstraVia, pgr_withPointsVia). via travels in the input row like
-	// starts.
+	// pgr_turnRestrictedPath: stop at the first path that breaks no restriction.
+	bool stop_on_first = true;
+	// The Via families (pgr_dijkstraVia, pgr_withPointsVia, pgr_trspVia, pgr_trspVia_withPoints).
+	// via travels in the input row like starts. pgr_turnRestrictedPath reads strict too.
 	std::vector<int64_t> via;
 	bool has_via = false;
 	bool strict = false;
