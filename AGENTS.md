@@ -28,23 +28,23 @@ and points SQL. The other twenty-two families call their own per-family `pgr_do_
 one adapter on the pg_compat side; the two A* families also read each edge's end-point coordinates
 (`x1`, `y1`, `x2`, `y2`), and `pgr_withPointsDD` reads the same two derived edge queries as
 `pgr_withPoints`. So do `pgr_withPointsKSP`, `pgr_withPointsVia`, `pgr_trsp_withPoints` and
-`pgr_trspVia_withPoints`. The K-shortest-path families
-(`pgr_ksp`, `pgr_withPointsKSP`) number their paths with a `path_id` that runs across the whole
-answer, and the Via families (`pgr_dijkstraVia`, `pgr_withPointsVia`) add `route_agg_cost`, the cost
-along the whole route. The turn-restriction families (`pgr_trsp`, `pgr_trsp_withPoints`,
-`pgr_trspVia`, `pgr_trspVia_withPoints`, `pgr_turnRestrictedPath`) also read a restrictions query
-(`cost`, and `path` as a list of any integer type); they return the path, route and K-shortest-path
-rows of the families above. The root-based families (driving distance, breadth- and depth-first search)
-take a `roots` list and return tree rows (`seq, depth, start_vid, pred, node, edge, cost,
-agg_cost`); the spanning-tree families do too, except `pgr_kruskal` and `pgr_prim` themselves, which
-take no roots and return a plain edge list (`edge, cost`) instead. `pgr_connectedComponents` goes
-through the same adapter and exec function (`_pgr_exec`), which returns its vertex/component pairs
-instead of path rows. `pgr_extractVertices` and `pgr_findCloseEdges`, which upstream writes in
-PL/pgSQL, are reimplemented as bind_replace functions. Each binds the caller's edge query, picks one
-of upstream's modes, and rewrites the call into a fixed DuckDB query
-(`src/functions/sql_template.cpp`). Their geometry work calls duckdb-spatial's `ST_*` functions at
-run time. Every public function carries a catalog description and an example
-(`duckdb_functions().description` / `.examples`), registered from `src/functions/function_docs.cpp`.
+`pgr_trspVia_withPoints`. The K-shortest-path families (`pgr_ksp`, `pgr_withPointsKSP`) number their
+paths with a `path_id` that runs across the whole answer, and the Via families (`pgr_dijkstraVia`,
+`pgr_withPointsVia`) add `route_agg_cost`, the cost along the whole route. The turn-restriction
+families (`pgr_trsp`, `pgr_trsp_withPoints`, `pgr_trspVia`, `pgr_trspVia_withPoints`,
+`pgr_turnRestrictedPath`) also read a restrictions query (`cost`, and `path` as a list of any
+integer type); they return the path, route and K-shortest-path rows of the families above. The
+root-based families (driving distance, breadth- and depth-first search) take a `roots` list and
+return tree rows (`seq, depth, start_vid, pred, node, edge, cost, agg_cost`); the spanning-tree
+families do too, except `pgr_kruskal` and `pgr_prim` themselves, which take no roots and return a
+plain edge list (`edge, cost`) instead. `pgr_connectedComponents` goes through the same adapter and
+exec function (`_pgr_exec`), which returns its vertex/component pairs instead of path rows.
+`pgr_extractVertices` and `pgr_findCloseEdges`, which upstream writes in PL/pgSQL, are reimplemented
+as bind_replace functions. Each binds the caller's edge query, picks one of upstream's modes, and
+rewrites the call into a fixed DuckDB query (`src/functions/sql_template.cpp`). Their geometry work
+calls duckdb-spatial's `ST_*` functions at run time. Every public function carries a catalog
+description and an example (`duckdb_functions().description` / `.examples`), registered from
+`src/functions/function_docs.cpp`.
 
 ## Layout
 
@@ -201,10 +201,10 @@ their `unittest` suite. The test tools read upstream's committed fixtures and dr
   because which minimum spanning forest `pgr_kruskal*` builds among equal-cost edges depends on
   the C++ standard library's `std::priority_queue` order (libstdc++ vs. libc++); `pgr_prim*` uses
   Boost's own heap instead, but its blocks are asserted the same way for uniformity. A
-  `pgr_ksp`/`pgr_withPointsKSP` block never takes the equal-cost route-tie verdict, because
-  which K of several equal-cost paths Yen's algorithm returns depends on its exploration order and
-  the route invariant cannot see that choice; such a block that differs from upstream stays a
-  failure for a human to decide.
+  `pgr_ksp`/`pgr_withPointsKSP`/`pgr_turnRestrictedPath` block never takes the equal-cost
+  route-tie verdict, because which K of several equal-cost paths Yen's algorithm returns depends
+  on its exploration order and the route invariant cannot see that choice; such a block that
+  differs from upstream stays a failure for a human to decide.
 - `scripts/check_signatures.py` — compares upstream's `sql/sigs/pgrouting--<ver>.sig` against
   `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
   signature is intentionally registered as several DuckDB variants, one per number of its

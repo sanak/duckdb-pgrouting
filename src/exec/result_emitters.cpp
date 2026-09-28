@@ -90,7 +90,9 @@ void EmitMst(const DriverResult &result, EmitState &state, idx_t n, DataChunk &o
 // Upstream's K-shortest-path C entries (src/ksp/ksp.c, src/ksp/withPoints_ksp.c,
 // src/ksp/turnRestrictedPath.c) number the rows from 1 and the paths across the whole answer:
 // path_id starts at 1 and grows after each row whose edge is -1, path_seq restarts at 1 after each
-// row whose edge is negative. The driver's start_id and end_id are the path's own endpoints.
+// row whose edge is negative. The driver's end_id is the path's own endpoint; so is start_id, for
+// pgr_ksp and pgr_withPointsKSP, but for pgr_turnRestrictedPath it is the route index (0, 1, …)
+// among the input restrictions instead.
 void EmitKsp(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<Path_rt>();
 	auto seq = FlatVector::GetData<int32_t>(output.data[0]);

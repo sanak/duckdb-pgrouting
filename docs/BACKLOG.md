@@ -65,10 +65,13 @@ decision rather than an oversight.
   stack.** Upstream's `TrspHandler::construct_path` (`src/trsp/trspHandler.cpp`) recurses once per
   edge of the path it rebuilds. PostgreSQL runs it on a backend's main thread (8 MB of stack by
   default); DuckDB runs table functions on worker threads, whose stack is much smaller on some
-  platforms (512 KB on macOS), and Wasm's stack is small too. An overflow aborts the process
-  rather than raising an error. Under the ASan build a re-routed path of 1500 edges already
-  overflows a macOS worker; the tests keep re-routed paths below 1000 edges. Fixing it would mean
-  changing upstream's recursion.
+  platforms (512 KB on macOS; Linux worker threads normally get 8 MB, and Wasm was not measured).
+  An overflow aborts the process rather than raising an error. On a macOS release build, a
+  re-routed path of 10000 edges works and 15000 crashes the process (SIGBUS) on a 512 KB worker
+  thread; under the ASan build a re-routed path of 1500 edges already overflows a macOS worker.
+  Which thread runs the function — a worker, or the calling thread with its larger stack — is not
+  fixed, so the same query may crash only sometimes. The tests keep re-routed paths below 1000
+  edges. Fixing it would mean changing upstream's recursion.
 - **`pgr_ksp` with a negative `K` returns no rows instead of an error.** Upstream's C entry
   (`src/ksp/ksp.c`) returns before calling its driver when `K < 0`, under a "TODO return error
   message" comment, while `pgr_withPointsKSP` raises `Invalid value of 'K'` for the same input.

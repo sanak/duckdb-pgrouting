@@ -202,7 +202,7 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::COMPONENTS_SPECS,        &duckdb_pgrouting::ASTAR_SPECS,
 	    &duckdb_pgrouting::BD_ASTAR_SPECS,          &duckdb_pgrouting::DRIVING_DISTANCE_SPECS,
 	    &duckdb_pgrouting::SPANNING_TREE_SPECS,     &duckdb_pgrouting::TRAVERSAL_SPECS,
-	    &duckdb_pgrouting::KSP_SPECS,                &duckdb_pgrouting::TRSP_SPECS};
+	    &duckdb_pgrouting::KSP_SPECS,               &duckdb_pgrouting::TRSP_SPECS};
 	return TABLES;
 }
 
