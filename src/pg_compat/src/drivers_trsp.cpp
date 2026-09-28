@@ -9,6 +9,8 @@
 #include "driver_groups.hpp"
 
 #include "drivers/trsp/trsp_driver.h"
+#include "drivers/trsp/trsp_withPoints_driver.h"
+#include "pgrouting/withpoints_keys.hpp"
 
 namespace duckdb_pgrouting {
 
@@ -21,6 +23,18 @@ bool CallTrspDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 		pgr_do_trsp(edges, restrictions, combinations, arrays.starts, arrays.ends, request.directed,
 		            &call.path_rows, &call.count, &call.log, &call.notice, &call.err);
 		return true;
+	case DriverKind::TRSP_WITH_POINTS: {
+		// get_new_queries (src/withPoints/get_new_queries.cpp) derives the two edge queries the
+		// driver fetches; WithPointsDerivedKeys reproduces its template, so these are the keys the
+		// derived inputs are registered under. The restrictions query comes second, as the C entry
+		// passes it.
+		const auto keys = WithPointsDerivedKeys(request.edges_sql, request.points_sql);
+		pgr_do_trsp_withPoints(keys.no_points.c_str(), restrictions, request.points_sql.c_str(),
+		                       keys.of_points.c_str(), combinations, arrays.starts, arrays.ends, request.directed,
+		                       LowerDrivingSide(request), request.details, &call.path_rows, &call.count,
+		                       &call.log, &call.notice, &call.err);
+		return true;
+	}
 	default:
 		return false;
 	}

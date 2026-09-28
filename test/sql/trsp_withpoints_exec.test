@@ -1,0 +1,115 @@
+# name: test/sql/trsp_withpoints_exec.test
+# description: _pgr_exec with the withPoints TRSP driver: points, restrictions, driving side
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE pois AS SELECT pid, edge_id, side, fraction FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+statement ok
+CREATE TABLE combos AS SELECT * FROM (VALUES (-1, 10), (6, -3)) AS t(source, target);
+
+# The points row, the two derived-query rows and the restrictions row do not depend on the call's
+# literals, so they are built once (see withpoints_dd_exec.test for why the _pgr_exec calls are
+# inlined).
+statement ok
+CREATE TABLE twp AS
+SELECT (SELECT list(p) FROM (SELECT pid, edge_id, fraction, side FROM pois) p) AS points,
+       (SELECT list(e) FROM (SELECT DISTINCT edges.* FROM edges JOIN pois ON (id = edge_id)) e)
+         AS edges_of_points,
+       (SELECT list(e) FROM (SELECT * FROM edges
+                             WHERE NOT EXISTS (SELECT 1 FROM pois WHERE id = edge_id)) e)
+         AS edges_no_points,
+       (SELECT list(r) FROM (SELECT id, path, cost FROM restrictions) r) AS restrictions;
+
+# Upstream's q2: undirected, both sides, the side written in upper case (estimate_drivingSide
+# lowercases it).
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 6) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [-3, 7]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points, restrictions FROM twp),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  restrictions_sql := 'SELECT id, path, cost FROM restrictions',
+  driver := 'trsp_with_points', driving_side := 'B', directed := false, details := false)
+WHERE edge = -1 ORDER BY seq;
+----
+-1	-3	3.2
+-1	7	1.6
+
+# Upstream's q4: many to many, left side, again in upper case.
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 6) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1, 6]::BIGINT[] AS starts, [-3, 1]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points, restrictions FROM twp),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  restrictions_sql := 'SELECT id, path, cost FROM restrictions',
+  driver := 'trsp_with_points', driving_side := 'L', directed := true, details := false)
+WHERE edge = -1 ORDER BY seq;
+----
+-1	-3	3.2
+-1	1	9.6
+6	-3	2.6
+6	1	9
+
+# Upstream's q1: right side (what the side-less signature derives from directed = true), with
+# details: the points passed on the way (-6, -3) are rows too.
+query IIRII
+SELECT count(*), max(path_seq), round(max(agg_cost), 6), count(*) FILTER (WHERE node = -6),
+       count(*) FILTER (WHERE node = -3)
+FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [10]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points, restrictions FROM twp),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  restrictions_sql := 'SELECT id, path, cost FROM restrictions',
+  driver := 'trsp_with_points', driving_side := 'r', directed := true, details := true);
+----
+12	12	8.4	1	1
+
+# Upstream's q5: the combinations form.
+query IIR
+SELECT start_vid, end_vid, round(agg_cost, 6) FROM _pgr_exec(
+  (SELECT NULL AS edges, (SELECT list(c) FROM (SELECT source, target FROM combos) c) AS combinations,
+          points, edges_of_points, edges_no_points, restrictions FROM twp),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  restrictions_sql := 'SELECT id, path, cost FROM restrictions',
+  combinations_sql := 'SELECT source, target FROM combos',
+  driver := 'trsp_with_points', driving_side := 'r', directed := true, details := true)
+WHERE edge = -1 ORDER BY seq;
+----
+-1	10	8.4
+6	-3	2.6
+
+# The .c layer's check (src/trsp/trsp_withPoints.c), verbatim.
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, [-1]::BIGINT[] AS starts, [10]::BIGINT[] AS ends, points, edges_of_points,
+          edges_no_points, restrictions FROM twp),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  points_sql := 'SELECT pid, edge_id, fraction, side FROM pois',
+  restrictions_sql := 'SELECT id, path, cost FROM restrictions',
+  driver := 'trsp_with_points', driving_side := 'x');
+----
+Invalid Input Error: Invalid value of 'driving side'
+HINT: Valid value are 'r', 'l', 'b'
+
+# STRICT: nothing is checked when an argument is NULL.
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), edges_sql := '', points_sql := 'SELECT 1',
+  driver := 'trsp_with_points', driving_side := 'x', null_input := true);
+----
+0
