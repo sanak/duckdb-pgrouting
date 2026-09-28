@@ -11,6 +11,7 @@
 
 #include "c_types/ii_t_rt.h"
 #include "c_types/iid_t_rt.h"
+#include "cpp_common/coordinate_t.hpp"
 #include "cpp_common/edge_t.hpp"
 #include "cpp_common/edge_xy_t.hpp"
 #include "cpp_common/get_check_data.hpp"
@@ -56,6 +57,10 @@ template <> inline std::string InputKind<Restriction_t>() {
 // pgr_TSP's cost matrix (get_matrixRows).
 template <> inline std::string InputKind<IID_t_rt>() {
 	return duckdb_pgrouting::KIND_MATRIX;
+}
+// pgr_TSPeuclidean's coordinates (get_coordinates).
+template <> inline std::string InputKind<Coordinate_t>() {
+	return duckdb_pgrouting::KIND_COORDINATES;
 }
 
 } // namespace detail

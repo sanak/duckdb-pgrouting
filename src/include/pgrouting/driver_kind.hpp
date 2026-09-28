@@ -39,7 +39,8 @@ enum class DriverKind : uint8_t {
 	TRSP_VIA,
 	TRSP_VIA_WITH_POINTS,
 	TURN_RESTRICTED_PATH,
-	TSP
+	TSP,
+	EUCLIDEAN_TSP
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -120,6 +121,7 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::TRSP_VIA_WITH_POINTS, "trsp_via_with_points", ResultShape::ROUTES, RequestCheck::DRIVING_SIDE, true},
     {DriverKind::TURN_RESTRICTED_PATH, "turn_restricted_path", ResultShape::KSP, RequestCheck::TURN_RESTRICTED_PATH},
     {DriverKind::TSP, "tsp", ResultShape::TSP_TOUR, RequestCheck::NONE},
+    {DriverKind::EUCLIDEAN_TSP, "euclidean_tsp", ResultShape::TSP_TOUR, RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -134,7 +136,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::TSP) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::EUCLIDEAN_TSP) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

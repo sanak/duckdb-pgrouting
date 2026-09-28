@@ -32,6 +32,8 @@ constexpr const char *KIND_POINTS = "points";
 constexpr const char *KIND_RESTRICTIONS = "restrictions";
 // pgr_TSP's cost-matrix query (start_vid, end_vid, agg_cost).
 constexpr const char *KIND_MATRIX = "matrix";
+// pgr_TSPeuclidean's coordinates query (id, x, y).
+constexpr const char *KIND_COORDINATES = "coordinates";
 
 // Looks up the input registered for this exact (sql, kind) pair.
 // Throws std::string when the key is unknown: that means the driver asked for an input the

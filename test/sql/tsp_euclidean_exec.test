@@ -1,0 +1,114 @@
+# name: test/sql/tsp_euclidean_exec.test
+# description: _pgr_exec with the euclidean TSP driver: the coordinates input, TSP_TOUR rows
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE coords AS SELECT * FROM (VALUES (1, 0, 0), (2, 3, 0), (3, 3, 4), (4, 0, 4), (5, 1, 2)) AS c(id, x, y);
+
+statement ok
+CREATE TABLE cx AS SELECT (SELECT list(c) FROM (SELECT id, x, y FROM coords) c) AS coordinates;
+
+statement ok
+CREATE MACRO c() AS 'SELECT id, x, y FROM coords';
+
+query TTTT
+SELECT typeof(seq), typeof(node), typeof(cost), typeof(agg_cost)
+FROM _pgr_exec((SELECT NULL AS edges, coordinates FROM cx), coordinates_sql := c(), driver := 'euclidean_tsp')
+LIMIT 1;
+----
+INTEGER	BIGINT	DOUBLE	DOUBLE
+
+# Straight-line costs; end 3 is visited last before the return to 1.
+query IIRR
+SELECT seq, node, round(cost, 4), round(agg_cost, 4)
+FROM _pgr_exec((SELECT NULL AS edges, coordinates FROM cx), coordinates_sql := c(), driver := 'euclidean_tsp',
+  start_id := 1, end_id := 3)
+ORDER BY seq;
+----
+1	1	0	0
+2	2	3	3
+3	5	2.8284	5.8284
+4	4	2.2361	8.0645
+5	3	3	11.0645
+6	1	5	16.0645
+
+# DOUBLE coordinates read like INTEGER ones.
+query TR
+SELECT string_agg(node::VARCHAR, ' ' ORDER BY seq), round(max(agg_cost), 4)
+FROM _pgr_exec(
+  (SELECT NULL AS edges, (SELECT list(c) FROM (SELECT id, x::DOUBLE AS x, y::DOUBLE AS y FROM coords) c) AS coordinates),
+  coordinates_sql := 'doubles', driver := 'euclidean_tsp', start_id := 2, end_id := 5);
+----
+2 1 4 3 5 2	15.6569
+
+# start_id alone: which tour depends on the row order, but it is a closed tour through all five.
+query IIIII
+SELECT count(*), count(DISTINCT node), min(node) FILTER (WHERE seq = 1), min(node) FILTER (WHERE seq = 6),
+       count(*) FILTER (WHERE seq = 1 AND cost <> 0)
+FROM _pgr_exec((SELECT NULL AS edges, coordinates FROM cx), coordinates_sql := c(), driver := 'euclidean_tsp',
+  start_id := 1);
+----
+6	5	1	1	0
+
+# One point: a tour that stays put.
+query TR
+SELECT string_agg(node::VARCHAR, ' ' ORDER BY seq), max(agg_cost)
+FROM _pgr_exec(
+  (SELECT NULL AS edges, (SELECT list(c) FROM (SELECT 5 AS id, 1 AS x, 1 AS y) c) AS coordinates),
+  coordinates_sql := 'one point', driver := 'euclidean_tsp');
+----
+5 5	0
+
+statement error
+SELECT * FROM _pgr_exec((SELECT NULL AS edges, coordinates FROM cx), coordinates_sql := c(),
+  driver := 'euclidean_tsp', start_id := 99);
+----
+Parameter 'start_id' do not exist on the data
+
+# An empty coordinates query returns nothing before any id is checked.
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT NULL AS edges, (SELECT list(c) FROM (SELECT id, x, y FROM coords WHERE id > 100) c) AS coordinates),
+  coordinates_sql := 'empty', driver := 'euclidean_tsp', start_id := 99);
+----
+0
+
+# Upstream's column checks (get_coordinates: id ANY-INTEGER, x and y ANY-NUMERICAL, all required).
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, (SELECT list(c) FROM (SELECT x, y FROM coords) c) AS coordinates),
+  coordinates_sql := 'no id', driver := 'euclidean_tsp');
+----
+Column 'id' not Found
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, (SELECT list(c) FROM (SELECT id, x::VARCHAR AS x, y FROM coords) c) AS coordinates),
+  coordinates_sql := 'text x', driver := 'euclidean_tsp');
+----
+Unexpected Column 'x' type. Expected ANY-NUMERICAL
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges,
+          (SELECT list(c) FROM (SELECT id, x, y FROM coords UNION ALL SELECT 6, 1, NULL) c) AS coordinates),
+  coordinates_sql := 'NULL y', driver := 'euclidean_tsp');
+----
+Unexpected Null value in column y
+
+statement error
+SELECT * FROM _pgr_exec((SELECT NULL AS edges, 'x' AS coordinates), coordinates_sql := 'x', driver := 'euclidean_tsp');
+----
+_pgr_exec: column 'coordinates' must be LIST(STRUCT)
+
+# A matrix is no substitute: the euclidean driver looks for coordinates only.
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, (SELECT list(m) FROM (SELECT 1 AS start_vid, 2 AS end_vid, 1.0 AS agg_cost) m) AS matrix),
+  matrix_sql := 'm', coordinates_sql := 'm', driver := 'euclidean_tsp');
+----
+no 'coordinates' input registered

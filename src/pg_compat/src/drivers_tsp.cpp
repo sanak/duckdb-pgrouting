@@ -9,6 +9,7 @@
 #include "driver_groups.hpp"
 
 #include "drivers/tsp/TSP_driver.h"
+#include "drivers/tsp/euclideanTSP_driver.h"
 
 namespace duckdb_pgrouting {
 
@@ -17,6 +18,10 @@ bool CallTspDriver(const DriverRequest &request, const DriverArrays &, DriverCal
 	case DriverKind::TSP:
 		pgr_do_tsp(request.matrix_sql.c_str(), request.start_id, request.end_id, &call.tour_rows, &call.count,
 		           &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::EUCLIDEAN_TSP:
+		pgr_do_euclideanTSP(request.coordinates_sql.c_str(), request.start_id, request.end_id, &call.tour_rows,
+		                    &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	default:
 		return false;

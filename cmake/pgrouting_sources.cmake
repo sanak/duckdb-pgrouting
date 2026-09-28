@@ -70,5 +70,6 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/trsp/trspVia_driver.cpp
     ${PGROUTING_DIR}/src/trsp/trspVia_withPoints_driver.cpp
     ${PGROUTING_DIR}/src/tsp/TSP_driver.cpp
+    ${PGROUTING_DIR}/src/tsp/euclideanTSP_driver.cpp
     ${PGROUTING_DIR}/src/tsp/tsp.cpp
     ${PGROUTING_DIR}/src/withPoints/withPointsVia_driver.cpp)

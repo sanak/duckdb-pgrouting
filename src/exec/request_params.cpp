@@ -31,6 +31,7 @@ const RequestParameter REQUEST_PARAMETERS[] = {
     {"combinations_sql", &DriverRequest::combinations_sql},
     {"restrictions_sql", &DriverRequest::restrictions_sql},
     {"matrix_sql", &DriverRequest::matrix_sql},
+    {"coordinates_sql", &DriverRequest::coordinates_sql},
     {"directed", &DriverRequest::directed},
     {"only_cost", &DriverRequest::only_cost},
     {"normal", &DriverRequest::normal},

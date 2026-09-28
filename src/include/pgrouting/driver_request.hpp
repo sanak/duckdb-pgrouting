@@ -19,8 +19,10 @@ struct DriverRequest {
 	std::string combinations_sql;
 	// The turn-restriction families' restrictions query (cost, path).
 	std::string restrictions_sql;
-	// pgr_TSP's cost-matrix query (start_vid, end_vid, agg_cost). The TSP families read no edges_sql.
+	// pgr_TSP's cost-matrix query (start_vid, end_vid, agg_cost) and pgr_TSPeuclidean's coordinates
+	// query (id, x, y). The TSP families read no edges_sql.
 	std::string matrix_sql;
+	std::string coordinates_sql;
 	std::vector<int64_t> starts;
 	std::vector<int64_t> ends;
 	bool has_starts = false;

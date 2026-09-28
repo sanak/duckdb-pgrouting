@@ -54,6 +54,9 @@ std::string RestrictionsKey(const DriverRequest &request) {
 std::string MatrixKey(const DriverRequest &request) {
 	return request.matrix_sql;
 }
+std::string CoordinatesKey(const DriverRequest &request) {
+	return request.coordinates_sql;
+}
 
 // With points given, the public overloads pass 'edges' as an untyped NULL: the driver then fetches
 // the points query and the two edge queries it derives from edges_sql and points_sql, never
@@ -70,6 +73,8 @@ const InputSlot INPUT_SLOTS[] = {
     {"restrictions", SlotKind::ROW_LIST, false, duckdb_pgrouting::KIND_RESTRICTIONS, RestrictionsKey, nullptr,
      nullptr},
     {"matrix", SlotKind::ROW_LIST, false, duckdb_pgrouting::KIND_MATRIX, MatrixKey, nullptr, nullptr},
+    {"coordinates", SlotKind::ROW_LIST, false, duckdb_pgrouting::KIND_COORDINATES, CoordinatesKey, nullptr,
+     nullptr},
     {"starts", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::starts, &DriverRequest::has_starts},
     {"ends", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::ends, &DriverRequest::has_ends},
     {"roots", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::roots, &DriverRequest::has_roots},
