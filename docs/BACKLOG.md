@@ -48,6 +48,11 @@ decision rather than an oversight.
   unlike `pgr_bellmanFord`, `pgr_edwardMoore` and `pgr_dagShortestPath`, whose headers do poll it
   inside their main loop. PostgreSQL runs the same unmodified algorithm bodies and is equally
   uncancellable there, so this is not a regression introduced by the shared interrupt path.
+- **`pgr_ksp` with a negative `K` returns no rows instead of an error.** Upstream's C entry
+  (`src/ksp/ksp.c`) returns before calling its driver when `K < 0`, under a "TODO return error
+  message" comment, while `pgr_withPointsKSP` raises `Invalid value of 'K'` for the same input.
+  This extension reproduces both answers (`RequestCheck::KSP_K` and `WITH_POINTS_KSP` in
+  `src/include/pgrouting/driver_kind.hpp`); follow upstream if it turns the first into an error.
 - **`pgr_aStar` / `pgr_aStarCost` / `pgr_aStarCostMatrix` can return a dearer-than-optimal cost when
   a source has several targets.** `distance_heuristic::operator()` in
   `include/astar/astar.hpp` minimizes over the still-open goals but erases a goal from that set as
@@ -130,23 +135,16 @@ Each of these would be a change no test could observe, so none of them is made:
   without fault injection. The rest of that mapping is pinned by `test/sql/dijkstra_errors.test`,
   but any claim that the mapping is covered has to carry this qualifier — it is never true
   unqualified.
-- **Two of the six stems in the `dijkstra` category, `dijkstraCostMatrix` and `dijkstraVia`,
-  produce no generated test file at all.** `dijkstraVia` produces none because its page is not
-  selected: `pgr_dijkstravia` is not implemented. `dijkstraCostMatrix` produces none either: its
-  only runnable block, q1, passes a scalar subquery
-  (`(SELECT array_agg(id) FROM vertices WHERE id IN (...))`) as the vertex array, which DuckDB
-  rejects in the argument of a table function that is not in-out (`Table function cannot contain
-  subqueries`), so it is skipped in `test/pgrouting_skip.json`; q2 calls `pgr_TSP`, which this
-  extension does not implement. Coverage for `pgr_dijkstraCostMatrix` instead comes from the
-  hand-written `test/sql/dijkstra_cost.test`. The workaround for the scalar-subquery shape, used
-  there and available to any caller: `SET VARIABLE ids = (SELECT list(id) FROM vertices WHERE ...);`
-  then pass `getvariable('ids')` as the vertex-array argument. The category itself still has
-  generated files — `dijkstra.test`, `dijkstraCost.test`, `dijkstraNear.test` and
-  `dijkstraNearCost.test` all exist — only these two stems within it have none. Coverage for "what
-  upstream offers here that this build does not" is recorded by layer 4 (the signature comparison)
-  for both remaining functions (`pgr_TSP`, `pgr_dijkstravia`), and by
-  `test/pgrouting_not_ported.json` only for `pgr_dijkstravia`; `pgr_TSP` surfaces solely through
-  `check_signatures.py`'s unimplemented-function list.
+- **`dijkstra/dijkstraCostMatrix.pg` produces no generated test file.** Its only runnable block,
+  q1, passes a scalar subquery (`(SELECT array_agg(id) FROM vertices WHERE id IN (...))`) as the
+  vertex array, which DuckDB rejects in the argument of a table function that is not in-out
+  (`Table function cannot contain subqueries`), so it is skipped in `test/pgrouting_skip.json`; q2
+  calls `pgr_TSP`, which this extension does not implement. Coverage for `pgr_dijkstraCostMatrix`
+  instead comes from the hand-written `test/sql/dijkstra_cost.test`. The workaround for the
+  scalar-subquery shape, used there and available to any caller: `SET VARIABLE ids = (SELECT
+  list(id) FROM vertices WHERE ...);` then pass `getvariable('ids')` as the vertex-array
+  argument. Every other stem of the category has a generated file. `pgr_TSP` surfaces solely
+  through `check_signatures.py`'s unimplemented-function list.
 - **`bdDijkstra/bdDijkstraCostMatrix.pg` produces no generated test file either**, for the same
   reason: its only runnable block, q2, passes a scalar subquery as the vertex array and is skipped
   in `test/pgrouting_skip.json`; q3 calls `pgr_TSP`. Coverage for `pgr_bdDijkstraCostMatrix` comes
@@ -159,6 +157,8 @@ Each of these would be a change no test could observe, so none of them is made:
   generated test file.** The first is a regression script with no named blocks; the second
   documents `pgr_randomSpanTree`, which pgRouting 4.0 does not publish (it is absent from
   `sql/sigs/pgrouting--4.0.sig`).
+- **`ksp/turnRestrictedPath.pg` produces no generated test file** until `pgr_turnRestrictedPath`
+  is ported: its page is selected by stem, and no implemented function has that name.
 - **A depth- or distance-limited `pgr_kruskalBFS`/`kruskalDFS`/`kruskalDD`/`primBFS`/`primDFS`/
   `primDD` generated block asserts only the tree structure, not which vertices are reached.**
   Its spanning-forest invariant (each root's single depth-0 row, no repeated node, every other

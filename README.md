@@ -74,7 +74,7 @@ WHERE function_name LIKE 'pgr\_%' ESCAPE '\' ORDER BY ALL;
 
 ## Functions
 
-Thirty-six pgRouting functions — one hundred and twenty-six of pgRouting 4.0's signatures — plus
+Forty pgRouting functions — one hundred and forty-four of pgRouting 4.0's signatures — plus
 `pgr_version()`.
 The [pgRouting documentation](https://docs.pgrouting.org/4.0/en/) describes each algorithm, its
 parameters and its result columns, all of which this extension keeps.
@@ -86,6 +86,8 @@ parameters and its result columns, all of which this extension keeps.
 | Bidirectional Dijkstra | `pgr_bdDijkstra`, `pgr_bdDijkstraCost`, `pgr_bdDijkstraCostMatrix` |
 | A* | `pgr_aStar`, `pgr_aStarCost`, `pgr_aStarCostMatrix`, `pgr_bdAstar`, `pgr_bdAstarCost`, `pgr_bdAstarCostMatrix` |
 | Other shortest paths | `pgr_bellmanFord`, `pgr_edwardMoore`, `pgr_dagShortestPath`, `pgr_binaryBreadthFirstSearch` |
+| K shortest paths | `pgr_ksp`, `pgr_withPointsKSP` |
+| Via | `pgr_dijkstraVia`, `pgr_withPointsVia` |
 | Components | `pgr_connectedComponents` |
 | Driving distance | `pgr_drivingDistance`, `pgr_withPointsDD` |
 | Spanning trees | `pgr_kruskal`, `pgr_kruskalBFS`, `pgr_kruskalDFS`, `pgr_kruskalDD`, `pgr_prim`, `pgr_primBFS`, `pgr_primDFS`, `pgr_primDD` |
