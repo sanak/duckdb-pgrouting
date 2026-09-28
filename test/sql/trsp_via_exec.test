@@ -1,0 +1,219 @@
+# name: test/sql/trsp_via_exec.test
+# description: _pgr_exec with the two TRSP Via drivers: restricted legs, U-turns, strict, points
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE pois AS SELECT pid, edge_id, side, fraction FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+statement ok
+CREATE TABLE er AS
+SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges,
+       (SELECT list(r) FROM (SELECT path, cost FROM restrictions) r) AS restrictions;
+
+# Upstream's q1: the third leg (1 -> 8) turns 7 -> 10 and carries the restriction's cost.
+query IIIRR
+SELECT path_id, start_vid, end_vid, agg_cost, route_agg_cost
+FROM _pgr_exec((SELECT edges, restrictions, [5, 7, 1, 8, 15]::BIGINT[] AS via FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp_via')
+WHERE edge < 0 ORDER BY seq;
+----
+1	5	7	2	2
+2	7	1	2	4
+3	1	8	103	107
+4	8	15	4	111
+
+query IIII
+SELECT count(*), max(seq), count(*) FILTER (WHERE edge = -2), max(seq) FILTER (WHERE edge = -2)
+FROM _pgr_exec((SELECT edges, restrictions, [5, 7, 1, 8, 15]::BIGINT[] AS via FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp_via');
+----
+15	15	1	15
+
+# Upstream's q0: the restricted leg re-routed by TrspHandler keeps its place in the route.
+query IIIRR
+SELECT path_id, start_vid, end_vid, agg_cost, route_agg_cost
+FROM _pgr_exec((SELECT edges, restrictions, [5, 1, 8]::BIGINT[] AS via FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp_via')
+WHERE edge < 0 ORDER BY seq;
+----
+1	5	1	10	10
+2	1	8	103	113
+
+# Upstream's q13: U_turn_on_edge = false sends pgr_dijkstraVia's second leg 7 -> 6 round through 11,
+# 16, 15 and 10 (cost 5); that detour breaks the restriction [9, 16], so TrspHandler re-routes the
+# leg, and it knows no U-turn rule: the leg comes back straight over edge 4 (cost 1).
+query IIIR
+SELECT path_id, node, edge, agg_cost
+FROM _pgr_exec((SELECT edges, restrictions, [6, 7, 6]::BIGINT[] AS via FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp_via', u_turn_on_edge := false)
+ORDER BY seq;
+----
+1	6	4	0
+1	7	-1	1
+2	7	4	0
+2	6	-2	1
+
+# No restriction rows: exactly pgr_dijkstraVia's answer.
+query I
+SELECT count(*) FROM (
+  (SELECT * FROM _pgr_exec(
+     (SELECT edges, (SELECT list(r) FROM (SELECT path, cost FROM restrictions WHERE id < 0) r) AS restrictions,
+             [5, 7, 1]::BIGINT[] AS via FROM er),
+     edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+     restrictions_sql := 'SELECT path, cost FROM restrictions WHERE id < 0', driver := 'trsp_via')
+   EXCEPT
+   SELECT * FROM _pgr_exec((SELECT edges, [5, 7, 1]::BIGINT[] AS via FROM er),
+     edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via'))
+  UNION ALL
+  (SELECT * FROM _pgr_exec((SELECT edges, [5, 7, 1]::BIGINT[] AS via FROM er),
+     edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges', driver := 'dijkstra_via')
+   EXCEPT
+   SELECT * FROM _pgr_exec(
+     (SELECT edges, (SELECT list(r) FROM (SELECT path, cost FROM restrictions WHERE id < 0) r) AS restrictions,
+             [5, 7, 1]::BIGINT[] AS via FROM er),
+     edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+     restrictions_sql := 'SELECT path, cost FROM restrictions WHERE id < 0', driver := 'trsp_via')));
+----
+0
+
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT edges, (SELECT list(r) FROM (SELECT path, cost FROM restrictions WHERE id < 0) r) AS restrictions,
+          [5, 7, 1]::BIGINT[] AS via FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions WHERE id < 0', driver := 'trsp_via');
+----
+6
+
+# 4 cannot be reached from 7: without strict the other legs come back; with it, nothing.
+query II
+SELECT DISTINCT start_vid, end_vid
+FROM _pgr_exec((SELECT edges, restrictions, [5, 7, 4, 2]::BIGINT[] AS via FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp_via')
+ORDER BY 1;
+----
+4	2
+5	7
+
+query I
+SELECT count(*)
+FROM _pgr_exec((SELECT edges, restrictions, [5, 7, 4, 2]::BIGINT[] AS via FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp_via', strict := true);
+----
+0
+
+# One vertex is no leg; no vertex is upstream's get_intArray(..., false) error.
+query I
+SELECT count(*)
+FROM _pgr_exec((SELECT edges, restrictions, [5]::BIGINT[] AS via FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp_via');
+----
+0
+
+statement error
+SELECT count(*)
+FROM _pgr_exec((SELECT edges, restrictions, []::BIGINT[] AS via FROM er),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges',
+  restrictions_sql := 'SELECT path, cost FROM restrictions', driver := 'trsp_via');
+----
+No elements found
+
+# More rows than one DuckDB vector: 1 -> 800 -> 1600 -> 2401 along a one-way chain whose first turn is
+# restricted at cost 100, so the first leg is re-routed. seq and the route cost continue across every
+# 2048-row chunk. The legs are kept short because upstream's TrspHandler::construct_path recurses once
+# per edge of a re-routed path.
+statement ok
+CREATE TABLE chain AS SELECT i AS id, i AS source, i + 1 AS target, 1.0::DOUBLE AS cost FROM range(1, 2401) t(i);
+
+statement ok
+CREATE TABLE chain_restrictions AS SELECT [1, 2]::BIGINT[] AS path, 100.0::DOUBLE AS cost;
+
+query IIIRI
+SELECT count(*), count(DISTINCT seq), max(seq), max(route_agg_cost), count(*) FILTER (WHERE cost = 101)
+FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM chain) e) AS edges,
+          (SELECT list(r) FROM (SELECT * FROM chain_restrictions) r) AS restrictions,
+          [1, 800, 1600, 2401]::BIGINT[] AS via),
+  edges_sql := 'SELECT * FROM chain', restrictions_sql := 'SELECT * FROM chain_restrictions',
+  driver := 'trsp_via');
+----
+2403	2403	2403	2500	1
+
+# pgr_trspVia_withPoints's driver.
+statement ok
+CREATE TABLE tvwp AS
+SELECT (SELECT list(p) FROM (SELECT pid, edge_id, side, fraction FROM pois) p) AS points,
+       (SELECT list(e) FROM (SELECT DISTINCT edges.* FROM edges JOIN pois ON (id = edge_id)) e)
+         AS edges_of_points,
+       (SELECT list(e) FROM (SELECT * FROM edges
+                             WHERE NOT EXISTS (SELECT 1 FROM pois WHERE id = edge_id)) e)
+         AS edges_no_points,
+       (SELECT list(r) FROM (SELECT path, cost FROM restrictions) r) AS restrictions;
+
+# Upstream's q0 (the side-less signature passes 'r' when directed).
+query IIIRR
+SELECT path_id, start_vid, end_vid, round(agg_cost, 6), round(route_agg_cost, 6) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-6, 15, -5]::BIGINT[] AS via, points, edges_of_points, edges_no_points, restrictions
+     FROM tvwp),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  points_sql := 'SELECT pid, edge_id, side, fraction FROM pois',
+  restrictions_sql := 'SELECT path, cost FROM restrictions',
+  driver := 'trsp_via_with_points', driving_side := 'r', directed := true, details := false)
+WHERE edge < 0 ORDER BY seq;
+----
+1	-6	15	5.3	5.3
+2	15	-5	1.8	7.1
+
+# Upstream's q1: the side in upper case.
+query IIIRR
+SELECT path_id, start_vid, end_vid, round(agg_cost, 6), round(route_agg_cost, 6) FROM _pgr_exec(
+  (SELECT NULL AS edges, [-6, 7, -4, 8, -2]::BIGINT[] AS via, points, edges_of_points, edges_no_points,
+          restrictions FROM tvwp),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  points_sql := 'SELECT pid, edge_id, side, fraction FROM pois',
+  restrictions_sql := 'SELECT path, cost FROM restrictions',
+  driver := 'trsp_via_with_points', driving_side := 'L', directed := true, details := false)
+WHERE edge < 0 ORDER BY seq;
+----
+1	-6	7	0.3	0.3
+2	7	-4	1.7	2
+3	-4	8	3.9	5.9
+4	8	-2	2.6	8.5
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT NULL AS edges, [-6, 7]::BIGINT[] AS via, points, edges_of_points, edges_no_points, restrictions
+     FROM tvwp),
+  edges_sql := 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id',
+  points_sql := 'SELECT pid, edge_id, side, fraction FROM pois',
+  restrictions_sql := 'SELECT path, cost FROM restrictions',
+  driver := 'trsp_via_with_points', driving_side := 'x');
+----
+Invalid Input Error: Invalid value of 'driving side'
+HINT: Valid value are 'r', 'l', 'b'
+
+# STRICT: nothing is checked when an argument is NULL.
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), edges_sql := '', points_sql := 'SELECT 1',
+  driver := 'trsp_via_with_points', driving_side := 'x', null_input := true);
+----
+0

@@ -119,8 +119,8 @@ void EmitKsp(const DriverResult &result, EmitState &state, idx_t n, DataChunk &o
 	}
 }
 
-// Upstream's Via C entries (src/dijkstra/dijkstraVia.c, src/withPoints/withPointsVia.c) number the
-// rows from 1, pass path_id (one per leg, counted even for a leg with no path) through, and add 1
+// Upstream's Via C entries (src/dijkstra/dijkstraVia.c, src/withPoints/withPointsVia.c, src/trsp/trspVia.c,
+// src/trsp/trspVia_withPoints.c) number the rows from 1, pass path_id (one per leg, counted even for a leg with no path) through, and add 1
 // to the driver's zero-based path_seq. The route's last row carries edge -2, as the driver writes it.
 void EmitRoutes(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<Routes_t>();

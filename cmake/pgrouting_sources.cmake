@@ -65,4 +65,6 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/traversal/depthFirstSearch_driver.cpp
     ${PGROUTING_DIR}/src/trsp/trsp_driver.cpp
     ${PGROUTING_DIR}/src/trsp/trsp_withPoints_driver.cpp
+    ${PGROUTING_DIR}/src/trsp/trspVia_driver.cpp
+    ${PGROUTING_DIR}/src/trsp/trspVia_withPoints_driver.cpp
     ${PGROUTING_DIR}/src/withPoints/withPointsVia_driver.cpp)
