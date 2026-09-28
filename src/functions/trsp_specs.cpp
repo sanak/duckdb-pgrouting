@@ -3,7 +3,10 @@
 // The overload table of sql/trsp/*.sql. pgr_trsp calls _pgr_trspv4(edges, restrictions, starts,
 // ends, directed) or its combinations form; a one-vertex argument becomes a one-element array.
 // pgr_trsp_withPoints calls _pgr_trsp_withPoints_v4(edges, restrictions, points, starts, ends,
-// directed, driving_side, details) or its combinations form.
+// directed, driving_side, details) or its combinations form. pgr_trspVia calls
+// _pgr_trspVia(edges, restrictions, via, directed, strict, U_turn_on_edge) and pgr_trspVia_withPoints
+// _pgr_trspVia_withPoints_v4(edges, restrictions, points, via, directed, strict, U_turn_on_edge,
+// driving_side, details).
 
 #include "function_spec.hpp"
 
@@ -17,6 +20,12 @@ DriverFlags TrspFlags() {
 
 DriverFlags TrspWithPointsFlags(DrivingSideSource side) {
 	auto flags = FamilyFlags(DriverKind::TRSP_WITH_POINTS, false, Projection::ALL);
+	flags.driving_side = side;
+	return flags;
+}
+
+DriverFlags TrspViaWithPointsFlags(DrivingSideSource side) {
+	auto flags = FamilyFlags(DriverKind::TRSP_VIA_WITH_POINTS, false, Projection::ALL);
 	flags.driving_side = side;
 	return flags;
 }
@@ -73,6 +82,16 @@ const duckdb::vector<FunctionSpec> TRSP_SPECS = {
     {"pgr_trsp_withPoints",
      {ArgKind::EDGES_SQL, ArgKind::RESTRICTIONS_SQL, ArgKind::POINTS_SQL, ArgKind::COMBINATIONS_SQL},
      {DIRECTED, DETAILS}, TrspWithPointsFlags(SIDE_OF_DIRECTED)},
+
+    {"pgr_trspVia", {ArgKind::EDGES_SQL, ArgKind::RESTRICTIONS_SQL, ArgKind::VIA},
+     {DIRECTED, VIA_STRICT, VIA_U_TURN_ON_EDGE}, FamilyFlags(DriverKind::TRSP_VIA, false, Projection::ALL)},
+
+    // pgr_trspVia_withPoints: the side follows the via array; details defaults to false.
+    {"pgr_trspVia_withPoints",
+     {ArgKind::EDGES_SQL, ArgKind::RESTRICTIONS_SQL, ArgKind::POINTS_SQL, ArgKind::VIA, ArgKind::DRIVING_SIDE},
+     {DIRECTED, VIA_STRICT, VIA_U_TURN_ON_EDGE, DETAILS}, TrspViaWithPointsFlags(CHAR_SIDE)},
+    {"pgr_trspVia_withPoints", {ArgKind::EDGES_SQL, ArgKind::RESTRICTIONS_SQL, ArgKind::POINTS_SQL, ArgKind::VIA},
+     {DIRECTED, VIA_STRICT, VIA_U_TURN_ON_EDGE, DETAILS}, TrspViaWithPointsFlags(SIDE_OF_DIRECTED)},
 };
 
 } // namespace duckdb_pgrouting

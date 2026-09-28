@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// The overload table of sql/ksp/ksp.sql and sql/ksp/withPointsKSP.sql (pgr_turnRestrictedPath, in
-// the same directory, is not ported yet). pgr_ksp calls _pgr_ksp_v4(edges, starts, ends, K,
-// directed, heap_paths) or its combinations form; a one-vertex argument becomes a one-element
-// array. pgr_withPointsKSP calls _pgr_withPointsKSP_v4(edges, points, starts, ends, K,
-// driving_side, directed, heap_paths, details) or its combinations form. The registered name
-// pgr_ksp is the one sql/ksp/ksp.sql declares; upstream's documentation writes pgr_KSP, which
-// DuckDB resolves to the same function.
+// The overload table of sql/ksp/ksp.sql, sql/ksp/withPointsKSP.sql and sql/ksp/turnRestrictedPath.sql.
+// pgr_ksp calls _pgr_ksp_v4(edges, starts, ends, K, directed, heap_paths) or its combinations form; a
+// one-vertex argument becomes a one-element array. pgr_withPointsKSP calls
+// _pgr_withPointsKSP_v4(edges, points, starts, ends, K, driving_side, directed, heap_paths, details)
+// or its combinations form. pgr_turnRestrictedPath calls _pgr_turnRestrictedPath_v4(edges,
+// restrictions, ARRAY[start], ARRAY[end], K, directed, heap_paths, stop_on_first, strict). The
+// registered name pgr_ksp is the one sql/ksp/ksp.sql declares; upstream's documentation writes
+// pgr_KSP, which DuckDB resolves to the same function.
 
 #include "function_spec.hpp"
 
@@ -74,6 +75,11 @@ const duckdb::vector<FunctionSpec> KSP_SPECS = {
      {DIRECTED, HEAP_PATHS, DETAILS}, WithPointsKspFlags(SIDE_OF_DIRECTED)},
     {"pgr_withPointsKSP", {ArgKind::EDGES_SQL, ArgKind::POINTS_SQL, ArgKind::COMBINATIONS_SQL, ArgKind::K},
      {DIRECTED, HEAP_PATHS, DETAILS}, WithPointsKspFlags(SIDE_OF_DIRECTED)},
+
+    {"pgr_turnRestrictedPath",
+     {ArgKind::EDGES_SQL, ArgKind::RESTRICTIONS_SQL, ArgKind::START_VID, ArgKind::END_VID, ArgKind::K},
+     {DIRECTED, HEAP_PATHS, STOP_ON_FIRST, VIA_STRICT},
+     FamilyFlags(DriverKind::TURN_RESTRICTED_PATH, false, Projection::ALL)},
 };
 
 } // namespace duckdb_pgrouting

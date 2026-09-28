@@ -65,7 +65,10 @@ pgr_primBFS	pgr_primBFS
 pgr_primDD	pgr_primDD
 pgr_primDFS	pgr_primDFS
 pgr_trsp	pgr_trsp
+pgr_trspVia	pgr_trspVia
+pgr_trspVia_withPoints	pgr_trspVia_withPoints
 pgr_trsp_withPoints	pgr_trsp_withPoints
+pgr_turnRestrictedPath	pgr_turnRestrictedPath
 pgr_version	pgr_version
 pgr_withPoints	pgr_withPoints
 pgr_withPointsCost	pgr_withPointsCost

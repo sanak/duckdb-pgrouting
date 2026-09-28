@@ -1,0 +1,91 @@
+# name: test/sql/trsp_via_withpoints.test
+# description: pgr_trspVia_withPoints: variants, driving side, details, STRICT
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id';
+
+statement ok
+CREATE MACRO r() AS 'SELECT path, cost FROM restrictions';
+
+statement ok
+CREATE MACRO p() AS 'SELECT pid, edge_id, side, fraction FROM pointsofinterest';
+
+# Two signatures, each with four defaulted parameters (directed, strict, U_turn_on_edge, details).
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name = 'pgr_trspVia_withPoints' AND tags['ext'] = 'pgrouting' GROUP BY ALL;
+----
+pgr_trspVia_withPoints	10
+
+# Upstream's q0 and q1 (the side in upper case).
+query IIIRR
+SELECT path_id, start_vid, end_vid, round(agg_cost, 6), round(route_agg_cost, 6)
+FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 15, -5]) WHERE edge < 0 ORDER BY seq;
+----
+1	-6	15	5.3	5.3
+2	15	-5	1.8	7.1
+
+query IIIRR
+SELECT path_id, start_vid, end_vid, round(agg_cost, 6), round(route_agg_cost, 6)
+FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 7, -4, 8, -2], 'L', directed := true) WHERE edge < 0 ORDER BY seq;
+----
+1	-6	7	0.3	0.3
+2	7	-4	1.7	2
+3	-4	8	3.9	5.9
+4	8	-2	2.6	8.5
+
+# Every variant of both signatures: 10 rows.
+query I
+SELECT count(*) FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 15, -5], true)
+UNION ALL SELECT count(*) FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 15, -5], true, false, true, false)
+UNION ALL SELECT count(*) FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 15, -5], 'r')
+UNION ALL SELECT count(*) FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 15, -5], 'r', true, false, true, false)
+UNION ALL SELECT count(*) FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 15, -5], 'R', details := false);
+----
+10
+10
+10
+10
+10
+
+# Without a side argument the side follows directed.
+query I
+SELECT count(*) FROM (
+  (SELECT * FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 7, -4, 8, -2])
+   EXCEPT SELECT * FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 7, -4, 8, -2], 'r'))
+  UNION ALL
+  (SELECT * FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 7, -4, 8, -2], false)
+   EXCEPT SELECT * FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 7, -4, 8, -2], 'b', false)));
+----
+0
+
+statement error
+SELECT * FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 7], 'x');
+----
+Invalid Input Error: Invalid value of 'driving side'
+HINT: Valid value are 'r', 'l', 'b'
+
+query I
+SELECT count(*) FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 7], NULL::VARCHAR)
+UNION ALL SELECT count(*) FROM pgr_trspVia_withPoints(e(), r(), p(), [-6, 7], details := NULL)
+UNION ALL SELECT count(*) FROM pgr_trspVia_withPoints(e(), NULL::VARCHAR, p(), [-6, 7], 'x');
+----
+0
+0
+0

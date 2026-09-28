@@ -1,0 +1,122 @@
+# name: test/sql/trsp_via.test
+# description: pgr_trspVia: variants, restricted legs, U-turns, strict, STRICT
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+statement ok
+CREATE MACRO r() AS 'SELECT path, cost FROM restrictions';
+
+# One signature with three defaulted parameters (directed, strict, U_turn_on_edge): 4 variants.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name = 'pgr_trspVia' AND tags['ext'] = 'pgrouting' GROUP BY ALL;
+----
+pgr_trspVia	4
+
+query T
+SELECT column_name FROM (DESCRIBE SELECT * FROM pgr_trspVia(e(), r(), [5, 7, 1, 8, 15]));
+----
+seq
+path_id
+path_seq
+start_vid
+end_vid
+node
+edge
+cost
+agg_cost
+route_agg_cost
+
+# Upstream's q1 through every variant: 15 rows.
+query I
+SELECT count(*) FROM pgr_trspVia(e(), r(), [5, 7, 1, 8, 15])
+UNION ALL SELECT count(*) FROM pgr_trspVia(e(), r(), [5, 7, 1, 8, 15], true)
+UNION ALL SELECT count(*) FROM pgr_trspVia(e(), r(), [5, 7, 1, 8, 15], true, false)
+UNION ALL SELECT count(*) FROM pgr_trspVia(e(), r(), [5, 7, 1, 8, 15], true, false, true)
+UNION ALL SELECT count(*) FROM pgr_trspVia(e(), r(), [5, 7, 1, 8, 15], directed := true, strict := false,
+                                           U_turn_on_edge := true);
+----
+15
+15
+15
+15
+15
+
+# Upstream's q5.
+query IR
+SELECT path_id, route_agg_cost FROM pgr_trspVia(e(), r(), [5, 7, 1, 8, 15]) WHERE edge < 0 ORDER BY seq;
+----
+1	2
+2	4
+3	107
+4	111
+
+# Upstream's q13 against pgr_dijkstraVia's q11: without U-turns pgr_dijkstraVia detours 7 -> 6 at
+# cost 5; that detour breaks a restriction, and the re-routed leg comes back straight over edge 4.
+query IR
+SELECT path_id, agg_cost FROM pgr_trspVia(e(), r(), [6, 7, 6], U_turn_on_edge := false) WHERE edge < 0 ORDER BY seq;
+----
+1	1
+2	1
+
+query IR
+SELECT path_id, agg_cost FROM pgr_dijkstraVia(e(), [6, 7, 6], U_turn_on_edge := false) WHERE edge < 0 ORDER BY seq;
+----
+1	1
+2	5
+
+# No restriction rows: exactly pgr_dijkstraVia's rows.
+query I
+SELECT count(*) FROM (
+  (SELECT * FROM pgr_trspVia(e(), 'SELECT path, cost FROM restrictions WHERE id < 0', [5, 7, 1])
+   EXCEPT SELECT * FROM pgr_dijkstraVia(e(), [5, 7, 1]))
+  UNION ALL
+  (SELECT * FROM pgr_dijkstraVia(e(), [5, 7, 1])
+   EXCEPT SELECT * FROM pgr_trspVia(e(), 'SELECT path, cost FROM restrictions WHERE id < 0', [5, 7, 1])));
+----
+0
+
+# An unreachable leg: skipped unless strict.
+query I
+SELECT count(*) FROM pgr_trspVia(e(), r(), [5, 7, 4, 2], strict := true)
+UNION ALL SELECT count(*) FROM pgr_trspVia(e(), r(), [5]);
+----
+0
+0
+
+query II
+SELECT DISTINCT start_vid, end_vid FROM pgr_trspVia(e(), r(), [5, 7, 4, 2]) ORDER BY 1;
+----
+4	2
+5	7
+
+statement error
+SELECT * FROM pgr_trspVia(e(), r(), []::BIGINT[]);
+----
+No elements found
+
+# STRICT: a NULL anywhere gives no rows.
+query I
+SELECT count(*) FROM pgr_trspVia(e(), NULL::VARCHAR, [5, 7])
+UNION ALL SELECT count(*) FROM pgr_trspVia(e(), r(), NULL::BIGINT[])
+UNION ALL SELECT count(*) FROM pgr_trspVia(e(), r(), [5, 7], strict := NULL)
+UNION ALL SELECT count(*) FROM pgr_trspVia(e(), r(), [5, 7], U_turn_on_edge := NULL);
+----
+0
+0
+0
+0

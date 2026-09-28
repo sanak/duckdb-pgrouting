@@ -59,7 +59,9 @@ constexpr OptionalParam EPSILON {"epsilon", OptionalType::DOUBLE, "1.0", "epsilo
 constexpr OptionalParam EQUICOST {"equicost", OptionalType::BOOLEAN, "false", "equicost"};
 constexpr OptionalParam MAX_DEPTH {"max_depth", OptionalType::BIGINT, "9223372036854775807", "max_depth"};
 constexpr OptionalParam HEAP_PATHS {"heap_paths", OptionalType::BOOLEAN, "false", "heap_paths"};
-// The Via families' parameters. Not named STRICT: windows.h defines that as a macro.
+constexpr OptionalParam STOP_ON_FIRST {"stop_on_first", OptionalType::BOOLEAN, "true", "stop_on_first"};
+// strict, as the Via families and pgr_turnRestrictedPath declare it. Not named STRICT: windows.h
+// defines that as a macro.
 constexpr OptionalParam VIA_STRICT {"strict", OptionalType::BOOLEAN, "false", "strict"};
 // Upstream's spelling; DuckDB matches named parameters case-insensitively.
 constexpr OptionalParam VIA_U_TURN_ON_EDGE {"U_turn_on_edge", OptionalType::BOOLEAN, "true", "u_turn_on_edge"};

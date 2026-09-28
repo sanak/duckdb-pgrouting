@@ -1,0 +1,115 @@
+# name: test/sql/turn_restricted_path.test
+# description: pgr_turnRestrictedPath: variants, strict, heap paths, K, STRICT
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT * EXCLUDE (geom) FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+statement ok
+CREATE MACRO r() AS 'SELECT path, cost FROM restrictions';
+
+# One signature with four defaulted parameters (directed, heap_paths, stop_on_first, strict).
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name = 'pgr_turnRestrictedPath' AND tags['ext'] = 'pgrouting' GROUP BY ALL;
+----
+pgr_turnRestrictedPath	5
+
+query T
+SELECT column_name FROM (DESCRIBE SELECT * FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3));
+----
+seq
+path_id
+path_seq
+start_vid
+end_vid
+node
+edge
+cost
+agg_cost
+
+# Upstream's q1, with its Infinity marker where the broken restriction begins.
+query IIIIIIIRR
+SELECT * FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3) ORDER BY seq;
+----
+1	1	1	0	8	3	7	1	inf
+2	1	2	0	8	7	10	1	1
+3	1	3	0	8	8	-1	0	2
+
+# Every variant, positionally and by name.
+query I
+SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3, true)
+UNION ALL SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3, true, false)
+UNION ALL SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3, true, false, true)
+UNION ALL SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3, true, false, true, false)
+UNION ALL SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3, directed := true, heap_paths := false,
+                                                      stop_on_first := true, strict := false);
+----
+3
+3
+3
+3
+3
+
+# Upstream's q2 (strict), q3 (undirected) and q4 (every candidate).
+query I
+SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3, strict := true);
+----
+0
+
+query IR
+SELECT count(*), max(agg_cost) FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3, directed := false);
+----
+7	6
+
+query IIIR
+SELECT path_id, start_vid, count(*), max(agg_cost)
+FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3, directed := false, heap_paths := true, stop_on_first := false)
+GROUP BY ALL ORDER BY 1;
+----
+1	0	7	6
+2	1	7	6
+
+# Start = end and an absent vertex find nothing; K < 0 is upstream's error.
+query I
+SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 3, 3)
+UNION ALL SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 999, 3);
+----
+0
+0
+
+statement error
+SELECT * FROM pgr_turnRestrictedPath(e(), r(), 3, 8, -1);
+----
+Invalid Input Error: Invalid value of 'K'
+HINT: Valid value are greater than 0
+
+# A restriction with an empty path is refused (upstream would read past it).
+statement error
+SELECT * FROM pgr_turnRestrictedPath(e(), 'SELECT * FROM (VALUES ([]::BIGINT[], 5.0)) AS r(path, cost)', 3, 8, 3);
+----
+Unexpected NULL or empty array in column path
+
+# STRICT: a NULL anywhere gives no rows, and K is not checked.
+query I
+SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 8, NULL::INTEGER)
+UNION ALL SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), NULL::BIGINT, 8, -1)
+UNION ALL SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3, stop_on_first := NULL)
+UNION ALL SELECT count(*) FROM pgr_turnRestrictedPath(e(), r(), 3, 8, 3, strict := NULL);
+----
+0
+0
+0
+0

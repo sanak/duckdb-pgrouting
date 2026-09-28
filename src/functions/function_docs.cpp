@@ -170,6 +170,11 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "placed along its edges; a point is addressed by the negative of its id.",
      "SELECT * FROM pgr_withPointsKSP('SELECT id, source, target, cost, reverse_cost FROM edges', "
      "'SELECT pid, edge_id, fraction, side FROM pointsofinterest', -1, -2, 2, 'l')"},
+    {"pgr_turnRestrictedPath",
+     "A path between two vertices that breaks none of the given turn restrictions, searched among up "
+     "to K candidate paths by Yen's algorithm; strict returns nothing when every candidate breaks one.",
+     "SELECT * FROM pgr_turnRestrictedPath('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "'SELECT path, cost FROM restrictions', 3, 8, 3)"},
     {"pgr_withPointsVia",
      "A route through the given vertices and temporary points, in order, as consecutive shortest "
      "paths on the graph plus points placed along its edges.",
@@ -186,6 +191,17 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "SELECT * FROM pgr_trsp_withPoints('SELECT id, source, target, cost, reverse_cost FROM edges', "
      "'SELECT path, cost FROM restrictions', 'SELECT pid, edge_id, fraction, side FROM pointsofinterest', "
      "-1, 10)"},
+    {"pgr_trspVia",
+     "A route that visits the given vertices in order, as consecutive turn-restricted shortest paths; "
+     "each row also carries the cost along the whole route.",
+     "SELECT * FROM pgr_trspVia('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "'SELECT path, cost FROM restrictions', [5, 7, 1, 8, 15])"},
+    {"pgr_trspVia_withPoints",
+     "A turn-restricted route through the given vertices and temporary points, in order, on the graph "
+     "plus points placed along its edges.",
+     "SELECT * FROM pgr_trspVia_withPoints('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "'SELECT path, cost FROM restrictions', 'SELECT pid, edge_id, side, fraction FROM pointsofinterest', "
+     "[-6, 15, -5])"},
     {"pgr_breadthFirstSearch",
      "Visits the graph breadth-first from the given roots, one row per vertex reached with its "
      "predecessor and depth, optionally only to a maximum depth.",
