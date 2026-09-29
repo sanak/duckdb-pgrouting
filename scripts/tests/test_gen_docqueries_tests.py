@@ -817,5 +817,91 @@ class TestStaleOutputsKeepsUnverifiedSpatialPages(unittest.TestCase):
         self.assertEqual(existing, gen.stale_outputs(existing, [], None))
 
 
+class TestFlowTieClassification(unittest.TestCase):
+    COLUMNS = ["seq", "edge", "start_vid", "end_vid", "flow", "residual_capacity"]
+    DIRECTIVE = "IIIIII"
+    SQL = "SELECT * FROM pgr_edmondsKarp('SELECT id, source, target, capacity FROM edges', 1, 4)"
+
+    # One unit from 1 to 4, through 2.
+    UPSTREAM = [["1", "1", "1", "2", "1", "0"], ["2", "2", "2", "4", "1", "0"]]
+    # The same unit through 3: another maximum flow of the same value.
+    OTHER = [[1, 3, 1, 3, 1, 0], [2, 4, 3, 4, 1, 0]]
+    # Two units: not a maximum flow of upstream's value.
+    MORE = [[1, 1, 1, 2, 1, 0], [2, 2, 2, 4, 1, 0], [3, 3, 1, 3, 1, 0], [4, 4, 3, 4, 1, 0]]
+
+    def _table(self, columns, rows):
+        import pgparse
+
+        return pgparse.AlignedTable(columns, rows, len(rows))
+
+    def _result(self, columns, rows, types):
+        return duckdbcli.QueryResult(columns=columns, types=types, rows=rows)
+
+    def test_another_flow_of_the_same_value_is_a_flow_tie(self):
+        verdict = gen.classify(self._table(self.COLUMNS, self.UPSTREAM),
+                               self._result(self.COLUMNS, self.OTHER, ["INTEGER"] + ["BIGINT"] * 5),
+                               self.DIRECTIVE, None, self.SQL)
+        self.assertEqual("flow_tie", verdict)
+
+    def test_a_different_value_is_a_defect(self):
+        verdict = gen.classify(self._table(self.COLUMNS, self.UPSTREAM),
+                               self._result(self.COLUMNS, self.MORE, ["INTEGER"] + ["BIGINT"] * 5),
+                               self.DIRECTIVE, None, self.SQL)
+        self.assertEqual("defect", verdict)
+
+    def test_the_same_rows_still_match(self):
+        same = [[gen.coerce(c, t) for c, t in zip(r, self.DIRECTIVE)] for r in self.UPSTREAM]
+        verdict = gen.classify(self._table(self.COLUMNS, self.UPSTREAM),
+                               self._result(self.COLUMNS, same, ["INTEGER"] + ["BIGINT"] * 5),
+                               self.DIRECTIVE, None, self.SQL)
+        self.assertEqual("match", verdict)
+
+    def test_the_total_is_the_sources_net_outflow(self):
+        # 1 -> 2 -> 4 plus a cycle 2 -> 3 -> 2 that adds no value.
+        rows = [[1, 1, 1, 2, 1, 0], [2, 2, 2, 4, 1, 0], [3, 5, 2, 3, 1, 0], [4, 6, 3, 2, 1, 0]]
+        self.assertEqual((1, None), gen.flow_shape(self.COLUMNS, rows, self.DIRECTIVE))
+
+    def test_a_min_cost_flow_compares_its_total_cost_too(self):
+        columns = ["seq", "edge", "source", "target", "flow", "residual_capacity", "cost", "agg_cost"]
+        directive = "IIIIIIRR"
+        sql = self.SQL.replace("pgr_edmondsKarp", "pgr_maxFlowMinCost")
+        upstream = [["1", "1", "1", "2", "1", "0", "1", "1"], ["2", "2", "2", "4", "1", "0", "1", "2"]]
+        dearer = [[1, 3, 1, 3, 1, 0, 5.0, 5.0], [2, 4, 3, 4, 1, 0, 5.0, 10.0]]
+        types = ["INTEGER"] + ["BIGINT"] * 5 + ["DOUBLE"] * 2
+        self.assertEqual("defect", gen.classify(self._table(columns, upstream),
+                                                self._result(columns, dearer, types), directive, None, sql))
+        self.assertEqual((1, 2.0), gen.flow_shape(columns, upstream, directive))
+
+    def test_other_functions_never_take_the_flow_invariant(self):
+        sql = self.SQL.replace("pgr_edmondsKarp", "pgr_dijkstra")
+        verdict = gen.classify(self._table(self.COLUMNS, self.UPSTREAM),
+                               self._result(self.COLUMNS, self.OTHER, ["INTEGER"] + ["BIGINT"] * 5),
+                               self.DIRECTIVE, None, sql)
+        self.assertEqual("defect", verdict)
+
+    def test_the_companion_asserts_the_total(self):
+        companion = gen.flow_companion_sql(self.SQL + ";", self.COLUMNS)
+        self.assertIn("WITH r AS (" + self.SQL + ")", companion)
+        self.assertIn("SELECT start_vid AS v, flow AS f FROM r", companion)
+        self.assertIn("SELECT end_vid, -flow FROM r", companion)
+        self.assertNotIn("sum(cost)", companion)
+        self.assertEqual("I", gen.flow_directive(self.COLUMNS))
+        self.assertEqual([["1"]], gen.flow_companion_rows(self._table(self.COLUMNS, self.UPSTREAM), self.DIRECTIVE))
+
+    def test_the_min_cost_companion_asserts_the_total_cost_too(self):
+        columns = ["seq", "edge", "source", "target", "flow", "residual_capacity", "cost", "agg_cost"]
+        upstream = [["1", "1", "1", "2", "1", "0", "1", "1"], ["2", "2", "2", "4", "1", "0", "1.5", "2.5"]]
+        companion = gen.flow_companion_sql(self.SQL, columns)
+        self.assertIn("SELECT source AS v, flow AS f FROM r", companion)
+        self.assertIn("(SELECT sum(cost) FROM r)", companion)
+        self.assertEqual("IR", gen.flow_directive(columns))
+        self.assertEqual([["1", "2.5"]], gen.flow_companion_rows(self._table(columns, upstream), "IIIIIIRR"))
+
+
+class TestEdgeDisjointPathsHaveNoRouteTie(unittest.TestCase):
+    def test_edge_disjoint_paths_are_guarded_like_ksp(self):
+        self.assertIn("pgr_edgedisjointpaths", gen.KSP_FUNCTIONS)
+
+
 if __name__ == "__main__":
     unittest.main()

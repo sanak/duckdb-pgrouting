@@ -51,8 +51,20 @@ TREE_TIE_COLUMNS = ("start_vid", "node", "agg_cost")
 # equal-cost paths come back depends on the order in which Yen's algorithm explores them, and the
 # per-endpoint row count and maximum cost that settle a route tie cannot see that choice. A block
 # calling one of these that differs from upstream stays a defect until a person decides an
-# invariant for it.
-KSP_FUNCTIONS = frozenset({"pgr_ksp", "pgr_withpointsksp", "pgr_turnrestrictedpath"})
+# invariant for it. pgr_edgeDisjointPaths is here for the same reason: which set of disjoint paths
+# comes back is not a cost tie, and a differing block stays a defect.
+KSP_FUNCTIONS = frozenset({"pgr_ksp", "pgr_withpointsksp", "pgr_turnrestrictedpath", "pgr_edgedisjointpaths"})
+
+# Maximum-flow results: which edges carry the flow depends on the algorithm's search order and so on
+# the order the edges are read in; the flow's value does not, nor, for a minimum-cost flow, its total
+# cost. A block calling one of these whose rows differ from upstream's is a flow tie when both totals
+# match, and is then asserted through them.
+FLOW_FUNCTIONS = frozenset({"pgr_pushrelabel", "pgr_boykovkolmogorov", "pgr_edmondskarp", "pgr_maxflowmincost"})
+FLOW_NOTE = (
+    "which edges carry the flow depends on the order the edges are read in, so only what every maximum "
+    "flow shares is asserted: its value (the net flow leaving the sources) and, for a minimum-cost flow, "
+    "its total cost"
+)
 
 # Kruskal/Prim results: which minimum spanning forest (or which walk of one) comes back among
 # equal-cost edges is never guaranteed, unlike a route or a driving-distance tree. Boost's
@@ -357,15 +369,59 @@ def tree_tie_shape(sql: str, columns: Sequence[str], rows: Sequence[Sequence[Any
     return sorted(tuple(_actual(row[i], directive[i], float_digits) for i in index) for row in rows)
 
 
+def flow_ends(columns: Sequence[str]) -> Optional[Tuple[str, str]]:
+    """The tail and head column names of a flow result, or None when it is not one."""
+    lowered = [c.lower() for c in columns]
+    if "flow" not in lowered:
+        return None
+    for tail, head in (("start_vid", "end_vid"), ("source", "target")):
+        if tail in lowered and head in lowered:
+            return tail, head
+    return None
+
+
+def flow_shape(columns: Sequence[str], rows: Sequence[Sequence[Any]], directive: str,
+               float_digits: Optional[int] = None) -> Optional[Tuple[Any, Any]]:
+    """A flow's value and, with a cost column, its total cost; None when the result is no flow.
+
+    The value is the sum of every vertex's positive net outflow: inner vertices balance and the
+    targets only take in, so that is what the sources send, without knowing which they are.
+    """
+    ends = flow_ends(columns)
+    if ends is None:
+        return None
+    lowered = [c.lower() for c in columns]
+    tail, head, flow = (lowered.index(ends[0]), lowered.index(ends[1]), lowered.index("flow"))
+    net: Dict[Any, int] = {}
+    for row in rows:
+        amount = _actual(row[flow], directive[flow], float_digits)
+        net_tail = _actual(row[tail], directive[tail], float_digits)
+        net_head = _actual(row[head], directive[head], float_digits)
+        net[net_tail] = net.get(net_tail, 0) + amount
+        net[net_head] = net.get(net_head, 0) - amount
+    value = sum(o for o in net.values() if o > 0)
+    total_cost = None
+    if "cost" in lowered:
+        cost = lowered.index("cost")
+        total_cost = sum(_actual(row[cost], directive[cost], float_digits) for row in rows)
+    return value, total_cost
+
+
 def classify(table: pgparse.AlignedTable, result: duckdbcli.QueryResult, directive: str,
              float_digits: Optional[int] = None, sql: str = "") -> str:
-    """"match", "tie", "tree_tie" or "defect" for one block."""
+    """"match", "tie", "tree_tie", "flow_tie" or "defect" for one block."""
     expected = [[coerce(cell, t) for cell, t in zip(row, directive)] for row in table.rows]
     actual = [[_actual(v, t, float_digits) for v, t in zip(row, directive)] for row in result.rows]
     if expected == actual:
         return "match"
     called = {match.group(1).lower() for match in CALL_RE.finditer(sql)}
     if called & KSP_FUNCTIONS:
+        return "defect"
+    if called & FLOW_FUNCTIONS:
+        upstream_flow = flow_shape(table.columns, table.rows, directive, float_digits)
+        ours_flow = flow_shape(result.columns, result.rows, directive, float_digits)
+        if upstream_flow is not None and upstream_flow == ours_flow:
+            return "flow_tie"
         return "defect"
     upstream_shape = tie_shape(table.columns, table.rows, directive, float_digits)
     ours_shape = tie_shape(result.columns, result.rows, directive, float_digits)
@@ -429,6 +485,35 @@ def tree_companion_rows(table: pgparse.AlignedTable, directive: str, sql: str) -
         cost_text = str(int(cost)) if isinstance(cost, float) and cost.is_integer() else repr(cost)
         out.append([str(start), str(node), cost_text])
     return out
+
+
+def flow_companion_sql(sql: str, columns: Sequence[str]) -> str:
+    """Wrap a flow query in the assertion that survives another flow of the same value."""
+    ends = flow_ends(columns)
+    assert ends is not None  # classify() already established this
+    total_cost = ", (SELECT sum(cost) FROM r)" if "cost" in [c.lower() for c in columns] else ""
+    return (
+        "WITH r AS ({}),\n"
+        "n AS (SELECT v, sum(f) AS o FROM (SELECT {} AS v, flow AS f FROM r UNION ALL SELECT {}, -flow FROM r) "
+        "GROUP BY v)\n"
+        "SELECT (SELECT sum(o) FROM n WHERE o > 0){};".format(sql.strip().rstrip(";"), ends[0], ends[1], total_cost)
+    )
+
+
+def flow_directive(columns: Sequence[str]) -> str:
+    """The companion's column types: the value, and the total cost when there is a cost column."""
+    return "IR" if "cost" in [c.lower() for c in columns] else "I"
+
+
+def flow_companion_rows(table: pgparse.AlignedTable, directive: str) -> List[List[str]]:
+    """The flow companion's expected row, computed from upstream's table, not from this build."""
+    shape = flow_shape(table.columns, table.rows, directive)
+    assert shape is not None  # classify() already established this
+    value, total_cost = shape
+    row = [str(value)]
+    if total_cost is not None:
+        row.append(str(int(total_cost)) if float(total_cost).is_integer() else repr(total_cost))
+    return [row]
 
 
 def is_forest_call(sql: str) -> bool:
@@ -948,6 +1033,17 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Set[str
                         "each root's vertices and their costs"
                     ),
                 )
+            )
+            continue
+        if verdict == "flow_tie":
+            ties.setdefault("{}/{}.pg".format(category, stem), {})[block.name] = {
+                "reason": "equal-value flow",
+                "upstream_rows": table.row_count,
+                "differing_rows": _differing(table, result, directive, float_digits),
+            }
+            items.append(
+                Emitted(block.name, flow_directive(table.columns), flow_companion_sql(sql, table.columns),
+                        flow_companion_rows(table, directive), note=FLOW_NOTE)
             )
             continue
         items.append(Emitted(block.name, directive, sql, expected_cells(table, directive)))
