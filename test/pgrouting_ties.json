@@ -158,6 +158,24 @@
       "upstream_rows": 13
     }
   },
+  "ordering/cuthillMckeeOrdering.pg": {
+    "q1": {
+      "reason": "vertex ordering",
+      "upstream_rows": 17
+    }
+  },
+  "ordering/kingOrdering.pg": {
+    "q1": {
+      "reason": "vertex ordering",
+      "upstream_rows": 17
+    }
+  },
+  "ordering/sloanOrdering.pg": {
+    "q1": {
+      "reason": "vertex ordering",
+      "upstream_rows": 17
+    }
+  },
   "spanningTree/kruskal.pg": {
     "q1": {
       "reason": "equal-cost spanning forest",

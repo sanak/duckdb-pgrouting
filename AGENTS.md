@@ -20,18 +20,22 @@ Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`,
 `pgr_turnRestrictedPath`, `pgr_trsp`, `pgr_trsp_withPoints`, `pgr_trspVia`,
 `pgr_trspVia_withPoints`, `pgr_TSP`, `pgr_TSPeuclidean`, `pgr_kruskal`, `pgr_kruskalBFS`,
 `pgr_kruskalDFS`, `pgr_kruskalDD`, `pgr_prim`, `pgr_primBFS`, `pgr_primDFS`, `pgr_primDD`,
-`pgr_breadthFirstSearch`, `pgr_depthFirstSearch`, `pgr_connectedComponents`,
-`pgr_extractVertices` and `pgr_findCloseEdges` — pgRouting's one hundred and sixty-five
-corresponding signatures, each registered once per number of its defaulted parameters passed
-positionally — and `pgr_version()`.
+`pgr_breadthFirstSearch`, `pgr_depthFirstSearch`, `pgr_connectedComponents`, `pgr_strongComponents`,
+`pgr_biconnectedComponents`, `pgr_articulationPoints`, `pgr_bridges`, `pgr_makeConnected`,
+`pgr_sequentialVertexColoring`, `pgr_bipartite`, `pgr_edgeColoring`, `pgr_cuthillMckeeOrdering`,
+`pgr_kingOrdering`, `pgr_sloanOrdering`, `pgr_topologicalSort`, `pgr_johnson`, `pgr_floydWarshall`,
+`pgr_betweennessCentrality`, `pgr_extractVertices` and `pgr_findCloseEdges` — pgRouting's one
+hundred and eighty corresponding signatures, each registered once per number of its defaulted
+parameters passed positionally — and `pgr_version()`.
 The `pgr_dijkstra` and `pgr_withPoints` families call pgRouting's unified `do_shortestPath` driver;
 with points given, DuckDB also materializes the two edge queries that driver derives from the edge
-and points SQL. The other twenty-four families call their own per-family `pgr_do_*` drivers through
-one adapter on the pg_compat side; the two A* families also read each edge's end-point coordinates
-(`x1`, `y1`, `x2`, `y2`), and `pgr_withPointsDD` reads the same two derived edge queries as
-`pgr_withPoints`. So do `pgr_withPointsKSP`, `pgr_withPointsVia`, `pgr_trsp_withPoints` and
-`pgr_trspVia_withPoints`. The K-shortest-path families (`pgr_ksp`, `pgr_withPointsKSP`) number their
-paths with a `path_id` that runs across the whole answer, and the Via families (`pgr_dijkstraVia`,
+and points SQL. The other thirty-nine families call their own per-family `pgr_do_*` drivers, or
+upstream's unified `do_ordering` and `do_allpairs`, through one adapter on the pg_compat side; the
+two A* families also read each edge's end-point coordinates (`x1`, `y1`, `x2`, `y2`), and
+`pgr_withPointsDD` reads the same two derived edge queries as `pgr_withPoints`. So do
+`pgr_withPointsKSP`, `pgr_withPointsVia`, `pgr_trsp_withPoints` and `pgr_trspVia_withPoints`. The
+K-shortest-path families (`pgr_ksp`, `pgr_withPointsKSP`) number their paths with a `path_id` that
+runs across the whole answer, and the Via families (`pgr_dijkstraVia`,
 `pgr_withPointsVia`) add `route_agg_cost`, the cost along the whole route. The turn-restriction
 families (`pgr_trsp`, `pgr_trsp_withPoints`, `pgr_trspVia`, `pgr_trspVia_withPoints`,
 `pgr_turnRestrictedPath`) also read a restrictions query (`cost`, and `path` as a list of any
@@ -43,7 +47,13 @@ The root-based families (driving distance, breadth- and depth-first search) take
 return tree rows (`seq, depth, start_vid, pred, node, edge, cost, agg_cost`); the spanning-tree
 families do too, except `pgr_kruskal` and `pgr_prim` themselves, which take no roots and return a
 plain edge list (`edge, cost`) instead. `pgr_connectedComponents` goes through the same adapter and
-exec function (`_pgr_exec`), which returns its vertex/component pairs instead of path rows.
+exec function (`_pgr_exec`), which returns its vertex/component pairs instead of path rows. So do
+the other graph-analysis functions (components, coloring, ordering, all pairs, betweenness
+centrality): their drivers fill three generic result shapes named after the upstream structs'
+fields (`IDS`, `ID_VALUE`, `TRIPLES`), and each public overload renames the columns it returns with
+a fixed select list (`Projection::COLUMNS`, `src/functions/function_spec.hpp`), as upstream's SQL
+wrapper selects from its internal function. Two upstream crashes on degenerate graphs are answered
+with no rows by the adapter instead (`src/pg_compat/src/drivers_graph.cpp`, `drivers_unified.cpp`).
 `pgr_extractVertices` and `pgr_findCloseEdges`, which upstream writes in PL/pgSQL, are reimplemented
 as bind_replace functions. Each binds the caller's edge query, picks one of upstream's modes, and
 rewrites the call into a fixed DuckDB query (`src/functions/sql_template.cpp`). Their geometry work
@@ -206,12 +216,15 @@ their `unittest` suite. The test tools read upstream's committed fixtures and dr
   because which minimum spanning forest `pgr_kruskal*` builds among equal-cost edges depends on
   the C++ standard library's `std::priority_queue` order (libstdc++ vs. libc++); `pgr_prim*` uses
   Boost's own heap instead, but its blocks are asserted the same way for uniformity. A
-  `pgr_ksp`/`pgr_withPointsKSP`/`pgr_turnRestrictedPath` block never takes the equal-cost
-  route-tie verdict, because which K of several equal-cost paths Yen's algorithm returns depends
-  on its exploration order and the route invariant cannot see that choice; such a block that
-  differs from upstream stays a failure for a human to decide. No TSP block takes a tie verdict
-  either (its rows carry no endpoints to compare); one whose tour depends on the row order is
-  skip-listed by a human.
+  `pgr_cuthillMckeeOrdering`/`pgr_kingOrdering`/`pgr_sloanOrdering` block is likewise always
+  asserted through an ordering invariant (row count, distinct vertices, first and last `seq`),
+  because Boost breaks their ties among equal-degree vertices with `std::sort`, `std::make_heap`
+  or `std::priority_queue`. A `pgr_ksp`/`pgr_withPointsKSP`/`pgr_turnRestrictedPath` block never
+  takes the equal-cost route-tie verdict, because which K of several equal-cost paths Yen's
+  algorithm returns depends on its exploration order and the route invariant cannot see that
+  choice; such a block that differs from upstream stays a failure for a human to decide. No TSP
+  block takes a tie verdict either (its rows carry no endpoints to compare); one whose tour depends
+  on the row order is skip-listed by a human.
 - `scripts/check_signatures.py` — compares upstream's `sql/sigs/pgrouting--<ver>.sig` against
   `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
   signature is intentionally registered as several DuckDB variants, one per number of its
@@ -235,7 +248,7 @@ Three JSON control files live under `test/`:
 | file | owner | content |
 |---|---|---|
 | `test/pgrouting_skip.json` | human | documentation blocks skipped entirely, each with a reason |
-| `test/pgrouting_ties.json` | the generator | blocks downgraded to tie-insensitive assertions, each with the observed difference — a spanning-forest entry has none, since it never depended on this build's answer; never hand-edited, regenerate instead |
+| `test/pgrouting_ties.json` | the generator | blocks downgraded to tie-insensitive assertions, each with the observed difference — a spanning-forest or vertex-ordering entry has none, since it never depended on this build's answer; never hand-edited, regenerate instead |
 | `test/pgrouting_not_ported.json` | human | upstream functions deliberately not ported, each with a reason |
 
 CI has five workflows. `MainDistributionPipeline.yml` builds every DuckDB platform through
@@ -278,7 +291,9 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
   `src/functions/function_spec.hpp`. A new
   upstream result struct adds a `ResultShape` value with its columns and emitter
   (`src/exec/result_emitters.cpp`) and, when its rows own arrays, a case in `DriverResult`'s
-  release. Every public function the family adds also needs its row in
+  release. A struct that already has a generic shape (`IDS` for `int64_t`, `ID_VALUE` for `II_t_rt`,
+  `TRIPLES` for `IID_t_rt`) needs none: its spec rows select and rename that shape's columns with
+  `ColumnsFlags`. Every public function the family adds also needs its row in
   `src/functions/function_docs.cpp`; registration throws without it. A new kind of input query adds
   a `KIND_*` constant (`input_access.hpp`), its `InputKind` specialization
   (`src/pg_compat/include/cpp_common/get_data.hpp`), an `INPUT_SLOTS` row

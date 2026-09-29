@@ -76,6 +76,38 @@ decision rather than an oversight.
   `CHECK_FOR_INTERRUPTS` only before the approximation and inside the Dijkstra run of a missing
   matrix entry, which a complete matrix never needs. Upstream's code built on its own took 3.8 s
   for 400 random points and 68 s for 800 (macOS arm64). PostgreSQL runs the same code.
+- **Two upstream crashes on degenerate graphs are answered with no rows instead.**
+  `pgr_biconnectedComponents` over a graph whose every usable edge is a self-loop makes upstream's
+  `biconnectedComponents` (`src/components/components.cpp`) index an empty vector, and
+  `pgr_sloanOrdering` over vertices without a usable edge crashes inside Boost's `sloan_ordering`;
+  either ends the process, as it would end a PostgreSQL backend. The adapter checks the
+  materialized edges first and returns no rows without calling the driver
+  (`src/pg_compat/src/drivers_graph.cpp`, `drivers_unified.cpp`). Both are candidates to report
+  upstream. `sloan_ordering` also touches one element past the end of its degree-indexed bit vector
+  (`shrink_trace[maximum_degree]`) on ordinary graphs, which stays inside the allocated storage
+  unless the maximum degree is a multiple of 64.
+- **The graph-analysis functions keep upstream's answers on degenerate and doubled edges.** An
+  undirected function reads an edge whose `cost` and `reverse_cost` are both usable and differ as
+  two parallel edges (`graph_add_edge`, `include/cpp_common/base_graph.hpp`): `pgr_bridges` never
+  reports it, `pgr_biconnectedComponents` lists it twice (and, in `test/sql/components_exec.test`'s
+  example, files the next edge with it), and `pgr_bridges` misses a bridge whose end carries a
+  self-loop. `pgr_makeConnected` over a graph with no usable edge raises the C++ standard library's
+  vector-length error, worded differently on each platform; `pgr_johnson`, `pgr_floydWarshall` and
+  `pgr_betweennessCentrality` raise `No result generated, report this error` when there is no pair.
+  `pgr_sloanOrdering` orders only the connected part holding the smallest vertex id and repeats that
+  id in the remaining positions (upstream's own pgTAP test marks it TODO).
+- **Graph orderings, colorings, `pgr_makeConnected` and `pgr_topologicalSort` depend on the edge
+  order, and the bandwidth orderings on the C++ standard library.** Their vertices enter the graph
+  in the order the edges are read, and Boost's `cuthill_mckee_ordering`, `king_ordering` and
+  `sloan_ordering` break ties with `std::sort`, `std::make_heap` and `std::priority_queue`. On
+  upstream's own ten-vertex example this build's king ordering starts `4 0` where upstream's
+  transcript starts `0 4`. Every answer is valid; the tests assert validity wherever the answer is
+  not forced.
+- **The graph-analysis functions cannot be cancelled once their algorithm runs.** Each polls
+  `CHECK_FOR_INTERRUPTS` once, before its Boost call (`pgr_biconnectedComponents` never does).
+  `pgr_bridges` runs one connected-components pass per candidate edge, so its time grows with about
+  the square of the edge count, and `pgr_johnson` / `pgr_floydWarshall` allocate their
+  vertices-squared matrix before polling. PostgreSQL runs the same code.
 - **A turn-restricted path that must be re-routed over thousands of edges can exhaust a thread's
   stack.** Upstream's `TrspHandler::construct_path` (`src/trsp/trspHandler.cpp`) recurses once per
   edge of the path it rebuilds. PostgreSQL runs it on a backend's main thread (8 MB of stack by
@@ -224,6 +256,13 @@ Each of these would be a change no test could observe, so none of them is made:
   long has more than 2047 stops, which upstream's improvement pass would take about an hour on
   (see "Accepted as it is"). Their emitter numbers `seq` from the chunk offset exactly as the
   tree emitter does, which `test/sql/driving_distance_exec.test` crosses chunks with.
+- **`components/makeConnected.pg` and `ordering/topologicalSort.pg` produce no generated test
+  file, and `coloring/bipartite.pg` q3, `ordering/kingOrdering.pg` q2 and
+  `ordering/sloanOrdering.pg` q4 are skipped.** makeConnected's and topologicalSort's answers depend
+  on the edge order (upstream's UNION, and a sample table read in another order); the other three
+  read tables or rows that earlier, result-less blocks create. `test/sql/components.test`,
+  `coloring.test` and `ordering.test` cover the same inputs with this build's answers and their
+  validity. The three bandwidth orderings' pages are asserted through the ordering invariant only.
 
 ## Open decision
 

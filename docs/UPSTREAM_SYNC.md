@@ -15,11 +15,18 @@ the following checklist, in order. Every step either passes or tells you exactly
    pgr_drivingDistance, pgr_withPointsDD, pgr_kruskal, pgr_prim, pgr_breadthFirstSearch,
    pgr_depthFirstSearch, pgr_ksp, pgr_withPointsKSP, pgr_dijkstraVia, pgr_withPointsVia,
    pgr_trsp, pgr_trsp_withPoints, pgr_trspVia, pgr_trspVia_withPoints, pgr_turnRestrictedPath,
-   pgr_TSP, pgr_TSPeuclidean)
+   pgr_TSP, pgr_TSPeuclidean, pgr_strongComponents, pgr_biconnectedComponents,
+   pgr_articulationPoints, pgr_bridges, pgr_makeConnected, pgr_sequentialVertexColoring,
+   pgr_bipartite, pgr_edgeColoring, pgr_betweennessCentrality)
    onto `do_shortestPath`, delete its case in its
    `src/pg_compat/src/drivers_*.cpp` file, switch that family's rows in its
    `src/functions/*_specs.cpp` table to `DriverKind::SHORTEST_PATH` with the flags its new SQL
    wrapper passes, and drop its driver file from `cmake/pgrouting_sources.cmake`.
+
+   The functions on upstream's unified `do_ordering` and `do_allpairs` (pgr_cuthillMckeeOrdering,
+   pgr_kingOrdering, pgr_sloanOrdering, pgr_topologicalSort, pgr_johnson, pgr_floydWarshall) are
+   called from `src/pg_compat/src/drivers_unified.cpp` with the `Which` value their C entries pass;
+   a changed signature of either driver shows up there.
 2. Update `cmake/pgrouting_sources.cmake` for added or removed upstream files, one entry at a
    time. Never glob: the list is deliberately explicit so that a new upstream file is a decision
    rather than an accident. Do not list a `*_process.cpp` (those talk to PostgreSQL and this
@@ -54,6 +61,12 @@ the following checklist, in order. Every step either passes or tells you exactly
    element and `turnRestrictedPath_driver.cpp` builds a Rule from every row. Re-read both at a
    bump: if upstream skips such rows there (as its TRSP drivers do with `if (r.via)`) or guards
    `Rule`, delete the guard.
+
+   `src/pg_compat/src/drivers_graph.cpp` and `drivers_unified.cpp` answer two graphs with no rows
+   instead of calling the driver: pgr_biconnectedComponents over self-loops only
+   (`biconnectedComponents` in `src/components/components.cpp` indexes an empty vector) and
+   pgr_sloanOrdering over vertices without edges (Boost's `sloan_ordering` crashes). Re-read both
+   at a bump; if upstream guards them, delete the guard and its tests' comments.
 6. Run `python3 scripts/check_signatures.py`. It reports signatures that upstream added, removed or
    retyped. Adapt the overload tables (`src/functions/*_specs.cpp`) for new, changed or
    removed overloads. For a new upstream function whose name collides with a DuckDB name, or which

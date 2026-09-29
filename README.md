@@ -74,7 +74,7 @@ WHERE function_name LIKE 'pgr\_%' ESCAPE '\' ORDER BY ALL;
 
 ## Functions
 
-Forty-seven pgRouting functions — one hundred and sixty-five of pgRouting 4.0's signatures — plus
+Sixty-two pgRouting functions — one hundred and eighty of pgRouting 4.0's signatures — plus
 `pgr_version()`.
 The [pgRouting documentation](https://docs.pgrouting.org/4.0/en/) describes each algorithm, its
 parameters and its result columns, all of which this extension keeps.
@@ -90,10 +90,14 @@ parameters and its result columns, all of which this extension keeps.
 | Via | `pgr_dijkstraVia`, `pgr_withPointsVia` |
 | Turn restrictions | `pgr_trsp`, `pgr_trsp_withPoints`, `pgr_trspVia`, `pgr_trspVia_withPoints`, `pgr_turnRestrictedPath` |
 | Traveling salesperson | `pgr_TSP`, `pgr_TSPeuclidean` |
-| Components | `pgr_connectedComponents` |
+| Components | `pgr_connectedComponents`, `pgr_strongComponents`, `pgr_biconnectedComponents`, `pgr_articulationPoints`, `pgr_bridges`, `pgr_makeConnected` |
 | Driving distance | `pgr_drivingDistance`, `pgr_withPointsDD` |
 | Spanning trees | `pgr_kruskal`, `pgr_kruskalBFS`, `pgr_kruskalDFS`, `pgr_kruskalDD`, `pgr_prim`, `pgr_primBFS`, `pgr_primDFS`, `pgr_primDD` |
 | Traversal | `pgr_breadthFirstSearch`, `pgr_depthFirstSearch` |
+| Coloring | `pgr_sequentialVertexColoring`, `pgr_bipartite`, `pgr_edgeColoring` |
+| Ordering | `pgr_cuthillMckeeOrdering`, `pgr_kingOrdering`, `pgr_sloanOrdering`, `pgr_topologicalSort` |
+| All pairs | `pgr_johnson`, `pgr_floydWarshall` |
+| Metrics | `pgr_betweennessCentrality` |
 | Utilities | `pgr_extractVertices`, `pgr_findCloseEdges` |
 
 Functions deliberately not ported are listed, each with its reason, in
@@ -121,6 +125,13 @@ Functions deliberately not ported are listed, each with its reason, in
   whichever row arrives first (with `end_id` alone, the tour starts at `end_id`). Every answer is
   still a valid tour; see `docs/BACKLOG.md` for upstream's other TSP behaviours this extension
   keeps.
+- **Graph orderings, colorings and joins depend on the input order too.** `pgr_makeConnected`,
+  `pgr_sequentialVertexColoring`, `pgr_bipartite`, `pgr_edgeColoring`, `pgr_topologicalSort` and
+  the three bandwidth orderings (`pgr_cuthillMckeeOrdering`, `pgr_kingOrdering`,
+  `pgr_sloanOrdering`) return one of several valid answers, chosen by the order the edges reach
+  the algorithm; the orderings' ties also follow the C++ standard library, so they can differ
+  between Linux, macOS, Windows and Wasm. Every answer is valid for its problem; see
+  `docs/BACKLOG.md` for the upstream behaviours these functions keep.
 - **Memory.** pgRouting's own allocations are not counted against DuckDB's `memory_limit`.
 - **A turn-restricted route re-routed over more than about ten thousand edges** can overflow a
   worker thread's stack and end the process on macOS (upstream's recursion); see
