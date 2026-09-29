@@ -602,6 +602,45 @@ class TestForestCompanion(unittest.TestCase):
         )
 
 
+class TestOrderingCompanion(unittest.TestCase):
+    def _table(self, columns, rows):
+        import pgparse
+
+        return pgparse.AlignedTable(columns, rows, len(rows))
+
+    def test_the_three_bandwidth_orderings_are_ordering_calls(self):
+        for name in ("pgr_cuthillMckeeOrdering", "pgr_kingOrdering", "pgr_sloanOrdering"):
+            with self.subTest(name=name):
+                self.assertTrue(gen.is_ordering_call("SELECT * FROM {}('SELECT 1')".format(name)))
+
+    def test_topological_sort_and_kruskal_are_not_ordering_calls(self):
+        self.assertFalse(gen.is_ordering_call("SELECT * FROM pgr_topologicalSort('SELECT 1')"))
+        self.assertFalse(gen.is_ordering_call("SELECT * FROM pgr_kruskal('SELECT 1')"))
+
+    def test_companion_sql_counts_rows_vertices_and_seq_bounds(self):
+        self.assertEqual(
+            "SELECT count(*), count(DISTINCT node), min(seq), max(seq)\n"
+            "FROM (SELECT * FROM pgr_kingOrdering('x'));",
+            gen.ordering_companion_sql("SELECT * FROM pgr_kingOrdering('x');\n"),
+        )
+
+    def test_companion_rows_come_from_upstreams_table(self):
+        # A Sloan-like answer that repeats vertex 1: four rows, two vertices, seq 1 to 4.
+        table = self._table(["seq", "node"], [[" 1", "1"], [" 2", "2"], [" 3", "1"], [" 4", "1"]])
+        self.assertEqual([["4", "2", "1", "4"]], gen.ordering_companion_rows(table, "II"))
+
+    def test_an_empty_ordering_expects_null_bounds(self):
+        self.assertEqual([["0", "0", "NULL", "NULL"]],
+                         gen.ordering_companion_rows(self._table(["seq", "node"], []), "II"))
+
+    def test_actual_rows_render_like_the_expected_ones(self):
+        columns = ["count_star()", "count(DISTINCT node)", "min(seq)", "max(seq)"]
+        full = duckdbcli.QueryResult(columns, ["BIGINT"] * 4, [[17, 13, 1, 17]])
+        self.assertEqual([["17", "13", "1", "17"]], gen.ordering_actual_rows(full))
+        empty = duckdbcli.QueryResult(columns, ["BIGINT"] * 4, [[0, 0, None, None]])
+        self.assertEqual([["0", "0", "NULL", "NULL"]], gen.ordering_actual_rows(empty))
+
+
 class TestClassifyTextLeadingSpace(unittest.TestCase):
     def test_a_text_cells_leading_space_is_a_match_not_a_defect(self):
         import pgparse

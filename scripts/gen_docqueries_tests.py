@@ -67,6 +67,21 @@ FOREST_FUNCTIONS = frozenset({
 FOREST_EDGE_COLUMNS = ("edge", "cost")
 FOREST_TREE_COLUMNS = ("seq", "depth", "start_vid", "pred", "node", "edge", "cost", "agg_cost")
 
+# Bandwidth-reducing vertex orderings. Boost's cuthill_mckee_ordering sorts each level of its search
+# with std::sort, king_ordering keeps its queue with std::make_heap and sloan_ordering picks its end
+# points through a std::priority_queue, so which of several vertices of equal degree comes first
+# depends on the C++ standard library (libstdc++, libc++ and MSVC's differ) as well as on the order
+# the edges are read in. Every block calling one of these is an ordering companion unconditionally,
+# as a spanning-forest block is, whether or not this build's raw answer happens to equal upstream's.
+ORDERING_FUNCTIONS = frozenset({"pgr_cuthillmckeeordering", "pgr_kingordering", "pgr_sloanordering"})
+ORDERING_COLUMNS = ("seq", "node")
+ORDERING_DIRECTIVE = "IIII"
+ORDERING_NOTE = (
+    "which of several vertices of equal degree comes first depends on the edge order and on the C++ "
+    "standard library's tie-breaks, so only what every such ordering shares is asserted: its row "
+    "count, how many distinct vertices it lists, and its first and last seq"
+)
+
 # A call is an upstream function only when pgr_ starts an identifier, so my_pgr_dijkstra_helper
 # is left alone.
 CALL_RE = re.compile(r"(?<![A-Za-z0-9_])(pgr_\w+)\s*\(", re.IGNORECASE)
@@ -624,6 +639,35 @@ def forest_actual_rows(result: duckdbcli.QueryResult, directive: str) -> List[Li
     return out
 
 
+def is_ordering_call(sql: str) -> bool:
+    """Whether sql calls a bandwidth-reducing ordering (ORDERING_FUNCTIONS), matched like CALL_RE."""
+    called = {match.group(1).lower() for match in CALL_RE.finditer(sql)}
+    return bool(called & ORDERING_FUNCTIONS)
+
+
+def ordering_companion_sql(sql: str) -> str:
+    """Wrap an ordering query in the assertion that survives any tie-break among its vertices."""
+    return "SELECT count(*), count(DISTINCT node), min(seq), max(seq)\nFROM ({});".format(
+        sql.strip().rstrip(";"))
+
+
+def ordering_companion_rows(table: pgparse.AlignedTable, directive: str) -> List[List[str]]:
+    """The ordering companion's expected row, computed from upstream's table, not from this build."""
+    lowered = [c.lower() for c in table.columns]
+    seq_index = lowered.index("seq")
+    node_index = lowered.index("node")
+    seqs = [coerce(row[seq_index], directive[seq_index]) for row in table.rows]
+    nodes = [coerce(row[node_index], directive[node_index]) for row in table.rows]
+    if not seqs:
+        return [["0", "0", "NULL", "NULL"]]
+    return [[str(len(seqs)), str(len(set(nodes))), str(min(seqs)), str(max(seqs))]]
+
+
+def ordering_actual_rows(result: duckdbcli.QueryResult) -> List[List[str]]:
+    """This build's companion row, formatted like ordering_companion_rows' expected row."""
+    return [["NULL" if value is None else str(int(value)) for value in row] for row in result.rows]
+
+
 HEADER = """# name: {out}
 # description: Generated from pgRouting's {stem} documentation queries
 # group: [pgrouting]
@@ -790,6 +834,31 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Set[str
                     block.name, forest_directive, forest_sql, expected_forest_rows,
                     note=FOREST_NOTES[variant],
                 )
+            )
+            continue
+        if is_ordering_call(sql):
+            if [c.lower() for c in table.columns] != list(ORDERING_COLUMNS):
+                raise Mismatch(
+                    "{}/{}.pg {}: an ordering function returned a column set the ordering "
+                    "invariant does not recognise: {}".format(category, stem, block.name, table.columns)
+                )
+            ordering_sql = ordering_companion_sql(sql)
+            expected_ordering_rows = ordering_companion_rows(table, directive)
+            actual_ordering_rows = ordering_actual_rows(db.query(ordering_sql))
+            if actual_ordering_rows != expected_ordering_rows:
+                raise Mismatch(
+                    "{}/{}.pg {}: this build's ordering fails the ordering invariant\n"
+                    "expected upstream's: {}\nthis build's:         {}".format(
+                        category, stem, block.name, expected_ordering_rows, actual_ordering_rows
+                    )
+                )
+            ties.setdefault("{}/{}.pg".format(category, stem), {})[block.name] = {
+                "reason": "vertex ordering",
+                "upstream_rows": table.row_count,
+            }
+            items.append(
+                Emitted(block.name, ORDERING_DIRECTIVE, ordering_sql, expected_ordering_rows,
+                        note=ORDERING_NOTE)
             )
             continue
         if any(t == "T" and cell.strip() == "" for row in table.rows for cell, t in zip(row, directive)):
