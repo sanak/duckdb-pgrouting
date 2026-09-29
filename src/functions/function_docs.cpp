@@ -363,6 +363,15 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "A largest set of edges of an undirected graph no two of which share a vertex, as sorted edge ids; "
      "which edges are chosen can depend on the order the edges are read in, how many cannot.",
      "SELECT * FROM pgr_maxCardinalityMatch('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_chinesePostman",
+     "A shortest closed walk of a directed graph that travels every edge with a positive cost at least "
+     "once, one row per step; it starts at the first edge's source, so the walk depends on the order the "
+     "edges are read in, and a graph that has no such walk returns nothing.",
+     "SELECT * FROM pgr_chinesePostman('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17')"},
+    {"pgr_chinesePostmanCost",
+     "The total cost of a shortest closed walk that travels every edge with a positive cost at least once; "
+     "one value, also callable as a scalar function.",
+     "SELECT pgr_chinesePostmanCost('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17')"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "
