@@ -1,0 +1,222 @@
+# name: test/sql/ordering_exec.test
+# description: _pgr_exec with the ordering drivers: IDS rows, standard-library tie-breaks, the Sloan guard
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+statement ok
+CREATE TABLE ex AS SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges;
+
+statement ok
+CREATE MACRO q() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+statement ok
+CREATE TABLE g (name VARCHAR, id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO g VALUES
+  ('edge', 7, 3, 7, 1, 1),
+  ('ids 1 and 2', 1, 5, 6, 1, 1), ('ids 1 and 2', 2, 6, 10, -1, 1),
+  ('self-loop', 2, 6, 6, -1, 1),
+  ('two self-loops', 1, 2, 2, -1, 1), ('two self-loops', 2, 1, 1, 1, -1),
+  ('two edges', 1, 1, 2, 1, 1), ('two edges', 2, 3, 4, 1, 1),
+  ('no usable edge', 1, 1, 2, -1, -1), ('no usable edge', 2, 3, 4, -1, -1),
+  ('source 10', 3, 10, 15, 1, -1), ('source 10', 5, 10, 11, 1, -1),
+  ('fork', 1, 1, 2, 1, -1), ('fork', 2, 1, 3, 1, -1), ('fork', 3, 3, 2, 1, -1),
+  ('directed self-loop', 1, 1, 1, 1, -1);
+
+statement ok
+CREATE TABLE graphs AS SELECT name, list({'id': id, 'source': source, 'target': target, 'cost': cost,
+  'reverse_cost': reverse_cost} ORDER BY id) AS edges FROM g GROUP BY name;
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(),
+  driver := 'cuthill_mckee_ordering'));
+----
+seq	BIGINT
+id	BIGINT
+
+# Which of several vertices of equal degree comes first depends on the edge order and on the C++
+# standard library (Boost's std::sort, std::make_heap and std::priority_queue), so on the sample
+# graph only what every answer shares is asserted: each vertex once, numbered 1 to 17.
+query TIIII
+SELECT 'cuthill', count(*), count(DISTINCT id), min(seq), max(seq)
+FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(), driver := 'cuthill_mckee_ordering')
+UNION ALL
+SELECT 'king', count(*), count(DISTINCT id), min(seq), max(seq)
+FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(), driver := 'king_ordering')
+ORDER BY 1;
+----
+cuthill	17	17	1	17
+king	17	17	1	17
+
+# Sloan's ordering covers only the component of the smallest vertex id (13 vertices here) and fills
+# the remaining positions with that id, as upstream answers (its own pgTAP test marks this TODO).
+query IIIT
+SELECT count(*), count(DISTINCT id), count(*) FILTER (WHERE id = 1), list(id ORDER BY id) FILTER (WHERE seq <= 13)
+FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(), driver := 'sloan_ordering');
+----
+17	13	5	[1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17]
+
+# Graphs whose ordering has no tie to break, so every platform returns the same rows: upstream's
+# pgTAP edge cases, which this build reproduces.
+query TT
+SELECT 'cuthill: edge', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'edge'),
+  edges_sql := 'edge', driver := 'cuthill_mckee_ordering'))
+UNION ALL SELECT 'cuthill: ids 1 and 2', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'ids 1 and 2'),
+  edges_sql := 'ids 1 and 2', driver := 'cuthill_mckee_ordering'))
+UNION ALL SELECT 'cuthill: self-loop', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'self-loop'),
+  edges_sql := 'self-loop', driver := 'cuthill_mckee_ordering'))
+UNION ALL SELECT 'cuthill: two self-loops', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'two self-loops'),
+  edges_sql := 'two self-loops', driver := 'cuthill_mckee_ordering'))
+UNION ALL SELECT 'king: edge', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'edge'),
+  edges_sql := 'edge', driver := 'king_ordering'))
+UNION ALL SELECT 'king: ids 1 and 2', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'ids 1 and 2'),
+  edges_sql := 'ids 1 and 2', driver := 'king_ordering'))
+UNION ALL SELECT 'king: self-loop', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'self-loop'),
+  edges_sql := 'self-loop', driver := 'king_ordering'))
+UNION ALL SELECT 'sloan: edge', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'edge'),
+  edges_sql := 'edge', driver := 'sloan_ordering'))
+UNION ALL SELECT 'sloan: self-loop', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'self-loop'),
+  edges_sql := 'self-loop', driver := 'sloan_ordering'))
+ORDER BY 1;
+----
+cuthill: edge	3 7
+cuthill: ids 1 and 2	5 6 10
+cuthill: self-loop	6
+cuthill: two self-loops	1 2
+king: edge	3 7
+king: ids 1 and 2	5 6 10
+king: self-loop	6
+sloan: edge	3 7
+sloan: self-loop	6
+
+# King orders the vertices of both self-loops, in an order that is a standard-library tie-break.
+query T
+SELECT list(id ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'two self-loops'),
+  edges_sql := 'two self-loops', driver := 'king_ordering');
+----
+[1, 2]
+
+# Sloan on two separate edges: one component ordered, the other positions filled with vertex 1.
+query III
+SELECT count(*), count(DISTINCT id), count(*) FILTER (WHERE id = 1)
+FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'two edges'), edges_sql := 'two edges', driver := 'sloan_ordering');
+----
+4	2	3
+
+# No usable edge: king and sloan extract the four vertices anyway. Upstream's Sloan ordering crashes
+# the process on a graph without edges; the guard answers with no rows instead. King lists them.
+query II
+SELECT
+  (SELECT count(*) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'no usable edge'),
+     edges_sql := 'no usable edge', driver := 'sloan_ordering')),
+  (SELECT count(DISTINCT id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'no usable edge'),
+     edges_sql := 'no usable edge', driver := 'king_ordering'));
+----
+0	4
+
+# The guard reads the edges only when it can: upstream's own column check still speaks.
+statement error
+SELECT * FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT 1 AS source, 2 AS target, -1.0 AS cost) e) AS edges),
+  edges_sql := 'no id', driver := 'sloan_ordering');
+----
+Column 'id' not Found
+
+# Upstream's topologicalSort q1 graph, read in id order: every edge made to point the way it can be
+# travelled.
+statement ok
+CREATE TABLE dag AS SELECT (SELECT list(e ORDER BY id) FROM (
+  SELECT id, source, target, cost FROM edges WHERE cost >= 0
+  UNION ALL
+  SELECT id, target, source, reverse_cost FROM edges WHERE cost < 0) e) AS edges;
+
+query T
+SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq)
+FROM _pgr_exec((SELECT edges FROM dag), edges_sql := 'dag', driver := 'topological_sort');
+----
+13 14 2 4 1 3 15 10 5 6 7 8 9 11 12 16 17
+
+# Every edge points forward in the order.
+query I
+WITH o AS (SELECT seq, id FROM _pgr_exec((SELECT edges FROM dag), edges_sql := 'dag', driver := 'topological_sort')),
+     d AS (SELECT unnest(edges, recursive := true) FROM dag)
+SELECT count(*) FROM d JOIN o s ON s.id = d.source JOIN o t ON t.id = d.target WHERE s.seq >= t.seq;
+----
+0
+
+# Topological orders of small DAGs, read in id order (the DFS breaks no tie through the standard
+# library, so these hold on every platform).
+query TT
+SELECT 'fork', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'fork'),
+  edges_sql := 'fork', driver := 'topological_sort'))
+UNION ALL SELECT 'source 10', (SELECT string_agg(id::VARCHAR, ' ' ORDER BY seq) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'source 10'),
+  edges_sql := 'source 10', driver := 'topological_sort'))
+ORDER BY 1;
+----
+fork	1 3 2
+source 10	10 11 15
+
+# A cycle, even a two-way edge or a directed self-loop, is upstream's error.
+statement error
+SELECT * FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(), driver := 'topological_sort');
+----
+Graph is not DAG
+
+statement error
+SELECT * FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'directed self-loop'), edges_sql := 'directed self-loop',
+  driver := 'topological_sort');
+----
+Graph is not DAG
+
+# An empty edge query: upstream's notice, no rows.
+query IIII
+SELECT
+  (SELECT count(*) FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost
+     FROM edges WHERE id < 0) e) AS edges), edges_sql := 'empty', driver := 'cuthill_mckee_ordering')),
+  (SELECT count(*) FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost
+     FROM edges WHERE id < 0) e) AS edges), edges_sql := 'empty', driver := 'king_ordering')),
+  (SELECT count(*) FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost
+     FROM edges WHERE id < 0) e) AS edges), edges_sql := 'empty', driver := 'sloan_ordering')),
+  (SELECT count(*) FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost
+     FROM edges WHERE id < 0) e) AS edges), edges_sql := 'empty', driver := 'topological_sort'));
+----
+0	0	0	0
+
+# More than one 2048-row chunk: seq stays continuous. A one-way chain of 3000 vertices has exactly
+# one topological order; a two-way one is a permutation of its vertices.
+statement ok
+CREATE TABLE chain AS SELECT (SELECT list({'id': i, 'source': i, 'target': i + 1, 'cost': 1.0,
+  'reverse_cost': -1.0} ORDER BY i) FROM range(1, 3000) t(i)) AS edges;
+
+statement ok
+CREATE TABLE long_path AS SELECT (SELECT list({'id': i, 'source': i, 'target': i + 1, 'cost': 1.0,
+  'reverse_cost': 1.0} ORDER BY i) FROM range(1, 3000) t(i)) AS edges;
+
+query II
+SELECT count(*), count(*) FILTER (WHERE id <> seq)
+FROM _pgr_exec((SELECT edges FROM chain), edges_sql := 'chain', driver := 'topological_sort');
+----
+3000	0
+
+query IIII
+SELECT count(*), count(DISTINCT id), min(seq), max(seq)
+FROM _pgr_exec((SELECT edges FROM long_path), edges_sql := 'long path', driver := 'cuthill_mckee_ordering');
+----
+3000	3000	1	3000
+
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), edges_sql := '', driver := 'king_ordering', null_input := true);
+----
+0

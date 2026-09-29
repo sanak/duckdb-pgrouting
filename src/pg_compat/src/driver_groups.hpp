@@ -65,5 +65,6 @@ bool CallTreeDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 bool CallRoutesDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallTrspDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallTspDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
+bool CallUnifiedDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 
 } // namespace duckdb_pgrouting

@@ -56,6 +56,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/pg_compat/src/drivers_tree.cpp
     src/pg_compat/src/drivers_trsp.cpp
     src/pg_compat/src/drivers_tsp.cpp
+    src/pg_compat/src/drivers_unified.cpp
     src/pg_compat/src/family_drivers.cpp
     src/pg_compat/src/get_check_data.cpp
     src/pg_compat/src/pg_types.cpp)

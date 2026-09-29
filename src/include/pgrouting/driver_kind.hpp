@@ -12,8 +12,8 @@
 namespace duckdb_pgrouting {
 
 // SHORTEST_PATH is pgRouting's unified do_shortestPath. The others are the per-family drivers that
-// pgRouting v4.0.2 still keeps; the pg_compat adapter (src/pg_compat/src/family_drivers.cpp) calls
-// them.
+// pgRouting v4.0.2 still keeps, and its unified do_ordering and do_allpairs, which serve several
+// public functions each; the pg_compat adapter (src/pg_compat/src/family_drivers.cpp) calls them.
 enum class DriverKind : uint8_t {
 	SHORTEST_PATH,
 	BD_DIJKSTRA,
@@ -48,7 +48,11 @@ enum class DriverKind : uint8_t {
 	MAKE_CONNECTED,
 	SEQUENTIAL_VERTEX_COLORING,
 	BIPARTITE,
-	EDGE_COLORING
+	EDGE_COLORING,
+	CUTHILL_MCKEE_ORDERING,
+	KING_ORDERING,
+	SLOAN_ORDERING,
+	TOPOLOGICAL_SORT
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -143,6 +147,10 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::SEQUENTIAL_VERTEX_COLORING, "sequential_vertex_coloring", ResultShape::ID_VALUE, RequestCheck::NONE},
     {DriverKind::BIPARTITE, "bipartite", ResultShape::ID_VALUE, RequestCheck::NONE},
     {DriverKind::EDGE_COLORING, "edge_coloring", ResultShape::ID_VALUE, RequestCheck::NONE},
+    {DriverKind::CUTHILL_MCKEE_ORDERING, "cuthill_mckee_ordering", ResultShape::IDS, RequestCheck::NONE},
+    {DriverKind::KING_ORDERING, "king_ordering", ResultShape::IDS, RequestCheck::NONE},
+    {DriverKind::SLOAN_ORDERING, "sloan_ordering", ResultShape::IDS, RequestCheck::NONE},
+    {DriverKind::TOPOLOGICAL_SORT, "topological_sort", ResultShape::IDS, RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -157,7 +165,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::EDGE_COLORING) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::TOPOLOGICAL_SORT) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {
