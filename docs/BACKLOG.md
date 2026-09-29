@@ -76,14 +76,19 @@ decision rather than an oversight.
   `CHECK_FOR_INTERRUPTS` only before the approximation and inside the Dijkstra run of a missing
   matrix entry, which a complete matrix never needs. Upstream's code built on its own took 3.8 s
   for 400 random points and 68 s for 800 (macOS arm64). PostgreSQL runs the same code.
-- **Two upstream crashes on degenerate graphs are answered with no rows instead.**
+- **Three upstream crashes on degenerate graphs are answered with no rows instead.**
   `pgr_biconnectedComponents` over a graph whose every usable edge is a self-loop makes upstream's
   `biconnectedComponents` (`src/components/components.cpp`) index an empty vector, and
   `pgr_sloanOrdering` over vertices without a usable edge crashes inside Boost's `sloan_ordering`;
   either ends the process, as it would end a PostgreSQL backend. The adapter checks the
   materialized edges first and returns no rows without calling the driver
-  (`src/pg_compat/src/drivers_graph.cpp`, `drivers_unified.cpp`). Both are candidates to report
-  upstream. `sloan_ordering` also touches one element past the end of its degree-indexed bit vector
+  (`src/pg_compat/src/drivers_graph.cpp`, `drivers_unified.cpp`). `pgr_chinesePostman` and
+  `pgr_chinesePostmanCost` start their tour at the first edge row's source, and crash when that
+  vertex lies on no direction with a positive cost and the positive directions are all one
+  connected piece, or there are none (`include/chinese/chinesePostman.hpp` reads the last key of an
+  empty map, or dereferences a null edge); where upstream survives such a start it returns no tour,
+  so `src/pg_compat/src/drivers_flow.cpp` answers those crashing inputs with no rows without
+  calling it. All three are candidates to report upstream. `sloan_ordering` also touches one element past the end of its degree-indexed bit vector
   (`shrink_trace[maximum_degree]`) on ordinary graphs, which stays inside the allocated storage
   unless the maximum degree is a multiple of 64.
 - **The graph-analysis functions keep upstream's answers on degenerate and doubled edges.** An
@@ -113,6 +118,29 @@ decision rather than an oversight.
   `pgr_stoerWagner`'s tied cuts depend on the edge order.** Each follows the order the vertices or
   edges enter the graph (see README's "Differences"); the tests assert the order-free facts
   wherever the answer is not forced.
+- **The flow functions keep upstream's answers.** `pgr_edgeDisjointPaths` with many sources and
+  one target swaps `start_vid` and `end_vid` (its SQL wrapper selects them in the other order);
+  among parallel edges it names the one read first for every path that uses either; it skips a
+  pair whose source is its target silently where the max-flow functions raise `A source found as
+  sink`; and upstream's C entry restarts `path_seq` only after edge -1 where this extension's
+  K-shortest-path numbering restarts after any negative edge, which differs only for negative
+  edge ids of the caller's own. `pgr_chinesePostmanCost` counts a cost for two separate cycles
+  whose tour `pgr_chinesePostman` does not return, and among parallel edges the tour always takes
+  the cheapest while the cost counts each one. A tour that cannot be completed reports `No paths
+  found` only to the log. `pgr_maxCardinalityMatch` over a query with neither `cost` nor `going`
+  raises `Unexpected Null value in column going`: upstream reads that column regardless, and a
+  column the query lacks reads as NULL here. `pgr_pushRelabel` can report flow going both ways
+  along one edge, a circulation of value 0, even when no target is reachable; the other two
+  algorithms and `pgr_maxFlow` report none.
+- **Which edges carry a maximum flow, which disjoint paths, which matched edges and where the
+  Postman's tour starts depend on the edge order.** The values do not: a flow's value and cost,
+  the number of paths per pair, the size of the matching, and the tour's length and cost. The
+  tests assert those wherever the answer is not forced.
+- **A Chinese Postman tour of thousands of steps can exhaust a thread's stack.** Upstream's
+  `EulerCircuitDFS` (`include/chinese/chinesePostman.hpp`) recurses once per step of the tour: on
+  a 512 KB stack (a macOS worker thread) a tour of 5000 to 8000 steps overflows it and ends the
+  process, on 8 MB one of 70000 to 100000; ASan builds need more stack per frame. No test builds
+  a long tour. Fixing it would mean changing upstream's recursion.
 - **Graph orderings, colorings, `pgr_makeConnected` and `pgr_topologicalSort` depend on the edge
   order, and the bandwidth orderings on the C++ standard library.** Their vertices enter the graph
   in the order the edges are read, and Boost's `cuthill_mckee_ordering`, `king_ordering` and
@@ -128,7 +156,10 @@ decision rather than an oversight.
   `pgr_isPlanar`, `pgr_lengauerTarjanDominatorTree` and `pgr_hawickCircuits` poll once as well;
   `pgr_lineGraph`, `pgr_lineGraphFull`, `pgr_transitiveClosure` and `pgr_stoerWagner` never do.
   `pgr_hawickCircuits` lists every elementary circuit, whose number can grow exponentially with the
-  graph, and `pgr_transitiveClosure` holds up to vertices-squared ids.
+  graph, and `pgr_transitiveClosure` holds up to vertices-squared ids. `pgr_pushRelabel`,
+  `pgr_boykovKolmogorov`, `pgr_edmondsKarp` and `pgr_maxFlow` poll once before their Boost call,
+  `pgr_edgeDisjointPaths` once per pair and `pgr_maxCardinalityMatch` once; the minimum-cost flow
+  functions and the Chinese Postman never do.
 - **A turn-restricted path that must be re-routed over thousands of edges can exhaust a thread's
   stack.** Upstream's `TrspHandler::construct_path` (`src/trsp/trspHandler.cpp`) recurses once per
   edge of the path it rebuilds. PostgreSQL runs it on a backend's main thread (8 MB of stack by
@@ -287,6 +318,14 @@ Each of these would be a change no test could observe, so none of them is made:
   create, need PostGIS, or have no ORDER BY. `test/sql/hawick_circuits.test`,
   `dominator_tree.test`, `line_graph.test`, `scalar_functions.test` and `degree.test` cover the
   same inputs with this build's answers and their order-free facts.
+- **No test crosses a 2048-row output chunk for `pgr_chinesePostman`.** A tour that long recurses
+  more than two thousand frames deep, which a macOS worker thread under ASan, or a Wasm build, may
+  not hold (see the stack entry above); its rows are `PATH` rows, whose chunk continuity
+  `test/sql/dijkstra_long_input.test` already covers.
+- **`max_flow/edgeDisjointPaths.pg` q4, q51, q6 and `chinese/chinesePostman.pg` q1 are skipped**
+  (see `test/pgrouting_skip.json`): their answers depend on the edge order and upstream's
+  transcripts were made from another one. `test/sql/edge_disjoint_paths.test` and
+  `chinese_postman.test` assert their order-free facts.
 
 ## Open decision
 

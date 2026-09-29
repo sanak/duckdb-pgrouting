@@ -1,0 +1,104 @@
+# name: test/sql/pgrouting/max_flow/maxFlow.test
+# description: Generated from pgRouting's maxFlow documentation queries
+# group: [pgrouting]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
+# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
+#
+# Source: third_party/pgrouting/docqueries/max_flow/maxFlow.pg and the committed transcript beside it. The queries and their expected rows are
+# upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
+# sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
+# line with its reason, so what this file does not cover is visible here rather than implied.
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE vertices AS
+  SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges,
+         CAST(out_edges AS BIGINT[]) AS out_edges, x, y
+  FROM read_csv_auto('test/data/sampledata/vertices.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE combinations AS
+  SELECT * FROM read_csv_auto('test/data/sampledata/combinations.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+  SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+  FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+# q1
+query I
+SELECT * FROM pgr_maxFlow(
+  'SELECT id, source, target, capacity, reverse_capacity
+  FROM edges',
+  11, 12);
+----
+230
+
+# q2
+query I
+SELECT * FROM pgr_maxFlow(
+  'SELECT id, source, target, capacity, reverse_capacity
+  FROM edges',
+  11, ARRAY[5, 10, 12]);
+----
+340
+
+# q3
+query I
+SELECT * FROM pgr_maxFlow(
+  'SELECT id, source, target, capacity, reverse_capacity
+  FROM edges',
+  ARRAY[11, 3, 17], 12);
+----
+230
+
+# q4
+query I
+SELECT * FROM pgr_maxFlow(
+  'SELECT id, source, target, capacity, reverse_capacity
+  FROM edges',
+  ARRAY[11, 3, 17], ARRAY[5, 10, 12]);
+----
+360
+
+# q5
+query II
+SELECT source, target FROM combinations
+WHERE target NOT IN (5, 6);
+----
+5	10
+6	15
+6	14
+
+# q51
+query I
+SELECT * FROM pgr_maxFlow(
+  'SELECT id, source, target, capacity, reverse_capacity
+  FROM edges',
+  'SELECT * FROM combinations WHERE target NOT IN (5, 6)');
+----
+80
+
+# q6
+query I
+SELECT * FROM pgr_maxFlow(
+  'SELECT id, source, target, capacity, reverse_capacity
+  FROM edges',
+  'SELECT * FROM (VALUES (5, 10), (6, 15), (6, 14)) AS t(source, target)');
+----
+80
+

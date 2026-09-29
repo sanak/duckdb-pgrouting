@@ -74,7 +74,7 @@ WHERE function_name LIKE 'pgr\_%' ESCAPE '\' ORDER BY ALL;
 
 ## Functions
 
-Seventy-one pgRouting functions — one hundred and ninety of pgRouting 4.0's signatures — plus
+Eighty-one pgRouting functions — two hundred and twenty-eight of pgRouting 4.0's signatures — plus
 `pgr_version()`.
 The [pgRouting documentation](https://docs.pgrouting.org/4.0/en/) describes each algorithm, its
 parameters and its result columns, all of which this extension keeps.
@@ -99,6 +99,7 @@ parameters and its result columns, all of which this extension keeps.
 | All pairs | `pgr_johnson`, `pgr_floydWarshall` |
 | Metrics | `pgr_betweennessCentrality`, `pgr_bandwidth`, `pgr_degree` |
 | Graph structure | `pgr_isPlanar`, `pgr_lineGraph`, `pgr_lineGraphFull`, `pgr_transitiveClosure`, `pgr_lengauerTarjanDominatorTree`, `pgr_hawickCircuits`, `pgr_stoerWagner` |
+| Flow | `pgr_maxFlow`, `pgr_pushRelabel`, `pgr_boykovKolmogorov`, `pgr_edmondsKarp`, `pgr_maxFlowMinCost`, `pgr_maxFlowMinCost_Cost`, `pgr_edgeDisjointPaths`, `pgr_maxCardinalityMatch`, `pgr_chinesePostman`, `pgr_chinesePostmanCost` |
 | Utilities | `pgr_extractVertices`, `pgr_findCloseEdges` |
 
 Functions deliberately not ported are listed, each with its reason, in
@@ -110,10 +111,10 @@ Functions deliberately not ported are listed, each with its reason, in
   `ARRAY[7, 10]`).
 - **Named arguments** use DuckDB's `:=` (or `=>`). A `NULL` argument returns no rows, as it does
   for pgRouting's `STRICT` functions.
-- **One-value functions work both ways.** `pgr_bandwidth` and `pgr_isPlanar` return a single
-  value, as in pgRouting: `SELECT pgr_isPlanar('…')` and `SELECT * FROM pgr_isPlanar('…')` both
+- **One-value functions work both ways.** `pgr_bandwidth`, `pgr_isPlanar`, `pgr_maxFlow`,
+  `pgr_maxFlowMinCost_Cost` and `pgr_chinesePostmanCost` return a single value, as in pgRouting: `SELECT pgr_isPlanar('…')` and `SELECT * FROM pgr_isPlanar('…')` both
   work (a table function of one row and a scalar macro of the same name). Like every function
-  here, neither takes a column as its query argument.
+  here, none takes a column as its query argument.
 - **Equal-cost ties.** The order in which the inner query's rows reach the algorithm is not fixed
   (DuckDB scans in parallel), so where two routes cost exactly the same, the same query may return
   either one between runs. Every answer is still optimal; PostgreSQL's unordered scans give
@@ -139,13 +140,19 @@ Functions deliberately not ported are listed, each with its reason, in
   `pgr_lineGraphFull` hands out, the order inside `pgr_transitiveClosure`'s lists, where each of
   `pgr_hawickCircuits`' circuits starts, which of several equally cheap cuts `pgr_stoerWagner`
   reports, and `pgr_lengauerTarjanDominatorTree`'s `seq` and `idom` (which, as upstream writes it,
-  is the `seq` of the dominator's row, not a vertex id). Every answer is valid for its problem; see
+  is the `seq` of the dominator's row, not a vertex id). So do which edges carry
+  `pgr_pushRelabel`'s, `pgr_boykovKolmogorov`'s, `pgr_edmondsKarp`'s and `pgr_maxFlowMinCost`'s
+  flow (never its value or cost), which paths `pgr_edgeDisjointPaths` returns (never how many),
+  which edges `pgr_maxCardinalityMatch` picks (never how many), and where `pgr_chinesePostman`'s
+  tour starts: at the first edge row's source. Every answer is valid for its problem; see
   `docs/BACKLOG.md` for the upstream behaviours these functions keep.
 - **`pgr_degree` returns its rows sorted by vertex**; upstream's order is unspecified.
+- **`pgr_edgeDisjointPaths` with many sources and one target swaps `start_vid` and `end_vid`**,
+  as pgRouting's own SQL wrapper does: `start_vid` shows the target, `end_vid` the source.
 - **Memory.** pgRouting's own allocations are not counted against DuckDB's `memory_limit`.
-- **A turn-restricted route re-routed over more than about ten thousand edges** can overflow a
-  worker thread's stack and end the process on macOS (upstream's recursion); see
-  `docs/BACKLOG.md`.
+- **A turn-restricted route re-routed over more than about ten thousand edges, or a Chinese
+  Postman tour of more than about five thousand steps,** can overflow a worker thread's stack and
+  end the process on macOS (upstream's recursion); see `docs/BACKLOG.md`.
 - **Geometry needs the spatial extension.** `pgr_findCloseEdges`, and `pgr_extractVertices` on
   geometry, call [duckdb-spatial](https://duckdb.org/docs/stable/core_extensions/spatial/overview):
   run `INSTALL spatial; LOAD spatial;` first. DuckDB does not autoload spatial; with

@@ -38,6 +38,15 @@ the following checklist, in order. Every step either passes or tells you exactly
    The structural functions (pgr_isPlanar, pgr_lineGraph, pgr_lineGraphFull, pgr_transitiveClosure,
    pgr_lengauerTarjanDominatorTree, pgr_hawickCircuits, pgr_stoerWagner) call their per-family
    drivers from `src/pg_compat/src/drivers_analysis.cpp`; treat them the same way.
+
+   The flow functions (pgr_maxFlow, pgr_pushRelabel, pgr_boykovKolmogorov, pgr_edmondsKarp,
+   pgr_maxFlowMinCost, pgr_maxFlowMinCost_Cost, pgr_edgeDisjointPaths, pgr_maxCardinalityMatch,
+   pgr_chinesePostman, pgr_chinesePostmanCost) call their per-family drivers from
+   `src/pg_compat/src/drivers_flow.cpp`; treat them the same way. Re-read
+   `include/chinese/chinesePostman.hpp` at every bump: the adapter's `PostmanStartsOffTheGraph`
+   guard exists because its constructor crashes when the first edge row's source lies on no
+   positive-cost direction and the positive directions are one connected piece or none, and goes
+   once upstream no longer does.
 2. Update `cmake/pgrouting_sources.cmake` for added or removed upstream files, one entry at a
    time. Never glob: the list is deliberately explicit so that a new upstream file is a decision
    rather than an accident. Do not list a `*_process.cpp` (those talk to PostgreSQL and this

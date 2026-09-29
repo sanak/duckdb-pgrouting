@@ -23,6 +23,11 @@
       "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
     }
   },
+  "chinese/chinesePostman.pg": {
+    "q1": {
+      "reason": "the tour starts at the first edge's source and follows the order the edges are read in, and upstream's transcript was made from another order; test/sql/chinese_postman.test asserts its length, total cost, edge multiset and that it closes"
+    }
+  },
   "circuits/hawickCircuits.pg": {
     "q1": {
       "reason": "where each circuit starts, and so the numbering and rotation of every circuit, depends on the order the edges are read in, and upstream's transcript was made from the sample table's physical order after sampledata.pg's UPDATE; test/sql/hawick_circuits.test asserts the order-free facts (94 rows, 20 circuits, total cost 74, the circuit lengths) in two orders"
@@ -103,6 +108,17 @@
     },
     "q9": {
       "reason": "reads vertex_map, which earlier blocks without a result set create and update; the generator never runs those"
+    }
+  },
+  "max_flow/edgeDisjointPaths.pg": {
+    "q4": {
+      "reason": "which edge-disjoint paths come back depends on the order the edges are read in, and upstream's transcript was made from another order; test/sql/edge_disjoint_paths.test asserts upstream's number of paths per pair"
+    },
+    "q51": {
+      "reason": "which edge-disjoint paths come back depends on the order the edges are read in, and upstream's transcript was made from another order; test/sql/edge_disjoint_paths.test asserts upstream's number of paths per pair"
+    },
+    "q6": {
+      "reason": "which edge-disjoint paths come back depends on the order the edges are read in, and upstream's transcript was made from another order; test/sql/edge_disjoint_paths.test asserts upstream's number of paths per pair"
     }
   },
   "metrics/bandwidth.pg": {

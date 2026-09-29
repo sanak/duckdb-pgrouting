@@ -158,6 +158,64 @@
       "upstream_rows": 13
     }
   },
+  "max_flow/boykovKolmogorov.pg": {
+    "q2": {
+      "differing_rows": 2,
+      "reason": "equal-value flow",
+      "upstream_rows": 9
+    },
+    "q4": {
+      "differing_rows": 2,
+      "reason": "equal-value flow",
+      "upstream_rows": 10
+    }
+  },
+  "max_flow/edmondsKarp.pg": {
+    "q2": {
+      "differing_rows": 2,
+      "reason": "equal-value flow",
+      "upstream_rows": 9
+    },
+    "q4": {
+      "differing_rows": 2,
+      "reason": "equal-value flow",
+      "upstream_rows": 10
+    }
+  },
+  "max_flow/maxFlowMinCost.pg": {
+    "q2": {
+      "differing_rows": 2,
+      "reason": "equal-value flow",
+      "upstream_rows": 9
+    },
+    "q4": {
+      "differing_rows": 2,
+      "reason": "equal-value flow",
+      "upstream_rows": 11
+    }
+  },
+  "max_flow/pushRelabel.pg": {
+    "q2": {
+      "differing_rows": 7,
+      "reason": "equal-value flow",
+      "upstream_rows": 13
+    },
+    "q4": {
+      "differing_rows": 3,
+      "reason": "equal-value flow",
+      "upstream_rows": 10
+    },
+    "q51": {
+      "differing_rows": 5,
+      "reason": "equal-value flow",
+      "upstream_rows": 7
+    },
+    "q6": {
+      "differing_rows": 5,
+      "reason": "equal-value flow",
+      "upstream_rows": 7
+    }
+  },
   "ordering/cuthillMckeeOrdering.pg": {
     "q1": {
       "reason": "vertex ordering",
