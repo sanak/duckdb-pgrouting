@@ -81,6 +81,10 @@ bool IsGeometry(const LogicalType &type) {
 	return type.id() == LogicalTypeId::GEOMETRY;
 }
 
+bool IsAnyIntegerList(const LogicalType &type) {
+	return type.id() == LogicalTypeId::LIST && IsAnyInteger(ListType::GetChildType(type));
+}
+
 void ThrowMissingColumn(const char *name, const string &sql) {
 	throw InvalidInputException("column \"%s\" does not exist\nHINT: %s", name, sql);
 }
@@ -91,6 +95,13 @@ void CheckColumnType(const QueryColumn *column, const char *name, bool integer, 
 	}
 	throw InvalidInputException("Expected type of column \"%s\" is %s\nHINT: Query: %s", name,
 	                            integer ? "ANY-INTEGER" : "geometry", sql);
+}
+
+void CheckIntegerListColumn(const QueryColumn *column, const char *name, const string &sql) {
+	if (!column || IsAnyIntegerList(column->type)) {
+		return;
+	}
+	throw InvalidInputException("Expected type of column \"%s\" is ANY-INTEGER-ARRAY\nHINT: Query: %s", name, sql);
 }
 
 unique_ptr<TableRef> AsTableRef(unique_ptr<SelectStatement> statement) {

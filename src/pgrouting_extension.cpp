@@ -14,6 +14,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	RegisterSpecFunctions(loader);
 	RegisterExtractVertices(loader);
 	RegisterFindCloseEdges(loader);
+	RegisterDegree(loader);
 }
 
 void PgroutingExtension::Load(ExtensionLoader &loader) {

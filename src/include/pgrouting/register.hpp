@@ -11,4 +11,5 @@ void RegisterExec(ExtensionLoader &loader);
 void RegisterSpecFunctions(ExtensionLoader &loader);
 void RegisterExtractVertices(ExtensionLoader &loader);
 void RegisterFindCloseEdges(ExtensionLoader &loader);
+void RegisterDegree(ExtensionLoader &loader);
 } // namespace duckdb

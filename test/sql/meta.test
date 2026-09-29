@@ -53,6 +53,7 @@ pgr_bridges	pgr_bridges
 pgr_connectedComponents	pgr_connectedComponents
 pgr_cuthillMckeeOrdering	pgr_cuthillMckeeOrdering
 pgr_dagShortestPath	pgr_dagShortestPath
+pgr_degree	pgr_degree
 pgr_depthFirstSearch	pgr_depthFirstSearch
 pgr_dijkstra	pgr_dijkstra
 pgr_dijkstraCost	pgr_dijkstraCost

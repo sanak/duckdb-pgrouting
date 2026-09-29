@@ -336,6 +336,11 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "the spatial extension.",
      "SELECT edge_id, fraction, side, distance FROM pgr_findCloseEdges('SELECT id, geom FROM edges', "
      "ST_Point(2.9, 1.8), 0.5, cap := 2)"},
+    {"pgr_degree",
+     "The number of edge ends at each vertex, counted from the edges' source and target (a self-loop "
+     "counts twice), or from a vertices query's in_edges and out_edges lists restricted to the given "
+     "edges; sorted by vertex.",
+     "SELECT * FROM pgr_degree('SELECT id, source, target FROM edges')"},
     {"pgr_version", "Version of the pgRouting library built into this extension.", "SELECT pgr_version()"},
 };
 

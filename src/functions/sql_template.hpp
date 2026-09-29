@@ -2,7 +2,7 @@
 #pragma once
 
 // Shared machinery of the public functions that upstream writes in PL/pgSQL (pgr_extractVertices,
-// pgr_findCloseEdges). Each is a bind_replace table function: it binds the caller's edge query to
+// pgr_findCloseEdges, pgr_degree). Each is a bind_replace table function: it binds the caller's edge query to
 // learn its columns, picks one fixed SQL template, and splices the caller's SQL into it as a parsed
 // CTE and its arguments as constants, never as text.
 
@@ -43,12 +43,17 @@ const QueryColumn *FindColumn(const duckdb::vector<QueryColumn> &columns, const 
 // signed types and the unsigned ones that fit in int64_t.
 bool IsAnyInteger(const duckdb::LogicalType &type);
 bool IsGeometry(const duckdb::LogicalType &type);
+// Upstream's ANY-INTEGER[]: a list of IsAnyInteger elements.
+bool IsAnyIntegerList(const duckdb::LogicalType &type);
 
 // Upstream's _pgr_checkColumn errors, verbatim: 'column "<name>" does not exist' with the
 // caller's query as the hint, and 'Expected type of column "<name>" is ANY-INTEGER' (or
 // "geometry") with "Query: <sql>" as the hint. CheckColumnType accepts an absent column.
 [[noreturn]] void ThrowMissingColumn(const char *name, const duckdb::string &sql);
 void CheckColumnType(const QueryColumn *column, const char *name, bool integer, const duckdb::string &sql);
+// Upstream's _pgr_checkColumn for an ANY-INTEGER[] column: 'Expected type of column "<name>" is
+// ANY-INTEGER-ARRAY' with "Query: <sql>" as the hint. An absent column is accepted.
+void CheckIntegerListColumn(const QueryColumn *column, const char *name, const duckdb::string &sql);
 
 // A bind_replace result that is `statement`.
 duckdb::unique_ptr<duckdb::TableRef> AsTableRef(duckdb::unique_ptr<duckdb::SelectStatement> statement);

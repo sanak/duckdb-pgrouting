@@ -39,6 +39,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/coloring_specs.cpp
     src/functions/components_specs.cpp
     src/functions/dag_shortest_path_specs.cpp
+    src/functions/degree.cpp
     src/functions/dijkstra_specs.cpp
     src/functions/dominator_specs.cpp
     src/functions/driving_distance_specs.cpp
