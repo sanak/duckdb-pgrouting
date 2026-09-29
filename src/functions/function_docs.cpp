@@ -307,6 +307,18 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "of vertices.",
      "SELECT * FROM pgr_transitiveClosure('SELECT id, source, target, cost, reverse_cost FROM edges "
      "WHERE id IN (2, 3, 5, 11, 12, 13, 15)')"},
+    {"pgr_lengauerTarjanDominatorTree",
+     "The immediate dominator of every vertex of a directed graph, seen from a root vertex: the last "
+     "vertex every path from the root must pass through. idom is the seq of the dominator's own row "
+     "(0 for the root and unreachable vertices), not a vertex id.",
+     "SELECT * FROM pgr_lengauerTarjanDominatorTree('SELECT id, source, target, cost, reverse_cost FROM "
+     "edges', 5)"},
+    {"pgr_stoerWagner",
+     "A minimum cut of a connected undirected graph: the cheapest set of edges whose removal splits it "
+     "in two, with the running total of their costs; among equally cheap cuts, which one depends on "
+     "the order the edges are read in.",
+     "SELECT * FROM pgr_stoerWagner('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id "
+     "< 17')"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "

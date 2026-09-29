@@ -211,7 +211,8 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::TRSP_SPECS,              &duckdb_pgrouting::TSP_SPECS,
 	    &duckdb_pgrouting::ORDERING_SPECS,          &duckdb_pgrouting::ALLPAIRS_SPECS,
 	    &duckdb_pgrouting::METRICS_SPECS,           &duckdb_pgrouting::PLANAR_SPECS,
-	    &duckdb_pgrouting::LINE_GRAPH_SPECS,        &duckdb_pgrouting::TRANSITIVE_CLOSURE_SPECS};
+	    &duckdb_pgrouting::LINE_GRAPH_SPECS,        &duckdb_pgrouting::TRANSITIVE_CLOSURE_SPECS,
+	    &duckdb_pgrouting::DOMINATOR_SPECS,         &duckdb_pgrouting::MINCUT_SPECS};
 	return TABLES;
 }
 
@@ -258,6 +259,7 @@ LogicalType TypeOf(duckdb_pgrouting::ArgKind kind) {
 	case ArgKind::START_VID:
 	case ArgKind::END_VID:
 	case ArgKind::ROOT:
+	case ArgKind::ROOT_VID:
 		return LogicalType::BIGINT;
 	case ArgKind::START_VIDS:
 	case ArgKind::END_VIDS:
@@ -549,6 +551,9 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 			case duckdb_pgrouting::ArgKind::COORDINATES_SQL:
 				request.coordinates_sql = StringValue::Get(input.inputs[i]);
 				coordinates_expr = Named(ListOfRows(context, request.coordinates_sql), "coordinates");
+				break;
+			case duckdb_pgrouting::ArgKind::ROOT_VID:
+				SetRequestParameter(request, "root", input.inputs[i]);
 				break;
 			}
 		}

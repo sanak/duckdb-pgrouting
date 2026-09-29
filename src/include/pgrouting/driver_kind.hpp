@@ -60,7 +60,9 @@ enum class DriverKind : uint8_t {
 	IS_PLANAR,
 	LINE_GRAPH,
 	LINE_GRAPH_FULL,
-	TRANSITIVE_CLOSURE
+	TRANSITIVE_CLOSURE,
+	DOMINATOR_TREE,
+	STOER_WAGNER
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -83,6 +85,7 @@ enum class ResultShape : uint8_t {
 	EDGE,            // Edge_rt, as its C entry (src/lineGraph/lineGraph.c) emits it: seq, then all but id
 	LINE_GRAPH_FULL, // Line_graph_full_rt, as src/lineGraph/lineGraphFull.c emits it: seq, then all but id
 	TRANSITIVE_CLOSURE, // TransitiveClosure_rt: seq, vid and the vid's targets as a list; every row owns its array
+	STOER_WAGNER, // StoerWagner_t, as src/mincut/stoerWagner.c emits it: its own seq replaced by the row number
 };
 
 // A check upstream's C entry runs on the parameters before it calls the driver, even when the
@@ -173,6 +176,8 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::LINE_GRAPH, "line_graph", ResultShape::EDGE, RequestCheck::NONE},
     {DriverKind::LINE_GRAPH_FULL, "line_graph_full", ResultShape::LINE_GRAPH_FULL, RequestCheck::NONE},
     {DriverKind::TRANSITIVE_CLOSURE, "transitive_closure", ResultShape::TRANSITIVE_CLOSURE, RequestCheck::NONE},
+    {DriverKind::DOMINATOR_TREE, "lengauer_tarjan_dominator_tree", ResultShape::ID_VALUE, RequestCheck::NONE},
+    {DriverKind::STOER_WAGNER, "stoer_wagner", ResultShape::STOER_WAGNER, RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -187,7 +192,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::TRANSITIVE_CLOSURE) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::STOER_WAGNER) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

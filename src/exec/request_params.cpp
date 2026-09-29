@@ -54,6 +54,7 @@ const RequestParameter REQUEST_PARAMETERS[] = {
     {"u_turn_on_edge", &DriverRequest::u_turn_on_edge},
     {"start_id", &DriverRequest::start_id},
     {"end_id", &DriverRequest::end_id},
+    {"root", &DriverRequest::root},
     {"driver", &DriverRequest::driver},
 };
 

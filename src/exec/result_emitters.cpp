@@ -13,6 +13,7 @@
 #include "c_types/mst_rt.h"
 #include "c_types/path_rt.h"
 #include "c_types/routes_t.h"
+#include "c_types/stoerWagner_t.h"
 #include "c_types/tsp_tour_rt.h"
 
 namespace duckdb {
@@ -190,7 +191,9 @@ void EmitIds(const DriverResult &result, EmitState &state, idx_t n, DataChunk &o
 }
 
 // II_t_rt as (d1.id, d2.value) with a seq from 1: pgr_makeConnected's C entry emits (seq, start_vid,
-// end_vid) in that order, the coloring C entries (src/coloring/*.c) the pair without a seq.
+// end_vid) in that order, the coloring C entries (src/coloring/*.c) the pair without a seq, and the
+// dominator tree's C entry (src/dominator/lengauerTarjanDominatorTree.c) emits (seq, vertex, idom) as
+// an INTEGER seq.
 void EmitIdValue(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<II_t_rt>();
 	auto seq = FlatVector::GetData<int64_t>(output.data[0]);
@@ -288,6 +291,23 @@ void EmitTransitiveClosure(const DriverResult &result, EmitState &state, idx_t n
 	ListVector::SetListSize(targets, size);
 }
 
+// src/mincut/stoerWagner.c numbers the rows from 1 (StoerWagner_t's own seq is not emitted) and
+// passes edge, cost and mincut through.
+void EmitStoerWagner(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<StoerWagner_t>();
+	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
+	auto edge = FlatVector::GetData<int64_t>(output.data[1]);
+	auto cost = FlatVector::GetData<double>(output.data[2]);
+	auto mincut = FlatVector::GetData<double>(output.data[3]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		seq[i] = NumericCast<int32_t>(k + 1);
+		edge[i] = rows[k].edge;
+		cost[i] = rows[k].cost;
+		mincut[i] = rows[k].mincut;
+	}
+}
+
 } // namespace
 
 void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
@@ -351,6 +371,10 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		types = {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::LIST(LogicalType::BIGINT)};
 		names = {"seq", "vid", "target_array"};
 		return;
+	case ResultShape::STOER_WAGNER:
+		types = {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
+		names = {"seq", "edge", "cost", "mincut"};
+		return;
 	}
 	throw InternalException("pgrouting: unhandled ResultShape");
 }
@@ -395,6 +419,9 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::TRANSITIVE_CLOSURE:
 		EmitTransitiveClosure(result, state, n, output);
+		break;
+	case ResultShape::STOER_WAGNER:
+		EmitStoerWagner(result, state, n, output);
 		break;
 	}
 	state.offset += n;

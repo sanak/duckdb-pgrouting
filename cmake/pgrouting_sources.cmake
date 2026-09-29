@@ -67,6 +67,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/dagShortestPath/dagShortestPath_driver.cpp
     ${PGROUTING_DIR}/src/dijkstra/dijkstraVia_driver.cpp
     ${PGROUTING_DIR}/src/dijkstra/shortestPath_driver.cpp
+    ${PGROUTING_DIR}/src/dominator/lengauerTarjanDominatorTree_driver.cpp
     ${PGROUTING_DIR}/src/driving_distance/driving_distance_driver.cpp
     ${PGROUTING_DIR}/src/driving_distance/driving_distance_withPoints_driver.cpp
     ${PGROUTING_DIR}/src/ksp/ksp_driver.cpp
@@ -76,6 +77,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/lineGraph/lineGraph_driver.cpp
     ${PGROUTING_DIR}/src/metrics/betweennessCentrality_driver.cpp
     ${PGROUTING_DIR}/src/metrics/metrics_driver.cpp
+    ${PGROUTING_DIR}/src/mincut/stoerWagner_driver.cpp
     ${PGROUTING_DIR}/src/ordering/cuthillMckeeOrdering.cpp
     ${PGROUTING_DIR}/src/ordering/kingOrdering.cpp
     ${PGROUTING_DIR}/src/ordering/ordering_driver.cpp

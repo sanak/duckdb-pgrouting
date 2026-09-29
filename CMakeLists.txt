@@ -39,6 +39,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/components_specs.cpp
     src/functions/dag_shortest_path_specs.cpp
     src/functions/dijkstra_specs.cpp
+    src/functions/dominator_specs.cpp
     src/functions/driving_distance_specs.cpp
     src/functions/extract_vertices.cpp
     src/functions/find_close_edges.cpp
@@ -47,6 +48,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/line_graph_specs.cpp
     src/functions/meta_functions.cpp
     src/functions/metrics_specs.cpp
+    src/functions/mincut_specs.cpp
     src/functions/ordering_specs.cpp
     src/functions/planar_specs.cpp
     src/functions/spanning_tree_specs.cpp

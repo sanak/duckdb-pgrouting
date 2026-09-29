@@ -53,6 +53,8 @@ void *RowsOf(const DriverCall &call, ResultShape shape) {
 		return call.line_graph_full_rows;
 	case ResultShape::TRANSITIVE_CLOSURE:
 		return call.closure_rows;
+	case ResultShape::STOER_WAGNER:
+		return call.min_cut_rows;
 	}
 	return nullptr;
 }
@@ -82,6 +84,7 @@ bool DropWrongShapeRows(DriverCall &call, ResultShape shape) {
 	// Frees only the outer block: a driver that writes rows of the wrong shape is an internal error
 	// already, and its arrays are not ours to walk.
 	drop(call.closure_rows, shape == ResultShape::TRANSITIVE_CLOSURE);
+	drop(call.min_cut_rows, shape == ResultShape::STOER_WAGNER);
 	return wrong;
 }
 

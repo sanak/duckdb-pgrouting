@@ -1,0 +1,106 @@
+# name: test/sql/stoer_wagner.test
+# description: pgr_stoerWagner: STOER_WAGNER rows, tied cuts, fewer than two vertices, long answers
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_stoerWagner('SELECT * FROM edges'));
+----
+seq	INTEGER
+edge	BIGINT
+cost	DOUBLE
+mincut	DOUBLE
+
+# Upstream's q1, q2 and q3 (q3's edge query itself calls pgr_connectedComponents).
+query IIRR
+SELECT * FROM pgr_stoerWagner('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17');
+----
+1	14	1	1
+
+query IIRR
+SELECT * FROM pgr_stoerWagner('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id = 18');
+----
+1	18	1	1
+
+query IIRR
+SELECT * FROM pgr_stoerWagner('SELECT id, source, target, cost, reverse_cost FROM edges WHERE source IN (
+  SELECT node FROM pgr_connectedComponents(''SELECT id, source, target, cost, reverse_cost FROM edges'')
+  WHERE component = 2)');
+----
+1	17	1	1
+
+# mincut accumulates the cut edges' costs row by row.
+query IIRR
+SELECT * FROM pgr_stoerWagner('SELECT * FROM (VALUES (1, 1, 2, 1.0, 1.0), (2, 2, 3, 2, 2), (3, 3, 1, 3, 3))
+  t(id, source, target, cost, reverse_cost)');
+----
+1	1	1	1
+2	2	2	3
+
+# The whole sample graph is disconnected: its minimum cut is empty.
+query I
+SELECT count(*) FROM pgr_stoerWagner('SELECT * FROM edges');
+----
+0
+
+# A two-way square has several minimum cuts of 2; which one is reported depends on the edge order.
+statement ok
+CREATE TABLE square AS SELECT * FROM (VALUES (1, 1, 2, 1.0, 1.0), (2, 2, 3, 1, 1), (3, 3, 4, 1, 1), (4, 4, 1, 1, 1))
+  t(id, source, target, cost, reverse_cost);
+
+query IIRR
+SELECT seq, edge, cost, mincut FROM _pgr_exec((SELECT (SELECT list(e ORDER BY id) FROM square e) AS edges),
+  edges_sql := 'square', driver := 'stoer_wagner');
+----
+1	2	1	1
+2	3	1	2
+
+query IIRR
+SELECT seq, edge, cost, mincut FROM _pgr_exec((SELECT (SELECT list(e ORDER BY id DESC) FROM square e) AS edges),
+  edges_sql := 'square reversed', driver := 'stoer_wagner');
+----
+1	2	1	1
+2	1	1	2
+
+# Fewer than two vertices: Boost's error, as the driver reports it.
+statement error
+SELECT * FROM pgr_stoerWagner('SELECT 1 AS id, 1 AS source, 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost');
+----
+the input graph must have at least two vertices
+
+statement error
+SELECT * FROM pgr_stoerWagner('SELECT 1 AS id, 1 AS source, 2 AS target, -1.0 AS cost, -1.0 AS reverse_cost');
+----
+the input graph must have at least two vertices
+
+# No rows, and STRICT.
+query II
+SELECT (SELECT count(*) FROM pgr_stoerWagner('SELECT * FROM edges WHERE id < 0')),
+       (SELECT count(*) FROM pgr_stoerWagner(NULL::VARCHAR));
+----
+0	0
+
+# More than one 2048-row output chunk: 2100 parallel edges between two vertices are all cut. The
+# driver names each cut edge by the first edge between its two vertices with its cost, so every row
+# says edge 1.
+statement ok
+CREATE TABLE bundle AS SELECT i AS id, 1 AS source, 2 AS target, 1.0 AS cost, -1.0 AS reverse_cost
+FROM range(1, 2101) t(i);
+
+query IIIRI
+SELECT count(*), max(seq), count(DISTINCT edge), max(mincut), count(*) FILTER (WHERE mincut = seq)
+FROM pgr_stoerWagner('SELECT * FROM bundle');
+----
+2100	2100	1	2100	2100

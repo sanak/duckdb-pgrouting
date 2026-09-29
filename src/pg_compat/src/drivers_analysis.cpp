@@ -8,10 +8,12 @@
 
 #include "driver_groups.hpp"
 
+#include "drivers/dominator/lengauerTarjanDominatorTree_driver.h"
 #include "drivers/lineGraph/lineGraphFull_driver.h"
-#include "drivers/transitiveClosure/transitiveClosure_driver.h"
 #include "drivers/lineGraph/lineGraph_driver.h"
+#include "drivers/mincut/stoerWagner_driver.h"
 #include "drivers/planar/isPlanar_driver.h"
+#include "drivers/transitiveClosure/transitiveClosure_driver.h"
 
 namespace duckdb_pgrouting {
 
@@ -39,6 +41,13 @@ bool CallAnalysisDriver(const DriverRequest &request, const DriverArrays &, Driv
 		return true;
 	case DriverKind::TRANSITIVE_CLOSURE:
 		pgr_do_transitiveClosure(edges, &call.closure_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::DOMINATOR_TREE:
+		// idom is the dominator's vertex index + 1 (its row's seq), as upstream emits it.
+		pgr_do_LTDTree(edges, request.root, &call.pair_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::STOER_WAGNER:
+		pgr_do_stoerWagner(edges, &call.min_cut_rows, &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	default:
 		return false;

@@ -74,6 +74,7 @@ pgr_kruskalBFS	pgr_kruskalBFS
 pgr_kruskalDD	pgr_kruskalDD
 pgr_kruskalDFS	pgr_kruskalDFS
 pgr_ksp	pgr_ksp
+pgr_lengauerTarjanDominatorTree	pgr_lengauerTarjanDominatorTree
 pgr_lineGraph	pgr_lineGraph
 pgr_lineGraphFull	pgr_lineGraphFull
 pgr_makeConnected	pgr_makeConnected
@@ -83,6 +84,7 @@ pgr_primDD	pgr_primDD
 pgr_primDFS	pgr_primDFS
 pgr_sequentialVertexColoring	pgr_sequentialVertexColoring
 pgr_sloanOrdering	pgr_sloanOrdering
+pgr_stoerWagner	pgr_stoerWagner
 pgr_strongComponents	pgr_strongComponents
 pgr_topologicalSort	pgr_topologicalSort
 pgr_transitiveClosure	pgr_transitiveClosure

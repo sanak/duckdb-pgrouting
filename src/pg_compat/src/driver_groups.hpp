@@ -20,6 +20,7 @@ struct Line_graph_full_rt;
 struct MST_rt;
 struct Path_rt;
 struct Routes_t;
+struct StoerWagner_t;
 struct TSP_tour_rt;
 struct TransitiveClosure_rt;
 
@@ -39,6 +40,7 @@ struct DriverCall {
 	Edge_rt *edge_rows = nullptr;
 	Line_graph_full_rt *line_graph_full_rows = nullptr;
 	TransitiveClosure_rt *closure_rows = nullptr;
+	StoerWagner_t *min_cut_rows = nullptr;
 	std::size_t count = 0;
 	char *log = nullptr;
 	char *notice = nullptr;

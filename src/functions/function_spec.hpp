@@ -32,7 +32,8 @@ enum class ArgKind : uint8_t {
 	VIA,              // BIGINT[], the vertices a route visits in order
 	RESTRICTIONS_SQL, // VARCHAR, the turn restrictions query (cost, path)
 	MATRIX_SQL,       // VARCHAR, pgr_TSP's cost-matrix query (start_vid, end_vid, agg_cost)
-	COORDINATES_SQL   // VARCHAR, pgr_TSPeuclidean's coordinates query (id, x, y)
+	COORDINATES_SQL,  // VARCHAR, pgr_TSPeuclidean's coordinates query (id, x, y)
+	ROOT_VID          // BIGINT, a single root vertex passed as the request's root
 };
 
 enum class OptionalType : uint8_t { BOOLEAN, BIGINT, INTEGER, DOUBLE };
@@ -163,12 +164,14 @@ extern const duckdb::vector<FunctionSpec> WITH_POINTS_SPECS;          // withpoi
 extern const duckdb::vector<FunctionSpec> BD_DIJKSTRA_SPECS;          // bd_dijkstra_specs.cpp
 extern const duckdb::vector<FunctionSpec> BELLMAN_FORD_SPECS;         // bellman_ford_specs.cpp
 extern const duckdb::vector<FunctionSpec> DAG_SHORTEST_PATH_SPECS;    // dag_shortest_path_specs.cpp
+extern const duckdb::vector<FunctionSpec> DOMINATOR_SPECS;            // dominator_specs.cpp
 extern const duckdb::vector<FunctionSpec> BREADTH_FIRST_SEARCH_SPECS; // breadth_first_search_specs.cpp
 extern const duckdb::vector<FunctionSpec> COMPONENTS_SPECS;           // components_specs.cpp
 extern const duckdb::vector<FunctionSpec> COLORING_SPECS;             // coloring_specs.cpp
 extern const duckdb::vector<FunctionSpec> ORDERING_SPECS;             // ordering_specs.cpp
 extern const duckdb::vector<FunctionSpec> ALLPAIRS_SPECS;             // allpairs_specs.cpp
 extern const duckdb::vector<FunctionSpec> METRICS_SPECS;              // metrics_specs.cpp
+extern const duckdb::vector<FunctionSpec> MINCUT_SPECS;               // mincut_specs.cpp
 extern const duckdb::vector<FunctionSpec> PLANAR_SPECS;               // planar_specs.cpp
 extern const duckdb::vector<FunctionSpec> ASTAR_SPECS;                // astar_specs.cpp
 extern const duckdb::vector<FunctionSpec> BD_ASTAR_SPECS;             // bd_astar_specs.cpp
