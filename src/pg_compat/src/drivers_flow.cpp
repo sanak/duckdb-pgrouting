@@ -8,7 +8,10 @@
 #include "driver_groups.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <initializer_list>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "drivers/chinese/chinesePostman_driver.h"
 #include "drivers/max_flow/edge_disjoint_paths_driver.h"
@@ -23,12 +26,13 @@ namespace {
 
 // pgr_chinesePostman's tour starts at the source of the edge query's first row (PgrDirectedChPPGraph's
 // constructor, include/chinese/chinesePostman.hpp), and its graph holds only the directions with a
-// positive cost. When that vertex lies on none of them, upstream crashes: with no positive direction
-// at all it reads the last key of an empty map, and otherwise it dereferences the null edge its
-// lookup map default-constructs while it walks the tour. Where upstream does not crash on such a
-// start (the rest cannot be balanced), it returns no tour, and no row for the Cost form. That answer
-// is given here without calling the driver. Input the driver would reject - a missing or mistyped
-// column, a NULL - is left to it; so is an empty query, which it reports.
+// positive cost. Upstream crashes when that vertex lies on no positive direction and either nothing
+// has a positive direction (it reads the last key of an empty map) or the positive directions are one
+// connected piece (it walks the whole piece from another vertex and then looks up an edge out of the
+// start, a null edge its lookup map default-constructs). When they are several pieces upstream returns
+// no tour but still the cost, so the driver is called. The crashing cases are answered here with no
+// rows, as the driver's no-tour answer, without calling the driver. Input the driver would reject - a
+// missing or mistyped column, a NULL - is left to it; so is an empty query, which it reports.
 bool PostmanStartsOffTheGraph(const DriverRequest &request) {
 	const auto &input = LookupInput(request.edges_sql, KIND_EDGES);
 	const int id = FindColumn(input, "id");
@@ -48,6 +52,9 @@ bool PostmanStartsOffTheGraph(const DriverRequest &request) {
 		return false;
 	}
 	const auto rows = InputRowCount(input);
+	if (rows == 0) {
+		return false;
+	}
 	for (std::size_t row = 0; row < rows; row++) {
 		for (const int column : {id, source, target, cost, reverse_cost}) {
 			if (column != -1 && IsNull(input, row, column)) {
@@ -55,18 +62,39 @@ bool PostmanStartsOffTheGraph(const DriverRequest &request) {
 			}
 		}
 	}
-	if (rows == 0) {
-		return false;
-	}
 	const int64_t start = ReadInt64(input, 0, source);
+	// Union-find over the vertices of the positive directions (direction is irrelevant to connectivity).
+	std::unordered_map<int64_t, int64_t> parent;
+	const std::function<int64_t(int64_t)> find = [&](int64_t v) {
+		while (parent[v] != v) {
+			parent[v] = parent[parent[v]];
+			v = parent[v];
+		}
+		return v;
+	};
 	for (std::size_t row = 0; row < rows; row++) {
 		const bool positive =
 		    ReadDouble(input, row, cost) > 0 || (reverse_cost != -1 && ReadDouble(input, row, reverse_cost) > 0);
-		if (positive && (ReadInt64(input, row, source) == start || ReadInt64(input, row, target) == start)) {
+		if (!positive) {
+			continue;
+		}
+		const int64_t from = ReadInt64(input, row, source);
+		const int64_t to = ReadInt64(input, row, target);
+		if (from == start || to == start) {
 			return false;
 		}
+		parent.emplace(from, from);
+		parent.emplace(to, to);
+		parent[find(from)] = find(to);
 	}
-	return true;
+	if (parent.empty()) {
+		return true;
+	}
+	std::unordered_set<int64_t> roots;
+	for (const auto &entry : parent) {
+		roots.insert(find(entry.first));
+	}
+	return roots.size() == 1;
 }
 
 } // namespace

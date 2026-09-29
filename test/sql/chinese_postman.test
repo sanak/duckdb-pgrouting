@@ -69,7 +69,7 @@ SELECT pgr_chinesePostmanCost('SELECT id, source, target, cost, reverse_cost FRO
 34	8
 
 # The first row's source lies on no direction with a positive cost. Upstream crashes on these; here
-# they answer no tour and no cost, as upstream does for such a start whenever it does not crash.
+# they answer no tour and no cost.
 query IT
 SELECT (SELECT count(*) FROM pgr_chinesePostman('SELECT * FROM (VALUES (1, 5, 6, -1.0, -1.0), (2, 1, 2, 1.0, 1.0))
           t(id, source, target, cost, reverse_cost)')),
@@ -83,6 +83,16 @@ SELECT (SELECT count(*) FROM pgr_chinesePostman('SELECT 1 AS id, 1 AS source, 2 
        pgr_chinesePostmanCost('SELECT 1 AS id, 1 AS source, 2 AS target, 0.0 AS cost, 0.0 AS reverse_cost') IS NULL;
 ----
 0	true
+
+# The start lies on no positive direction, but the rest is two separate cycles: upstream does not
+# crash there, and returns no tour but the cost of both cycles.
+query IR
+SELECT (SELECT count(*) FROM pgr_chinesePostman('SELECT * FROM (VALUES (1, 5, 6, -1.0, -1.0), (2, 1, 2, 1.0, 1.0),
+          (3, 3, 4, 1.0, 1.0)) t(id, source, target, cost, reverse_cost)')),
+       pgr_chinesePostmanCost('SELECT * FROM (VALUES (1, 5, 6, -1.0, -1.0), (2, 1, 2, 1.0, 1.0),
+          (3, 3, 4, 1.0, 1.0)) t(id, source, target, cost, reverse_cost)');
+----
+0	4
 
 # A graph whose first row is fine but which cannot be balanced reaches the driver: no tour, no cost.
 query IT
