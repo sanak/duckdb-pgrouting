@@ -21,10 +21,10 @@ the following checklist, in order. Every step either passes or tells you exactly
    `src/functions/*_specs.cpp` table to `DriverKind::SHORTEST_PATH` with the flags its new SQL
    wrapper passes, and drop its driver file from `cmake/pgrouting_sources.cmake`.
 
-   The functions on upstream's unified `do_ordering` and `do_allpairs` (pgr_cuthillMckeeOrdering,
-   pgr_kingOrdering, pgr_sloanOrdering, pgr_topologicalSort, pgr_johnson, pgr_floydWarshall) are
-   called from `src/pg_compat/src/drivers_unified.cpp` with the `Which` value their C entries pass;
-   a changed signature of either driver shows up there.
+   The functions on upstream's unified `do_ordering`, `do_allpairs` and `do_metrics`
+   (pgr_cuthillMckeeOrdering, pgr_kingOrdering, pgr_sloanOrdering, pgr_topologicalSort, pgr_johnson,
+   pgr_floydWarshall, pgr_bandwidth) are called from `src/pg_compat/src/drivers_unified.cpp` with
+   the `Which` value their C entries pass; a changed signature of either driver shows up there.
 
    The graph-analysis functions (pgr_strongComponents, pgr_biconnectedComponents,
    pgr_articulationPoints, pgr_bridges, pgr_makeConnected, pgr_sequentialVertexColoring,
@@ -33,6 +33,10 @@ the following checklist, in order. Every step either passes or tells you exactly
    example `do_coloring` or `do_metrics`), call it from `src/pg_compat/src/drivers_unified.cpp`
    with the `Which` value its C entry passes, and drop its per-family driver file from
    `cmake/pgrouting_sources.cmake`.
+
+   The structural functions (pgr_isPlanar, pgr_lineGraph, pgr_lineGraphFull, pgr_transitiveClosure,
+   pgr_lengauerTarjanDominatorTree, pgr_hawickCircuits, pgr_stoerWagner) call their per-family
+   drivers from `src/pg_compat/src/drivers_analysis.cpp`; treat them the same way.
 2. Update `cmake/pgrouting_sources.cmake` for added or removed upstream files, one entry at a
    time. Never glob: the list is deliberately explicit so that a new upstream file is a decision
    rather than an accident. Do not list a `*_process.cpp` (those talk to PostgreSQL and this
@@ -52,15 +56,16 @@ the following checklist, in order. Every step either passes or tells you exactly
    Only each implemented function's own documentation page is processed; a generated file that
    is no longer produced (its function's page vanished upstream, or it emits nothing) is removed
    by a regenerating run and reported by `--check`.
-5. Re-diff the two PL/pgSQL functions this extension reimplements:
-   `git -C third_party/pgrouting diff <old tag> <new tag> -- sql/utilities/extractVertices.sql sql/utilities/findCloseEdges.sql`.
+5. Re-diff the three PL/pgSQL functions this extension reimplements:
+   `git -C third_party/pgrouting diff <old tag> <new tag> -- sql/utilities/extractVertices.sql sql/utilities/findCloseEdges.sql sql/metrics/degree.sql`.
    Carry any change to their column checks, modes, error texts or query into
-   `src/functions/extract_vertices.cpp` / `src/functions/find_close_edges.cpp`. The generated
-   `test/sql/pgrouting/utilities/*.test` cover only the documented queries, so a silent change
-   elsewhere would go unnoticed. Also re-diff `src/common/check_parameters.c`, transcribed into the
-   A* request check in `src/exec/exec_function.cpp`, and the A* SQL wrappers' constant flags
-   (`normal := false` in the many-to-one forms, astarCost's `ORDER BY`, bdAstar's `NUMERIC`
-   defaults): their wording and flags are pinned only by hand-written tests, not by the generator.
+   `src/functions/extract_vertices.cpp`, `src/functions/find_close_edges.cpp` /
+   `src/functions/degree.cpp`. The generated `test/sql/pgrouting/utilities/*.test` and
+   `metrics/degree.test` cover only the documented queries, so a silent change elsewhere would go
+   unnoticed. Also re-diff `src/common/check_parameters.c`, transcribed into the A* request check in
+   `src/exec/exec_function.cpp`, and the A* SQL wrappers' constant flags (`normal := false` in the
+   many-to-one forms, astarCost's `ORDER BY`, bdAstar's `NUMERIC` defaults): their wording and flags
+   are pinned only by hand-written tests, not by the generator.
 
    `src/pg_compat/src/drivers_trsp.cpp` refuses a NULL or empty restriction path for
    pgr_turnRestrictedPath because `Rule::Rule` (`src/cpp_common/rule.cpp`) takes the path's last

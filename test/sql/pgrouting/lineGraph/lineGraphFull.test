@@ -1,0 +1,136 @@
+# name: test/sql/pgrouting/lineGraph/lineGraphFull.test
+# description: Generated from pgRouting's lineGraphFull documentation queries
+# group: [pgrouting]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
+# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
+#
+# Source: third_party/pgrouting/docqueries/lineGraph/lineGraphFull.pg and the committed transcript beside it. The queries and their expected rows are
+# upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
+# sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
+# line with its reason, so what this file does not cover is visible here rather than implied.
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE vertices AS
+  SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges,
+         CAST(out_edges AS BIGINT[]) AS out_edges, x, y
+  FROM read_csv_auto('test/data/sampledata/vertices.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE combinations AS
+  SELECT * FROM read_csv_auto('test/data/sampledata/combinations.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+  SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+  FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+# q0
+query IIIRR
+SELECT id, source, target, cost, reverse_cost
+FROM edges
+WHERE id IN (4, 7, 8, 10);
+----
+4	6	7	1	1
+7	3	7	1	1
+8	7	11	1	1
+10	7	8	1	1
+
+# q1
+query IIIRI
+SELECT * FROM pgr_lineGraphFull(
+  $$SELECT id, source, target, cost, reverse_cost
+  FROM edges
+  WHERE id IN (4, 7, 8, 10)$$);
+----
+1	-1	7	1	4
+2	6	-1	0	0
+3	-2	6	1	-4
+4	-3	3	1	-7
+5	-4	11	1	8
+6	-5	8	1	10
+7	7	-2	0	0
+8	7	-3	0	0
+9	7	-4	0	0
+10	7	-5	0	0
+11	-6	-2	0	0
+12	-6	-3	0	0
+13	-6	-4	0	0
+14	-6	-5	0	0
+15	-7	-2	0	0
+16	-7	-3	0	0
+17	-7	-4	0	0
+18	-7	-5	0	0
+19	-8	-2	0	0
+20	-8	-3	0	0
+21	-8	-4	0	0
+22	-8	-5	0	0
+23	-9	-6	1	7
+24	3	-9	0	0
+25	-10	-7	1	-8
+26	11	-10	0	0
+27	-11	-8	1	-10
+28	8	-11	0	0
+
+# q2: skipped - no result set
+
+# q3: skipped - no result set
+
+# q4: skipped - no result set
+
+# q5: skipped - no result set
+
+# q6: skipped - reads vertex_map, which earlier blocks without a result set create; the generator never runs those
+
+# q7: skipped - reads lineGraph_edges, which an earlier block without a result set creates; the generator never runs it
+
+# q8: skipped - no result set
+
+# q9: skipped - reads vertex_map, which earlier blocks without a result set create and update; the generator never runs those
+
+# q10: skipped - no result set
+
+# q11: skipped - reads vertex_map, which earlier blocks without a result set create and update; the generator never runs those
+
+# q12: skipped - reads vertex_map and lineGraph_edges, which earlier blocks without a result set create; the generator never runs those
+
+# q13: skipped - reads vertex_map and lineGraph_edges, which earlier blocks without a result set create; the generator never runs those
+
+# q14: skipped - no result set
+
+# q15: skipped - reads vertex_map and lineGraph_edges, which earlier blocks without a result set create; the generator never runs those
+
+# q16: skipped - no result set
+
+# q17: skipped - no result set
+
+# q18: skipped - reads lineGraph_edges, which an earlier block without a result set creates; the generator never runs it
+
+# q19: skipped - no result set
+
+# q20: skipped - reads vertex_map and lineGraph_edges, which earlier blocks without a result set create; the generator never runs those
+
+# q21: skipped - no result set
+
+# q22: skipped - alters new_graph, which earlier blocks without a result set create, with PostgreSQL sequences
+
+# q23: skipped - no result set
+
+# q24: skipped - reads new_graph, which earlier blocks without a result set create; the generator never runs those
+
+# q25: skipped - reads new_graph, which earlier blocks without a result set create; the generator never runs those
+

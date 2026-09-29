@@ -74,7 +74,7 @@ WHERE function_name LIKE 'pgr\_%' ESCAPE '\' ORDER BY ALL;
 
 ## Functions
 
-Sixty-two pgRouting functions — one hundred and eighty of pgRouting 4.0's signatures — plus
+Seventy-one pgRouting functions — one hundred and ninety of pgRouting 4.0's signatures — plus
 `pgr_version()`.
 The [pgRouting documentation](https://docs.pgrouting.org/4.0/en/) describes each algorithm, its
 parameters and its result columns, all of which this extension keeps.
@@ -97,7 +97,8 @@ parameters and its result columns, all of which this extension keeps.
 | Coloring | `pgr_sequentialVertexColoring`, `pgr_bipartite`, `pgr_edgeColoring` |
 | Ordering | `pgr_cuthillMckeeOrdering`, `pgr_kingOrdering`, `pgr_sloanOrdering`, `pgr_topologicalSort` |
 | All pairs | `pgr_johnson`, `pgr_floydWarshall` |
-| Metrics | `pgr_betweennessCentrality` |
+| Metrics | `pgr_betweennessCentrality`, `pgr_bandwidth`, `pgr_degree` |
+| Graph structure | `pgr_isPlanar`, `pgr_lineGraph`, `pgr_lineGraphFull`, `pgr_transitiveClosure`, `pgr_lengauerTarjanDominatorTree`, `pgr_hawickCircuits`, `pgr_stoerWagner` |
 | Utilities | `pgr_extractVertices`, `pgr_findCloseEdges` |
 
 Functions deliberately not ported are listed, each with its reason, in
@@ -109,6 +110,10 @@ Functions deliberately not ported are listed, each with its reason, in
   `ARRAY[7, 10]`).
 - **Named arguments** use DuckDB's `:=` (or `=>`). A `NULL` argument returns no rows, as it does
   for pgRouting's `STRICT` functions.
+- **One-value functions work both ways.** `pgr_bandwidth` and `pgr_isPlanar` return a single
+  value, as in pgRouting: `SELECT pgr_isPlanar('…')` and `SELECT * FROM pgr_isPlanar('…')` both
+  work (a table function of one row and a scalar macro of the same name). Like every function
+  here, neither takes a column as its query argument.
 - **Equal-cost ties.** The order in which the inner query's rows reach the algorithm is not fixed
   (DuckDB scans in parallel), so where two routes cost exactly the same, the same query may return
   either one between runs. Every answer is still optimal; PostgreSQL's unordered scans give
@@ -126,12 +131,17 @@ Functions deliberately not ported are listed, each with its reason, in
   still a valid tour; see `docs/BACKLOG.md` for upstream's other TSP behaviours this extension
   keeps.
 - **Graph orderings, colorings and joins depend on the input order too.** `pgr_makeConnected`,
-  `pgr_sequentialVertexColoring`, `pgr_bipartite`, `pgr_edgeColoring`, `pgr_topologicalSort` and
-  the three bandwidth orderings (`pgr_cuthillMckeeOrdering`, `pgr_kingOrdering`,
-  `pgr_sloanOrdering`) return one of several valid answers, chosen by the order the edges reach
-  the algorithm; the orderings' ties also follow the C++ standard library, so they can differ
-  between Linux, macOS, Windows and Wasm. Every answer is valid for its problem; see
+  `pgr_sequentialVertexColoring`, `pgr_bipartite`, `pgr_edgeColoring`, `pgr_topologicalSort` and the
+  three bandwidth orderings (`pgr_cuthillMckeeOrdering`, `pgr_kingOrdering`, `pgr_sloanOrdering`)
+  return one of several valid answers, chosen by the order the edges reach the algorithm; the
+  orderings' ties also follow the C++ standard library, so they can differ between Linux, macOS,
+  Windows and Wasm. So do the orientation and order of `pgr_lineGraph`'s rows, the negative ids
+  `pgr_lineGraphFull` hands out, the order inside `pgr_transitiveClosure`'s lists, where each of
+  `pgr_hawickCircuits`' circuits starts, which of several equally cheap cuts `pgr_stoerWagner`
+  reports, and `pgr_lengauerTarjanDominatorTree`'s `seq` and `idom` (which, as upstream writes it,
+  is the `seq` of the dominator's row, not a vertex id). Every answer is valid for its problem; see
   `docs/BACKLOG.md` for the upstream behaviours these functions keep.
+- **`pgr_degree` returns its rows sorted by vertex**; upstream's order is unspecified.
 - **Memory.** pgRouting's own allocations are not counted against DuckDB's `memory_limit`.
 - **A turn-restricted route re-routed over more than about ten thousand edges** can overflow a
   worker thread's stack and end the process on macOS (upstream's recursion); see

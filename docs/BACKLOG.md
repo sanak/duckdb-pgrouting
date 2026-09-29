@@ -98,6 +98,21 @@ decision rather than an oversight.
   `pgr_betweennessCentrality` raise `No result generated, report this error` when there is no pair.
   `pgr_sloanOrdering` orders only one connected part and repeats the smallest vertex id in the
   remaining positions (upstream's own pgTAP test marks it TODO).
+- **The structural graph functions keep upstream's answers.** `pgr_lengauerTarjanDominatorTree`'s
+  `idom` is the dominator's vertex index + 1 — the `seq` of the dominator's own row — rather than a
+  vertex id, and 0 for the root and unreachable vertices. `pgr_stoerWagner` names each cut edge by
+  the first edge between its two vertices with the same cost, so a bundle of equal parallel edges is
+  reported as one id repeated; it raises Boost's `the input graph must have at least two vertices.`
+  on a graph of fewer than two vertices, and returns nothing, silently, for a disconnected one.
+  `pgr_hawickCircuits` reports a directed self-loop as a circuit and, among parallel edges, only the
+  first one read. `pgr_transitiveClosure` lists a vertex twice in its own list for a two-way
+  self-loop. `pgr_bandwidth` raises `No edges found` for an empty edge query, where
+  `pgr_isPlanar` answers false. `pgr_lineGraph` drops the line graph's self-loops when undirected
+  and keeps them when directed.
+- **The line graphs, the closure lists, the circuits, the dominator tree's numbering and
+  `pgr_stoerWagner`'s tied cuts depend on the edge order.** Each follows the order the vertices or
+  edges enter the graph (see README's "Differences"); the tests assert the order-free facts
+  wherever the answer is not forced.
 - **Graph orderings, colorings, `pgr_makeConnected` and `pgr_topologicalSort` depend on the edge
   order, and the bandwidth orderings on the C++ standard library.** Their vertices enter the graph
   in the order the edges are read, and Boost's `cuthill_mckee_ordering`, `king_ordering` and
@@ -109,7 +124,11 @@ decision rather than an oversight.
   `CHECK_FOR_INTERRUPTS` once, before its Boost call (`pgr_biconnectedComponents` never does).
   `pgr_bridges` runs one connected-components pass per candidate edge, so its time grows with about
   the square of the edge count, and `pgr_johnson` / `pgr_floydWarshall` allocate their
-  vertices-squared matrix before polling. PostgreSQL runs the same code.
+  vertices-squared matrix before polling. PostgreSQL runs the same code. `pgr_bandwidth`,
+  `pgr_isPlanar`, `pgr_lengauerTarjanDominatorTree` and `pgr_hawickCircuits` poll once as well;
+  `pgr_lineGraph`, `pgr_lineGraphFull`, `pgr_transitiveClosure` and `pgr_stoerWagner` never do.
+  `pgr_hawickCircuits` lists every elementary circuit, whose number can grow exponentially with the
+  graph, and `pgr_transitiveClosure` holds up to vertices-squared ids.
 - **A turn-restricted path that must be re-routed over thousands of edges can exhaust a thread's
   stack.** Upstream's `TrspHandler::construct_path` (`src/trsp/trspHandler.cpp`) recurses once per
   edge of the path it rebuilds. PostgreSQL runs it on a backend's main thread (8 MB of stack by
@@ -260,6 +279,14 @@ Each of these would be a change no test could observe, so none of them is made:
   read tables or rows that earlier, result-less blocks create. `test/sql/components.test`,
   `coloring.test` and `ordering.test` cover the same inputs with this build's answers and their
   validity. The three bandwidth orderings' pages are asserted through the ordering invariant only.
+- **`circuits/hawickCircuits.pg` and `dominator/lengauerTarjanDominatorTree.pg` produce no
+  generated test file**, and several blocks of `lineGraph/*.pg`, `metrics/bandwidth.pg`,
+  `metrics/degree.pg` and `planar/isPlanar.pg` are skipped (see `test/pgrouting_skip.json`).
+  hawickCircuits' and the dominator tree's transcripts come from the sample table's physical order,
+  which this build does not reproduce; the others read tables that earlier, result-less blocks
+  create, need PostGIS, or have no ORDER BY. `test/sql/hawick_circuits.test`,
+  `dominator_tree.test`, `line_graph.test`, `scalar_functions.test` and `degree.test` cover the
+  same inputs with this build's answers and their order-free facts.
 
 ## Open decision
 
