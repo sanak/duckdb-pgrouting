@@ -37,9 +37,14 @@ SELECT (SELECT count(*) FROM pgr_articulationPoints('SELECT id, source, target, 
 0	0	0	0	0	0	0	0	0	0	0	4
 
 # makeConnected sizes a vector with the component count minus one, which on an empty graph wraps
-# around: the C++ standard library's length error, worded differently on each platform.
+# around: the C++ standard library's length error, worded differently on each platform, but every
+# platform's message names the container: "vector" (libc++'s Invalid Input Error, libstdc++'s
+# vector::_M_default_append / "cannot create std::vector larger than max_size()", MSVC's "vector too
+# long").
 statement error
 SELECT * FROM pgr_makeConnected('SELECT id, source, target, cost, reverse_cost FROM neg');
+----
+vector
 
 statement error
 SELECT * FROM pgr_johnson('SELECT id, source, target, cost, reverse_cost FROM neg');
