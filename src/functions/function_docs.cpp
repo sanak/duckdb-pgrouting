@@ -250,6 +250,37 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "Colors the edges of an undirected graph so that no two edges meeting at a vertex share a color, "
      "colors numbered from 1; the coloring found depends on the order the edges are read in.",
      "SELECT * FROM pgr_edgeColoring('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_cuthillMckeeOrdering",
+     "Renumbers the vertices in reverse Cuthill-McKee order, which keeps the two ends of every edge "
+     "close in the numbering (a small bandwidth); how ties between vertices of equal degree break "
+     "depends on the edge order and the platform.",
+     "SELECT * FROM pgr_cuthillMckeeOrdering('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_kingOrdering",
+     "Renumbers the vertices in King's order, which keeps the numbering's profile small; how ties "
+     "between vertices of equal degree break depends on the edge order and the platform.",
+     "SELECT * FROM pgr_kingOrdering('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_sloanOrdering",
+     "Renumbers the vertices in Sloan's order, which keeps the numbering's profile and wavefront small; "
+     "only the connected part holding the smallest vertex id is ordered, the remaining positions "
+     "repeating that id.",
+     "SELECT * FROM pgr_sloanOrdering('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_topologicalSort",
+     "Orders the vertices of a directed graph without cycles so that every edge points forward in the "
+     "order; a graph with a cycle is an error.",
+     "SELECT * FROM pgr_topologicalSort('SELECT id, source, target, cost FROM edges WHERE cost >= 0')"},
+    {"pgr_johnson",
+     "Shortest-path costs between every ordered pair of vertices that are connected, by Johnson's "
+     "algorithm, suited to sparse graphs; memory grows with the square of the number of vertices.",
+     "SELECT * FROM pgr_johnson('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 5')"},
+    {"pgr_floydWarshall",
+     "Shortest-path costs between every ordered pair of vertices that are connected, by the "
+     "Floyd-Warshall algorithm, suited to dense graphs; memory grows with the square of the number of "
+     "vertices and time with its cube.",
+     "SELECT * FROM pgr_floydWarshall('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 5')"},
+    {"pgr_betweennessCentrality",
+     "For each vertex, the share of shortest paths between other vertices that pass through it "
+     "(Brandes' algorithm, normalized by the number of vertex pairs).",
+     "SELECT * FROM pgr_betweennessCentrality('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 5')"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "

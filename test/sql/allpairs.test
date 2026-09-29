@@ -1,0 +1,135 @@
+# name: test/sql/allpairs.test
+# description: pgr_johnson and pgr_floydWarshall: variants, edges without id, agreement with pgr_dijkstraCostMatrix
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# One signature each with one defaulted parameter (directed): two variants each.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name IN ('pgr_johnson', 'pgr_floydWarshall') AND tags['ext'] = 'pgrouting' GROUP BY ALL ORDER BY 1;
+----
+pgr_floydWarshall	2
+pgr_johnson	2
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_johnson(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+start_vid	BIGINT
+end_vid	BIGINT
+agg_cost	DOUBLE
+
+# Upstream's q1 of each; pgr_johnson's reads no id.
+query IIR
+SELECT * FROM pgr_johnson('SELECT source, target, cost FROM edges WHERE id < 5') ORDER BY start_vid, end_vid;
+----
+5	6	1
+5	7	2
+6	7	1
+
+query IIR
+SELECT * FROM pgr_floydWarshall('SELECT id, source, target, cost, reverse_cost FROM edges where id < 5')
+ORDER BY start_vid, end_vid;
+----
+5	6	1
+5	7	2
+6	5	1
+6	7	1
+7	5	2
+7	6	1
+10	5	2
+10	6	1
+10	7	2
+15	5	3
+15	6	2
+15	7	3
+15	10	1
+
+# directed, positional or named.
+query TIR
+SELECT 'johnson positional', count(*), sum(agg_cost)
+FROM pgr_johnson('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 5', false)
+UNION ALL
+SELECT 'johnson named', count(*), sum(agg_cost)
+FROM pgr_johnson('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 5', directed := false)
+UNION ALL
+SELECT 'floyd arrow', count(*), sum(agg_cost)
+FROM pgr_floydWarshall('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 5', directed => false)
+ORDER BY 1;
+----
+floyd arrow	20	36
+johnson named	20	36
+johnson positional	20	36
+
+# Over the whole sample graph, both agree with pgr_dijkstraCostMatrix pair for pair, directed and
+# undirected.
+statement ok
+SET VARIABLE vids = (SELECT list(DISTINCT v ORDER BY v) FROM (SELECT source AS v FROM edges UNION SELECT target FROM edges));
+
+query II
+SELECT
+  (SELECT count(*) FROM pgr_johnson('SELECT id, source, target, cost, reverse_cost FROM edges') a
+   FULL JOIN pgr_dijkstraCostMatrix('SELECT id, source, target, cost, reverse_cost FROM edges', getvariable('vids')) b
+   USING (start_vid, end_vid) WHERE a.agg_cost IS DISTINCT FROM b.agg_cost),
+  (SELECT count(*) FROM pgr_floydWarshall('SELECT id, source, target, cost, reverse_cost FROM edges') a
+   FULL JOIN pgr_dijkstraCostMatrix('SELECT id, source, target, cost, reverse_cost FROM edges', getvariable('vids')) b
+   USING (start_vid, end_vid) WHERE a.agg_cost IS DISTINCT FROM b.agg_cost);
+----
+0	0
+
+query II
+SELECT
+  (SELECT count(*) FROM pgr_johnson('SELECT id, source, target, cost, reverse_cost FROM edges', false) a
+   FULL JOIN pgr_dijkstraCostMatrix('SELECT id, source, target, cost, reverse_cost FROM edges', getvariable('vids'),
+                                    directed := false) b
+   USING (start_vid, end_vid) WHERE a.agg_cost IS DISTINCT FROM b.agg_cost),
+  (SELECT count(*) FROM pgr_floydWarshall('SELECT id, source, target, cost, reverse_cost FROM edges', false) a
+   FULL JOIN pgr_dijkstraCostMatrix('SELECT id, source, target, cost, reverse_cost FROM edges', getvariable('vids'),
+                                    directed := false) b
+   USING (start_vid, end_vid) WHERE a.agg_cost IS DISTINCT FROM b.agg_cost);
+----
+0	0
+
+statement error
+SELECT * FROM pgr_johnson('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0');
+----
+No edges found
+
+statement error
+SELECT * FROM pgr_floydWarshall('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 0');
+----
+No edges found
+
+# More than one 2048-row output chunk: a two-way path of 50 vertices has 2450 ordered pairs.
+statement ok
+CREATE TABLE path50 AS SELECT i AS id, i AS source, i + 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost
+FROM range(1, 50) t(i);
+
+query TIR
+SELECT 'floyd', count(*), sum(agg_cost) FROM pgr_floydWarshall('SELECT * FROM path50')
+UNION ALL
+SELECT 'johnson', count(*), sum(agg_cost) FROM pgr_johnson('SELECT * FROM path50')
+ORDER BY 1;
+----
+floyd	2450	41650
+johnson	2450	41650
+
+query IIII
+SELECT (SELECT count(*) FROM pgr_johnson(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_johnson('SELECT * FROM path50', NULL::BOOLEAN)),
+       (SELECT count(*) FROM pgr_floydWarshall('SELECT * FROM path50', directed := NULL)),
+       (SELECT count(*) FROM pgr_floydWarshall(NULL::VARCHAR, true));
+----
+0	0	0	0

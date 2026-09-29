@@ -1,0 +1,158 @@
+# name: test/sql/ordering.test
+# description: pgr_cuthillMckeeOrdering, pgr_kingOrdering, pgr_sloanOrdering, pgr_topologicalSort
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# Upstream's own ten-vertex example (docqueries ordering/kingOrdering.pg q2 and sloanOrdering.pg q4).
+statement ok
+CREATE TABLE additional (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO additional VALUES
+  (1, 4, 7, 1, 1), (2, 7, 4, 1, 1), (3, 7, 9, 1, 1), (4, 9, 7, 1, 1), (5, 7, 0, 1, 1), (6, 0, 7, 1, 1),
+  (7, 0, 2, 1, 1), (8, 2, 0, 1, 1), (9, 2, 5, 1, 1), (10, 5, 2, 1, 1), (11, 5, 9, 1, 1), (12, 9, 5, 1, 1),
+  (13, 9, 8, 1, 1), (14, 8, 9, 1, 1), (15, 9, 1, 1, 1), (16, 1, 9, 1, 1), (17, 5, 1, 1, 1), (18, 1, 5, 1, 1),
+  (19, 9, 6, 1, 1), (20, 6, 9, 1, 1), (21, 6, 3, 1, 1), (22, 3, 6, 1, 1), (23, 1, 3, 1, 1), (24, 3, 1, 1, 1);
+
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name IN ('pgr_cuthillMckeeOrdering', 'pgr_kingOrdering', 'pgr_sloanOrdering', 'pgr_topologicalSort')
+  AND tags['ext'] = 'pgrouting' GROUP BY ALL ORDER BY 1;
+----
+pgr_cuthillMckeeOrdering	1
+pgr_kingOrdering	1
+pgr_sloanOrdering	1
+pgr_topologicalSort	1
+
+# Upstream's columns: seq is BIGINT for the three bandwidth orderings and INTEGER for topologicalSort.
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_cuthillMckeeOrdering(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+seq	BIGINT
+node	BIGINT
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_topologicalSort(
+  'SELECT id, source, target, cost FROM edges WHERE cost >= 0'));
+----
+seq	INTEGER
+node	BIGINT
+
+# The bandwidth orderings break ties between vertices of equal degree through the C++ standard
+# library and the edge order, so on these graphs only what every answer shares is asserted: each
+# vertex once, numbered from 1.
+query TIIII
+SELECT 'cuthill sample', count(*), count(DISTINCT node), min(seq), max(seq)
+FROM pgr_cuthillMckeeOrdering('SELECT id, source, target, cost, reverse_cost FROM edges')
+UNION ALL
+SELECT 'king sample', count(*), count(DISTINCT node), min(seq), max(seq)
+FROM pgr_kingOrdering('SELECT id, source, target, cost, reverse_cost FROM edges')
+UNION ALL
+SELECT 'cuthill additional', count(*), count(DISTINCT node), min(seq), max(seq)
+FROM pgr_cuthillMckeeOrdering('SELECT id, source, target, cost, reverse_cost FROM additional')
+UNION ALL
+SELECT 'king additional', count(*), count(DISTINCT node), min(seq), max(seq)
+FROM pgr_kingOrdering('SELECT id, source, target, cost, reverse_cost FROM additional')
+UNION ALL
+SELECT 'sloan additional', count(*), count(DISTINCT node), min(seq), max(seq)
+FROM pgr_sloanOrdering('SELECT id, source, target, cost, reverse_cost FROM additional')
+ORDER BY 1;
+----
+cuthill additional	10	10	1	10
+cuthill sample	17	17	1	17
+king additional	10	10	1	10
+king sample	17	17	1	17
+sloan additional	10	10	1	10
+
+# On a graph of several components, Sloan's ordering covers only the one of the smallest vertex id
+# and fills the remaining positions with that id, as upstream answers.
+query IIIT
+SELECT count(*), count(DISTINCT node), count(*) FILTER (WHERE node = 1), list(node ORDER BY node) FILTER (WHERE seq <= 13)
+FROM pgr_sloanOrdering('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+17	13	5	[1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17]
+
+# A graph with no tie to break gives every platform the same rows (upstream's pgTAP cases).
+query TT
+SELECT 'cuthill', string_agg(node::VARCHAR, ' ' ORDER BY seq)
+FROM pgr_cuthillMckeeOrdering('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id <= 2')
+UNION ALL
+SELECT 'king', string_agg(node::VARCHAR, ' ' ORDER BY seq)
+FROM pgr_kingOrdering('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id <= 2')
+UNION ALL
+SELECT 'sloan', string_agg(node::VARCHAR, ' ' ORDER BY seq)
+FROM pgr_sloanOrdering('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id = 7')
+ORDER BY 1;
+----
+cuthill	5 6 10
+king	5 6 10
+sloan	3 7
+
+# A graph with vertices but no usable edge: upstream's Sloan ordering would crash; no rows here.
+query I
+SELECT count(*) FROM pgr_sloanOrdering('SELECT 1 AS id, 1 AS source, 2 AS target, -1.0 AS cost, -1.0 AS reverse_cost');
+----
+0
+
+# Every edge made to point the way it can be travelled, read in id order: one topological order,
+# which every edge follows forward.
+query T
+SELECT string_agg(node::VARCHAR, ' ' ORDER BY seq)
+FROM pgr_topologicalSort('SELECT id, source, target, cost FROM edges WHERE cost >= 0');
+----
+13 14 2 4 15 1 3 10 5 6 7 8 9 11 12 16 17
+
+# Upstream's q1 builds its graph with a UNION, whose row order DuckDB does not fix, so which order
+# comes back varies; that it is a topological order of all 17 vertices does not.
+query II
+WITH o AS (SELECT * FROM pgr_topologicalSort($$SELECT id, source, target, cost FROM edges WHERE cost >= 0
+             UNION SELECT id, target, source, reverse_cost FROM edges WHERE cost < 0$$)),
+     d AS (SELECT source, target FROM edges WHERE cost >= 0 UNION ALL SELECT target, source FROM edges WHERE cost < 0)
+SELECT (SELECT count(*) FROM o),
+       (SELECT count(*) FROM d JOIN o s ON s.node = d.source JOIN o t ON t.node = d.target WHERE s.seq >= t.seq);
+----
+17	0
+
+statement error
+SELECT * FROM pgr_topologicalSort('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+Graph is not DAG
+
+# More than one 2048-row output chunk.
+statement ok
+CREATE TABLE chain AS SELECT i AS id, i AS source, i + 1 AS target, 1.0 AS cost FROM range(1, 3000) t(i);
+
+statement ok
+CREATE TABLE long_path AS SELECT i AS id, i AS source, i + 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost
+FROM range(1, 3000) t(i);
+
+query II
+SELECT count(*), count(*) FILTER (WHERE node <> seq) FROM pgr_topologicalSort('SELECT * FROM chain');
+----
+3000	0
+
+query IIII
+SELECT count(*), count(DISTINCT node), min(seq), max(seq) FROM pgr_kingOrdering('SELECT * FROM long_path');
+----
+3000	3000	1	3000
+
+query IIII
+SELECT (SELECT count(*) FROM pgr_cuthillMckeeOrdering(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_kingOrdering(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_sloanOrdering(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_topologicalSort(NULL::VARCHAR));
+----
+0	0	0	0

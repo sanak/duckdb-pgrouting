@@ -161,6 +161,9 @@ extern const duckdb::vector<FunctionSpec> DAG_SHORTEST_PATH_SPECS;    // dag_sho
 extern const duckdb::vector<FunctionSpec> BREADTH_FIRST_SEARCH_SPECS; // breadth_first_search_specs.cpp
 extern const duckdb::vector<FunctionSpec> COMPONENTS_SPECS;           // components_specs.cpp
 extern const duckdb::vector<FunctionSpec> COLORING_SPECS;             // coloring_specs.cpp
+extern const duckdb::vector<FunctionSpec> ORDERING_SPECS;             // ordering_specs.cpp
+extern const duckdb::vector<FunctionSpec> ALLPAIRS_SPECS;             // allpairs_specs.cpp
+extern const duckdb::vector<FunctionSpec> METRICS_SPECS;              // metrics_specs.cpp
 extern const duckdb::vector<FunctionSpec> ASTAR_SPECS;                // astar_specs.cpp
 extern const duckdb::vector<FunctionSpec> BD_ASTAR_SPECS;             // bd_astar_specs.cpp
 extern const duckdb::vector<FunctionSpec> DRIVING_DISTANCE_SPECS;     // driving_distance_specs.cpp

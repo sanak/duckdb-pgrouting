@@ -1,0 +1,57 @@
+# name: test/sql/graph_analysis_empty.test
+# description: Every graph-analysis function over edges none of which is usable (both costs negative)
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Each of these rows is read (id, source and target are valid) but none enters the graph. Several
+# upstream algorithms then index an empty vector (&components[0], colors[0]): harmless in a release
+# build, an assertion under a hardened standard library, so this file is left out of relassert runs,
+# as test/sql/connected_components.test is. Two upstream answers would crash any build -- Sloan's
+# ordering here, and biconnected components over self-loops only -- and are guarded; those guards are
+# also tested in test/sql/components_exec.test and test/sql/ordering_exec.test, which do run under
+# relassert.
+
+require pgrouting
+
+statement ok
+CREATE TABLE neg (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO neg VALUES (1, 1, 2, -1, -1), (2, 3, 4, -1, -1);
+
+query IIIIIIIIIIII
+SELECT (SELECT count(*) FROM pgr_articulationPoints('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(*) FROM pgr_bridges('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(*) FROM pgr_biconnectedComponents('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(*) FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(*) FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(*) FROM pgr_sequentialVertexColoring('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(*) FROM pgr_bipartite('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(*) FROM pgr_edgeColoring('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(*) FROM pgr_cuthillMckeeOrdering('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(*) FROM pgr_sloanOrdering('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(*) FROM pgr_topologicalSort('SELECT id, source, target, cost, reverse_cost FROM neg')),
+       (SELECT count(DISTINCT node) FROM pgr_kingOrdering('SELECT id, source, target, cost, reverse_cost FROM neg'));
+----
+0	0	0	0	0	0	0	0	0	0	0	4
+
+# makeConnected sizes a vector with the component count minus one, which on an empty graph wraps
+# around: the C++ standard library's length error, worded differently on each platform.
+statement error
+SELECT * FROM pgr_makeConnected('SELECT id, source, target, cost, reverse_cost FROM neg');
+
+statement error
+SELECT * FROM pgr_johnson('SELECT id, source, target, cost, reverse_cost FROM neg');
+----
+No result generated, report this error
+
+statement error
+SELECT * FROM pgr_floydWarshall('SELECT id, source, target, cost, reverse_cost FROM neg');
+----
+No result generated, report this error
+
+statement error
+SELECT * FROM pgr_betweennessCentrality('SELECT id, source, target, cost, reverse_cost FROM neg');
+----
+No result generated, report this error

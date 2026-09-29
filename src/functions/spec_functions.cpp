@@ -206,7 +206,9 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::ASTAR_SPECS,             &duckdb_pgrouting::BD_ASTAR_SPECS,
 	    &duckdb_pgrouting::DRIVING_DISTANCE_SPECS,  &duckdb_pgrouting::SPANNING_TREE_SPECS,
 	    &duckdb_pgrouting::TRAVERSAL_SPECS,         &duckdb_pgrouting::KSP_SPECS,
-	    &duckdb_pgrouting::TRSP_SPECS,              &duckdb_pgrouting::TSP_SPECS};
+	    &duckdb_pgrouting::TRSP_SPECS,              &duckdb_pgrouting::TSP_SPECS,
+	    &duckdb_pgrouting::ORDERING_SPECS,          &duckdb_pgrouting::ALLPAIRS_SPECS,
+	    &duckdb_pgrouting::METRICS_SPECS};
 	return TABLES;
 }
 
@@ -230,6 +232,8 @@ vector<unique_ptr<ParsedExpression>> ProjectionList(const duckdb_pgrouting::Func
 	case duckdb_pgrouting::Projection::COLUMNS:
 		// Fixed text from a spec table, never the caller's; CheckSpec parsed it at load.
 		return Parser::ParseExpressionList(spec.flags.columns);
+	default:
+		throw InternalException("Unhandled Projection");
 	}
 	vector<unique_ptr<ParsedExpression>> list;
 	for (auto &name : names) {

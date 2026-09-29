@@ -29,6 +29,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/exec/request_params.cpp
     src/exec/result_emitters.cpp
     src/exec/withpoints_keys.cpp
+    src/functions/allpairs_specs.cpp
     src/functions/astar_specs.cpp
     src/functions/bd_astar_specs.cpp
     src/functions/bd_dijkstra_specs.cpp
@@ -44,6 +45,8 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/function_docs.cpp
     src/functions/ksp_specs.cpp
     src/functions/meta_functions.cpp
+    src/functions/metrics_specs.cpp
+    src/functions/ordering_specs.cpp
     src/functions/spanning_tree_specs.cpp
     src/functions/spec_functions.cpp
     src/functions/sql_template.cpp
