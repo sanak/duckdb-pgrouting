@@ -1,0 +1,235 @@
+# name: test/sql/max_flow.test
+# description: pgr_pushRelabel, pgr_boykovKolmogorov, pgr_edmondsKarp: FLOW rows, valid flows in any order, messages, long answers
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE,
+  capacity BIGINT, reverse_capacity BIGINT);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1,80,130),(2,6,10,-1,1,-1,100),(3,10,15,-1,1,-1,130),(4,6,7,1,1,100,50),
+  (5,10,11,1,-1,130,-1),(6,1,3,1,1,50,100),(7,3,7,1,1,50,130),(8,7,11,1,1,100,130),
+  (9,11,16,1,1,130,80),(10,7,8,1,1,130,50),(11,11,12,1,-1,130,-1),(12,8,12,1,-1,100,-1),
+  (13,12,17,1,-1,100,-1),(14,8,9,1,1,80,130),(15,16,17,1,1,80,50),(16,15,16,1,1,80,80),
+  (17,2,4,1,1,130,100),(18,13,14,1,1,50,130);
+
+statement ok
+CREATE TABLE combinations (source BIGINT, target BIGINT);
+
+statement ok
+INSERT INTO combinations VALUES (5, 6), (5, 10), (6, 5), (6, 15), (6, 14);
+
+statement ok
+CREATE MACRO flow_edges() AS 'SELECT id, source, target, capacity, reverse_capacity FROM edges';
+
+# The driver's rows: every Flow_t field, as src/max_flow/minCostMaxFlow.c emits them.
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, capacity, reverse_capacity FROM edges) e) AS edges,
+          [11]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'sample', driver := 'max_flow', algorithm := 1));
+----
+seq	INTEGER
+edge	BIGINT
+source	BIGINT
+target	BIGINT
+flow	BIGINT
+residual_capacity	BIGINT
+cost	DOUBLE
+agg_cost	DOUBLE
+
+# The public columns: the arc's tail and head as start_vid and end_vid, no cost columns.
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_pushRelabel(flow_edges(), 11, 12));
+----
+seq	INTEGER
+edge	BIGINT
+start_vid	BIGINT
+end_vid	BIGINT
+flow	BIGINT
+residual_capacity	BIGINT
+
+# Upstream's q1 of each page, row for row (all three agree here).
+query IIIIII
+SELECT * FROM pgr_pushRelabel(flow_edges(), 11, 12);
+----
+1	10	7	8	100	30
+2	12	8	12	100	0
+3	8	11	7	100	30
+4	11	11	12	130	0
+
+query IIIIII
+SELECT * FROM pgr_boykovKolmogorov(flow_edges(), 11, 12);
+----
+1	10	7	8	100	30
+2	12	8	12	100	0
+3	8	11	7	100	30
+4	11	11	12	130	0
+
+query IIIIII
+SELECT * FROM pgr_edmondsKarp(flow_edges(), 11, 12);
+----
+1	10	7	8	100	30
+2	12	8	12	100	0
+3	8	11	7	100	30
+4	11	11	12	130	0
+
+# Upstream's q4 (many to many): which arcs carry the flow depends on the algorithm and on the edge
+# order, a valid maximum flow does not. Every reported arc carries flow and has used part of its
+# own direction's capacity; every vertex but the sources and targets balances; the sources send
+# 360, the targets take it.
+statement ok
+CREATE TABLE q4 AS
+  SELECT 'bk' AS alg, * FROM pgr_boykovKolmogorov(flow_edges(), ARRAY[11, 3, 17], ARRAY[5, 10, 12])
+  UNION ALL SELECT 'ek', * FROM pgr_edmondsKarp(flow_edges(), ARRAY[11, 3, 17], ARRAY[5, 10, 12])
+  UNION ALL SELECT 'pr', * FROM pgr_pushRelabel(flow_edges(), ARRAY[11, 3, 17], ARRAY[5, 10, 12]);
+
+query TI
+SELECT alg, count(*) FILTER (WHERE q4.flow <= 0 OR q4.flow + q4.residual_capacity <>
+  CASE WHEN q4.start_vid = e.source THEN e.capacity ELSE e.reverse_capacity END)
+FROM q4 JOIN edges e ON e.id = q4.edge GROUP BY alg ORDER BY alg;
+----
+bk	0
+ek	0
+pr	0
+
+query TIII
+WITH net AS (
+  SELECT alg, v, sum(f) AS o FROM (SELECT alg, start_vid AS v, flow AS f FROM q4
+                                   UNION ALL SELECT alg, end_vid, -flow FROM q4) GROUP BY alg, v)
+SELECT alg, sum(o) FILTER (WHERE v IN (11, 3, 17)), sum(o) FILTER (WHERE v IN (5, 10, 12)),
+       count(*) FILTER (WHERE o <> 0 AND v NOT IN (11, 3, 17, 5, 10, 12))
+FROM net GROUP BY alg ORDER BY alg;
+----
+bk	360	-360	0
+ek	360	-360	0
+pr	360	-360	0
+
+# The combinations form (upstream's q51): 5 -> 10 and 6 -> 15 carry 80 in all.
+query I
+SELECT coalesce(sum(flow) FILTER (WHERE start_vid IN (5, 6)), 0) - coalesce(sum(flow) FILTER (WHERE end_vid IN (5, 6)), 0)
+FROM pgr_edmondsKarp(flow_edges(), 'SELECT * FROM combinations WHERE target NOT IN (5, 6)');
+----
+80
+
+# reverse_capacity is optional: without it every edge is one-way, and 11 reaches 12 only by edge 11.
+query IIIIII
+SELECT * FROM pgr_edmondsKarp('SELECT id, source, target, capacity FROM edges', 11, 12);
+----
+1	11	11	12	130	0
+
+# Parallel edges are reported with their own ids; a self-loop never carries flow.
+query II
+SELECT count(*), sum(flow) FROM pgr_boykovKolmogorov('SELECT * FROM (VALUES (1, 1, 2, 5, -1), (2, 1, 2, 7, -1),
+  (3, 2, 2, 9, -1)) t(id, source, target, capacity, reverse_capacity)', 1, 2);
+----
+2	12
+
+# Nothing to do: no rows, no error.
+query I
+SELECT count(*) FROM pgr_pushRelabel('SELECT id, source, target, capacity, reverse_capacity FROM edges WHERE id < 0', 11, 12);
+----
+0
+
+# 14 is not reachable from 11. Push-relabel still reports a circulation of value 0 on edge 1, as
+# upstream does; the other two algorithms report nothing.
+query IIIIII
+SELECT * FROM pgr_pushRelabel(flow_edges(), 11, 14);
+----
+1	1	5	6	80	0
+2	1	6	5	80	50
+
+query II
+SELECT (SELECT count(*) FROM pgr_boykovKolmogorov(flow_edges(), 11, 14)),
+       (SELECT count(*) FROM pgr_edmondsKarp(flow_edges(), 11, 14));
+----
+0	0
+
+# An empty target array: the same circulation from push-relabel, nothing from the other two.
+query IIIIII
+SELECT * FROM pgr_pushRelabel(flow_edges(), 11, []::BIGINT[]);
+----
+1	1	5	6	80	0
+2	1	6	5	80	50
+
+query II
+SELECT (SELECT count(*) FROM pgr_boykovKolmogorov(flow_edges(), 11, []::BIGINT[])),
+       (SELECT count(*) FROM pgr_edmondsKarp(flow_edges(), 11, []::BIGINT[]));
+----
+0	0
+
+query I
+SELECT count(*) FROM pgr_pushRelabel(flow_edges(), 'SELECT * FROM combinations WHERE source < 0');
+----
+0
+
+# A vertex among both the sources and the targets.
+statement error
+SELECT * FROM pgr_boykovKolmogorov(flow_edges(), 11, 11);
+----
+A source found as sink
+
+statement error
+SELECT * FROM pgr_edmondsKarp(flow_edges(), ARRAY[11, 12], ARRAY[12, 17]);
+----
+A source found as sink
+
+# The edge query's columns, as upstream's flow getter checks them.
+statement error
+SELECT * FROM pgr_pushRelabel('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 12);
+----
+Column 'capacity' not Found
+
+statement error
+SELECT * FROM pgr_pushRelabel('SELECT id, source, target, cost AS capacity FROM edges', 11, 12);
+----
+Unexpected Column 'capacity' type. Expected ANY-INTEGER
+
+# STRICT: a NULL argument gives no rows.
+query III
+SELECT (SELECT count(*) FROM pgr_pushRelabel(NULL::VARCHAR, 11, 12)),
+       (SELECT count(*) FROM pgr_boykovKolmogorov(flow_edges(), NULL::BIGINT, 12)),
+       (SELECT count(*) FROM pgr_edmondsKarp(flow_edges(), NULL::VARCHAR));
+----
+0	0	0
+
+# Upstream's C entry checks the algorithm before anything else; only a direct call can pass another.
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, capacity, reverse_capacity FROM edges) e) AS edges,
+          [11]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'sample', driver := 'max_flow', algorithm := 4);
+----
+Unknown algorithm
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT id, source, target, capacity, reverse_capacity FROM edges) e) AS edges,
+          [11]::BIGINT[] AS starts, [12]::BIGINT[] AS ends),
+  edges_sql := 'sample', driver := 'max_flow', algorithm := 0);
+----
+Unknown algorithm
+
+# More than one output chunk: 1100 two-arc paths from 0 to 1101 give 2200 rows, seq unbroken.
+statement ok
+CREATE TABLE fan AS
+  SELECT i AS id, 0 AS source, i AS target, 1 AS capacity, -1 AS reverse_capacity FROM range(1, 1101) t(i)
+  UNION ALL SELECT 1100 + i, i, 1101, 1, -1 FROM range(1, 1101) t(i);
+
+query TIIIII
+SELECT 'pr', count(*), count(DISTINCT seq), min(seq), max(seq), sum(flow) FILTER (WHERE start_vid = 0)
+FROM pgr_pushRelabel('SELECT * FROM fan', 0, 1101)
+UNION ALL SELECT 'bk', count(*), count(DISTINCT seq), min(seq), max(seq), sum(flow) FILTER (WHERE start_vid = 0)
+FROM pgr_boykovKolmogorov('SELECT * FROM fan', 0, 1101)
+UNION ALL SELECT 'ek', count(*), count(DISTINCT seq), min(seq), max(seq), sum(flow) FILTER (WHERE start_vid = 0)
+FROM pgr_edmondsKarp('SELECT * FROM fan', 0, 1101)
+ORDER BY 1;
+----
+bk	2200	2200	1	2200	1100
+ek	2200	2200	1	2200	1100
+pr	2200	2200	1	2200	1100

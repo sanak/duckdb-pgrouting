@@ -117,6 +117,11 @@ bool CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 			ThrowCheck("Invalid value of 'K'", "Valid value are greater than 0");
 		}
 		return true;
+	case duckdb_pgrouting::RequestCheck::MAX_FLOW_ALGORITHM:
+		if (request.algorithm < 1 || request.algorithm > 3) {
+			ThrowCheck("Unknown algorithm", "");
+		}
+		return true;
 	}
 	throw InternalException("pgrouting: unhandled RequestCheck");
 }

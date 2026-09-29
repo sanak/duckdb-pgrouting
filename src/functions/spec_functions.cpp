@@ -213,7 +213,7 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::METRICS_SPECS,           &duckdb_pgrouting::PLANAR_SPECS,
 	    &duckdb_pgrouting::LINE_GRAPH_SPECS,        &duckdb_pgrouting::TRANSITIVE_CLOSURE_SPECS,
 	    &duckdb_pgrouting::DOMINATOR_SPECS,         &duckdb_pgrouting::MINCUT_SPECS,
-	    &duckdb_pgrouting::CIRCUITS_SPECS};
+	    &duckdb_pgrouting::CIRCUITS_SPECS,          &duckdb_pgrouting::MAX_FLOW_SPECS};
 	return TABLES;
 }
 
@@ -435,6 +435,7 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	request.which = spec.flags.which;
 	request.driver = spec.flags.driver;
 	request.mst_suffix = spec.flags.mst_suffix;
+	request.algorithm = spec.flags.algorithm;
 	if (!null_input) {
 		for (idx_t i = 0; i < spec.optionals.size(); i++) {
 			// CheckSpec established at load that request_field names a request parameter.

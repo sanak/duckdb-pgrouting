@@ -325,6 +325,20 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "order the edges are read in, and the number of circuits can grow very fast with the graph.",
      "SELECT * FROM pgr_hawickCircuits('SELECT id, source, target, cost, reverse_cost FROM edges WHERE "
      "id < 5')"},
+    {"pgr_pushRelabel",
+     "A maximum flow from one or many sources to one or many sinks by the push-relabel algorithm, one "
+     "row per edge direction that carries flow, with the capacity left on it; which edges carry it "
+     "can depend on the order the edges are read in, the total cannot.",
+     "SELECT * FROM pgr_pushRelabel('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 12)"},
+    {"pgr_boykovKolmogorov",
+     "A maximum flow from one or many sources to one or many sinks by the Boykov-Kolmogorov algorithm, "
+     "one row per edge direction that carries flow, with the capacity left on it.",
+     "SELECT * FROM pgr_boykovKolmogorov('SELECT id, source, target, capacity, reverse_capacity FROM edges', "
+     "11, 12)"},
+    {"pgr_edmondsKarp",
+     "A maximum flow from one or many sources to one or many sinks by the Edmonds-Karp algorithm, one row "
+     "per edge direction that carries flow, with the capacity left on it.",
+     "SELECT * FROM pgr_edmondsKarp('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 12)"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "

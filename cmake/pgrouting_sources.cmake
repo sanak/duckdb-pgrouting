@@ -76,6 +76,9 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/ksp/withPoints_ksp_driver.cpp
     ${PGROUTING_DIR}/src/lineGraph/lineGraphFull_driver.cpp
     ${PGROUTING_DIR}/src/lineGraph/lineGraph_driver.cpp
+    ${PGROUTING_DIR}/src/max_flow/flowgraph.cpp
+    ${PGROUTING_DIR}/src/max_flow/max_flow_driver.cpp
+    ${PGROUTING_DIR}/src/max_flow/maxflow.cpp
     ${PGROUTING_DIR}/src/metrics/betweennessCentrality_driver.cpp
     ${PGROUTING_DIR}/src/metrics/metrics_driver.cpp
     ${PGROUTING_DIR}/src/mincut/stoerWagner_driver.cpp

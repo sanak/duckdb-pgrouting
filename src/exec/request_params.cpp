@@ -55,6 +55,7 @@ const RequestParameter REQUEST_PARAMETERS[] = {
     {"start_id", &DriverRequest::start_id},
     {"end_id", &DriverRequest::end_id},
     {"root", &DriverRequest::root},
+    {"algorithm", &DriverRequest::algorithm},
     {"driver", &DriverRequest::driver},
 };
 

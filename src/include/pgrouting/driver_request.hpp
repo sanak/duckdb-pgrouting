@@ -68,6 +68,10 @@ struct DriverRequest {
 	// pgr_lengauerTarjanDominatorTree's root vertex (upstream's root_vid), a single BIGINT rather than
 	// the roots list the root-based families read as an array.
 	int64_t root = 0;
+	// The max-flow family's algorithm: 1 push-relabel, 2 Boykov-Kolmogorov, 3 Edmonds-Karp; 1 is
+	// _pgr_maxflow's DEFAULT. The max-flow driver takes only_cost in place of upstream's only_flow:
+	// both ask for one row carrying the total.
+	int32_t algorithm = 1;
 	// Which driver runs the request. Each driver reads only the fields its upstream C entry passes
 	// it; only SHORTEST_PATH reads points_sql, n_goals, global, driving_side, details and which,
 	// and the other drivers that take points (DriverInfo::takes_points) also read points_sql,

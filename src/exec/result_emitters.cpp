@@ -7,6 +7,7 @@
 
 #include "c_types/circuits_rt.h"
 #include "c_types/edge_rt.h"
+#include "c_types/flow_t.h"
 #include "c_types/ii_t_rt.h"
 #include "c_types/iid_t_rt.h"
 #include "c_types/line_graph_full_rt.h"
@@ -312,6 +313,33 @@ void EmitStoerWagner(const DriverResult &result, EmitState &state, idx_t n, Data
 // src/circuits/hawickCircuits.c numbers the rows from 1 and passes circuits_rt through: the driver
 // numbers the circuits (path_id, from 1) and the rows within each (path_seq, from 0), and closes each
 // circuit with a row of edge -1 back at its start.
+// src/max_flow/minCostMaxFlow.c numbers the rows from 1 and passes Flow_t through;
+// src/max_flow/max_flow.c emits the same rows without cost and agg_cost, which its wrappers never
+// select.
+void EmitFlow(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<Flow_t>();
+	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
+	auto edge = FlatVector::GetData<int64_t>(output.data[1]);
+	auto source = FlatVector::GetData<int64_t>(output.data[2]);
+	auto target = FlatVector::GetData<int64_t>(output.data[3]);
+	auto flow = FlatVector::GetData<int64_t>(output.data[4]);
+	auto residual_capacity = FlatVector::GetData<int64_t>(output.data[5]);
+	auto cost = FlatVector::GetData<double>(output.data[6]);
+	auto agg_cost = FlatVector::GetData<double>(output.data[7]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		const auto &row = rows[k];
+		seq[i] = NumericCast<int32_t>(k + 1);
+		edge[i] = row.edge;
+		source[i] = row.source;
+		target[i] = row.target;
+		flow[i] = row.flow;
+		residual_capacity[i] = row.residual_capacity;
+		cost[i] = row.cost;
+		agg_cost[i] = row.agg_cost;
+	}
+}
+
 void EmitCircuits(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
 	const auto *rows = result.Rows<circuits_rt>();
 	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
@@ -411,6 +439,11 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		         LogicalType::BIGINT,  LogicalType::DOUBLE,  LogicalType::DOUBLE};
 		names = {"seq", "path_id", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
 		return;
+	case ResultShape::FLOW:
+		types = {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+		         LogicalType::BIGINT,  LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
+		names = {"seq", "edge", "source", "target", "flow", "residual_capacity", "cost", "agg_cost"};
+		return;
 	}
 	throw InternalException("pgrouting: unhandled ResultShape");
 }
@@ -461,6 +494,9 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::CIRCUITS:
 		EmitCircuits(result, state, n, output);
+		break;
+	case ResultShape::FLOW:
+		EmitFlow(result, state, n, output);
 		break;
 	}
 	state.offset += n;

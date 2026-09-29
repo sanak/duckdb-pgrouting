@@ -14,6 +14,7 @@
 #include "pgrouting/family_drivers.hpp"
 
 struct Edge_rt;
+struct Flow_t;
 struct circuits_rt;
 struct II_t_rt;
 struct IID_t_rt;
@@ -43,6 +44,7 @@ struct DriverCall {
 	TransitiveClosure_rt *closure_rows = nullptr;
 	StoerWagner_t *min_cut_rows = nullptr;
 	circuits_rt *circuit_rows = nullptr;
+	Flow_t *flow_rows = nullptr;
 	std::size_t count = 0;
 	char *log = nullptr;
 	char *notice = nullptr;
@@ -93,5 +95,6 @@ bool CallTrspDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 bool CallTspDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallUnifiedDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallAnalysisDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
+bool CallFlowDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 
 } // namespace duckdb_pgrouting

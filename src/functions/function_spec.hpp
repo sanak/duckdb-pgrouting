@@ -119,6 +119,9 @@ struct DriverFlags {
 	// pgr_kruskal and pgr_prim pass ARRAY[0]::BIGINT[] as roots: their drivers read roots as a
 	// non-empty array before anything else, and drop 0 from the answer.
 	bool root_zero = false;
+	// The max-flow family's algorithm (1 push-relabel, 2 Boykov-Kolmogorov, 3 Edmonds-Karp), a
+	// constant in each upstream wrapper.
+	int32_t algorithm = 1;
 	Projection projection = Projection::ALL;
 	// With Projection::COLUMNS, the outer SELECT list, written as SQL over the columns of the
 	// driver's result shape (ShapeColumns). Spec-table text only, never a caller's: CheckSpec parses
@@ -182,6 +185,7 @@ extern const duckdb::vector<FunctionSpec> TRAVERSAL_SPECS;            // travers
 extern const duckdb::vector<FunctionSpec> TRANSITIVE_CLOSURE_SPECS;   // transitive_closure_specs.cpp
 extern const duckdb::vector<FunctionSpec> KSP_SPECS;                  // ksp_specs.cpp
 extern const duckdb::vector<FunctionSpec> LINE_GRAPH_SPECS;           // line_graph_specs.cpp
+extern const duckdb::vector<FunctionSpec> MAX_FLOW_SPECS;             // max_flow_specs.cpp
 extern const duckdb::vector<FunctionSpec> TRSP_SPECS;                 // trsp_specs.cpp
 extern const duckdb::vector<FunctionSpec> TSP_SPECS;                  // tsp_specs.cpp
 

@@ -48,6 +48,7 @@ pgr_betweennessCentrality	pgr_betweennessCentrality
 pgr_biconnectedComponents	pgr_biconnectedComponents
 pgr_binaryBreadthFirstSearch	pgr_binaryBreadthFirstSearch
 pgr_bipartite	pgr_bipartite
+pgr_boykovKolmogorov	pgr_boykovKolmogorov
 pgr_breadthFirstSearch	pgr_breadthFirstSearch
 pgr_bridges	pgr_bridges
 pgr_connectedComponents	pgr_connectedComponents
@@ -63,6 +64,7 @@ pgr_dijkstraNearCost	pgr_dijkstraNearCost
 pgr_dijkstraVia	pgr_dijkstraVia
 pgr_drivingDistance	pgr_drivingDistance
 pgr_edgeColoring	pgr_edgeColoring
+pgr_edmondsKarp	pgr_edmondsKarp
 pgr_edwardMoore	pgr_edwardMoore
 pgr_extractVertices	pgr_extractVertices
 pgr_findCloseEdges	pgr_findCloseEdges
@@ -84,6 +86,7 @@ pgr_prim	pgr_prim
 pgr_primBFS	pgr_primBFS
 pgr_primDD	pgr_primDD
 pgr_primDFS	pgr_primDFS
+pgr_pushRelabel	pgr_pushRelabel
 pgr_sequentialVertexColoring	pgr_sequentialVertexColoring
 pgr_sloanOrdering	pgr_sloanOrdering
 pgr_stoerWagner	pgr_stoerWagner

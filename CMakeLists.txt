@@ -48,6 +48,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/function_docs.cpp
     src/functions/ksp_specs.cpp
     src/functions/line_graph_specs.cpp
+    src/functions/max_flow_specs.cpp
     src/functions/meta_functions.cpp
     src/functions/metrics_specs.cpp
     src/functions/mincut_specs.cpp
@@ -62,6 +63,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/tsp_specs.cpp
     src/functions/withpoints_specs.cpp
     src/pg_compat/src/drivers_analysis.cpp
+    src/pg_compat/src/drivers_flow.cpp
     src/pg_compat/src/drivers_graph.cpp
     src/pg_compat/src/drivers_path.cpp
     src/pg_compat/src/drivers_routes.cpp

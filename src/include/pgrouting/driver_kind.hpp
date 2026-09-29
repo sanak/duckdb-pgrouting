@@ -63,7 +63,8 @@ enum class DriverKind : uint8_t {
 	TRANSITIVE_CLOSURE,
 	DOMINATOR_TREE,
 	STOER_WAGNER,
-	HAWICK_CIRCUITS
+	HAWICK_CIRCUITS,
+	MAX_FLOW
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -88,6 +89,7 @@ enum class ResultShape : uint8_t {
 	TRANSITIVE_CLOSURE, // TransitiveClosure_rt: seq, vid and the vid's targets as a list; every row owns its array
 	STOER_WAGNER, // StoerWagner_t, as src/mincut/stoerWagner.c emits it: its own seq replaced by the row number
 	CIRCUITS, // circuits_rt: KSP's columns, but path_id and path_seq come from the driver, path_seq from 0
+	FLOW, // Flow_t, as src/max_flow/minCostMaxFlow.c emits it: seq, then every field
 };
 
 // A check upstream's C entry runs on the parameters before it calls the driver, even when the
@@ -118,7 +120,11 @@ enum class RequestCheck : uint8_t {
 	// src/trsp/trsp_withPoints.c and src/trsp/trspVia_withPoints.c.
 	DRIVING_SIDE,
 	// K >= 0: src/ksp/turnRestrictedPath.c, which raises where src/ksp/ksp.c returns nothing.
-	TURN_RESTRICTED_PATH
+	TURN_RESTRICTED_PATH,
+	// algorithm 1, 2 or 3 (push-relabel, Boykov-Kolmogorov, Edmonds-Karp): src/max_flow/max_flow.c
+	// raises "Unknown algorithm" before anything else. The public wrappers pass a constant, so only
+	// a direct _pgr_exec call can reach it.
+	MAX_FLOW_ALGORITHM
 };
 
 struct DriverInfo {
@@ -181,6 +187,7 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::DOMINATOR_TREE, "lengauer_tarjan_dominator_tree", ResultShape::ID_VALUE, RequestCheck::NONE},
     {DriverKind::STOER_WAGNER, "stoer_wagner", ResultShape::STOER_WAGNER, RequestCheck::NONE},
     {DriverKind::HAWICK_CIRCUITS, "hawick_circuits", ResultShape::CIRCUITS, RequestCheck::NONE},
+    {DriverKind::MAX_FLOW, "max_flow", ResultShape::FLOW, RequestCheck::MAX_FLOW_ALGORITHM},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -195,7 +202,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::HAWICK_CIRCUITS) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::MAX_FLOW) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {
