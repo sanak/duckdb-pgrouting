@@ -35,6 +35,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/bd_dijkstra_specs.cpp
     src/functions/bellman_ford_specs.cpp
     src/functions/breadth_first_search_specs.cpp
+    src/functions/circuits_specs.cpp
     src/functions/coloring_specs.cpp
     src/functions/components_specs.cpp
     src/functions/dag_shortest_path_specs.cpp

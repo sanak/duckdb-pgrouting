@@ -166,6 +166,7 @@ extern const duckdb::vector<FunctionSpec> BELLMAN_FORD_SPECS;         // bellman
 extern const duckdb::vector<FunctionSpec> DAG_SHORTEST_PATH_SPECS;    // dag_shortest_path_specs.cpp
 extern const duckdb::vector<FunctionSpec> DOMINATOR_SPECS;            // dominator_specs.cpp
 extern const duckdb::vector<FunctionSpec> BREADTH_FIRST_SEARCH_SPECS; // breadth_first_search_specs.cpp
+extern const duckdb::vector<FunctionSpec> CIRCUITS_SPECS;             // circuits_specs.cpp
 extern const duckdb::vector<FunctionSpec> COMPONENTS_SPECS;           // components_specs.cpp
 extern const duckdb::vector<FunctionSpec> COLORING_SPECS;             // coloring_specs.cpp
 extern const duckdb::vector<FunctionSpec> ORDERING_SPECS;             // ordering_specs.cpp

@@ -14,6 +14,7 @@
 #include "pgrouting/family_drivers.hpp"
 
 struct Edge_rt;
+struct circuits_rt;
 struct II_t_rt;
 struct IID_t_rt;
 struct Line_graph_full_rt;
@@ -41,6 +42,7 @@ struct DriverCall {
 	Line_graph_full_rt *line_graph_full_rows = nullptr;
 	TransitiveClosure_rt *closure_rows = nullptr;
 	StoerWagner_t *min_cut_rows = nullptr;
+	circuits_rt *circuit_rows = nullptr;
 	std::size_t count = 0;
 	char *log = nullptr;
 	char *notice = nullptr;

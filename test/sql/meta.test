@@ -66,6 +66,7 @@ pgr_edwardMoore	pgr_edwardMoore
 pgr_extractVertices	pgr_extractVertices
 pgr_findCloseEdges	pgr_findCloseEdges
 pgr_floydWarshall	pgr_floydWarshall
+pgr_hawickCircuits	pgr_hawickCircuits
 pgr_isPlanar	pgr_isPlanar
 pgr_johnson	pgr_johnson
 pgr_kingOrdering	pgr_kingOrdering

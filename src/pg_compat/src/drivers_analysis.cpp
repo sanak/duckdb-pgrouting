@@ -8,6 +8,7 @@
 
 #include "driver_groups.hpp"
 
+#include "drivers/circuits/hawickCircuits_driver.h"
 #include "drivers/dominator/lengauerTarjanDominatorTree_driver.h"
 #include "drivers/lineGraph/lineGraphFull_driver.h"
 #include "drivers/lineGraph/lineGraph_driver.h"
@@ -48,6 +49,11 @@ bool CallAnalysisDriver(const DriverRequest &request, const DriverArrays &, Driv
 		return true;
 	case DriverKind::STOER_WAGNER:
 		pgr_do_stoerWagner(edges, &call.min_cut_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::HAWICK_CIRCUITS:
+		// Every elementary circuit is listed, so the answer can grow exponentially with the graph; the
+		// driver polls for cancellation only before it starts.
+		pgr_do_hawickCircuits(edges, &call.circuit_rows, &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	default:
 		return false;

@@ -66,6 +66,7 @@ void DriverResult::Release() {
 	case ResultShape::EDGE:
 	case ResultShape::LINE_GRAPH_FULL:
 	case ResultShape::STOER_WAGNER:
+	case ResultShape::CIRCUITS:
 		break; // flat rows
 	}
 	std::free(rows);

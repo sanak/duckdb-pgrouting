@@ -319,6 +319,12 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "the order the edges are read in.",
      "SELECT * FROM pgr_stoerWagner('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id "
      "< 17')"},
+    {"pgr_hawickCircuits",
+     "Every elementary circuit of a directed graph, self-loops included, one row per step with a "
+     "closing row back at the start; where each circuit starts, and so the numbering, depends on the "
+     "order the edges are read in, and the number of circuits can grow very fast with the graph.",
+     "SELECT * FROM pgr_hawickCircuits('SELECT id, source, target, cost, reverse_cost FROM edges WHERE "
+     "id < 5')"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "
