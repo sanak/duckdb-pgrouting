@@ -261,8 +261,7 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "SELECT * FROM pgr_kingOrdering('SELECT id, source, target, cost, reverse_cost FROM edges')"},
     {"pgr_sloanOrdering",
      "Renumbers the vertices in Sloan's order, which keeps the numbering's profile and wavefront small; "
-     "only the connected part holding the smallest vertex id is ordered, the remaining positions "
-     "repeating that id.",
+     "only one connected part is ordered, the remaining positions repeating the smallest vertex id.",
      "SELECT * FROM pgr_sloanOrdering('SELECT id, source, target, cost, reverse_cost FROM edges')"},
     {"pgr_topologicalSort",
      "Orders the vertices of a directed graph without cycles so that every edge points forward in the "

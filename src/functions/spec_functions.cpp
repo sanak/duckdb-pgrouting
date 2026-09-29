@@ -214,32 +214,31 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 
 // The outer SELECT list of a public overload over _pgr_exec's columns.
 vector<unique_ptr<ParsedExpression>> ProjectionList(const duckdb_pgrouting::FunctionSpec &spec) {
-	vector<string> names;
+	auto column_refs = [](const vector<string> &names) {
+		vector<unique_ptr<ParsedExpression>> list;
+		for (auto &name : names) {
+			list.push_back(make_uniq<ColumnRefExpression>(name));
+		}
+		return list;
+	};
 	switch (spec.flags.projection) {
 	case duckdb_pgrouting::Projection::ALL: {
 		vector<LogicalType> types;
+		vector<string> names;
 		ShapeColumns(duckdb_pgrouting::InfoOf(spec.flags.driver).shape, types, names);
-		break;
+		return column_refs(names);
 	}
 	case duckdb_pgrouting::Projection::COST:
 	case duckdb_pgrouting::Projection::COST_OF_PATH:
 	case duckdb_pgrouting::Projection::COST_SORTED:
-		names = {"start_vid", "end_vid", "agg_cost"};
-		break;
+		return column_refs({"start_vid", "end_vid", "agg_cost"});
 	case duckdb_pgrouting::Projection::EDGE_COST:
-		names = {"edge", "cost"};
-		break;
+		return column_refs({"edge", "cost"});
 	case duckdb_pgrouting::Projection::COLUMNS:
 		// Fixed text from a spec table, never the caller's; CheckSpec parsed it at load.
 		return Parser::ParseExpressionList(spec.flags.columns);
-	default:
-		throw InternalException("Unhandled Projection");
 	}
-	vector<unique_ptr<ParsedExpression>> list;
-	for (auto &name : names) {
-		list.push_back(make_uniq<ColumnRefExpression>(name));
-	}
-	return list;
+	throw InternalException("Unhandled Projection");
 }
 
 LogicalType TypeOf(duckdb_pgrouting::ArgKind kind) {

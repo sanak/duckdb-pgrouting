@@ -107,8 +107,8 @@ SELECT count(*) FROM pgr_sloanOrdering('SELECT 1 AS id, 1 AS source, 2 AS target
 ----
 0
 
-# Every edge made to point the way it can be travelled, read in id order: one topological order,
-# which every edge follows forward.
+# WHERE cost >= 0 drops edges rather than reversing them, keeping only the ones usable forward,
+# each one-way, read in id order: one topological order, which every kept edge follows forward.
 query T
 SELECT string_agg(node::VARCHAR, ' ' ORDER BY seq)
 FROM pgr_topologicalSort('SELECT id, source, target, cost FROM edges WHERE cost >= 0');

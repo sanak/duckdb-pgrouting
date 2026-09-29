@@ -91,11 +91,13 @@ decision rather than an oversight.
   two parallel edges (`graph_add_edge`, `include/cpp_common/base_graph.hpp`): `pgr_bridges` never
   reports it, `pgr_biconnectedComponents` lists it twice (and, in `test/sql/components_exec.test`'s
   example, files the next edge with it), and `pgr_bridges` misses a bridge whose end carries a
-  self-loop. `pgr_makeConnected` over a graph with no usable edge raises the C++ standard library's
+  self-loop. `pgr_biconnectedComponents` also files a self-loop under the first real component: over
+  `(1,1,1,1,1),(2,2,3,1,1)` (edge 1 a self-loop on vertex 1, edge 2 from 2 to 3) it answers
+  `(1,1,1) (2,1,2)`. `pgr_makeConnected` over a graph with no usable edge raises the C++ standard library's
   vector-length error, worded differently on each platform; `pgr_johnson`, `pgr_floydWarshall` and
   `pgr_betweennessCentrality` raise `No result generated, report this error` when there is no pair.
-  `pgr_sloanOrdering` orders only the connected part holding the smallest vertex id and repeats that
-  id in the remaining positions (upstream's own pgTAP test marks it TODO).
+  `pgr_sloanOrdering` orders only one connected part and repeats the smallest vertex id in the
+  remaining positions (upstream's own pgTAP test marks it TODO).
 - **Graph orderings, colorings, `pgr_makeConnected` and `pgr_topologicalSort` depend on the edge
   order, and the bandwidth orderings on the C++ standard library.** Their vertices enter the graph
   in the order the edges are read, and Boost's `cuthill_mckee_ordering`, `king_ordering` and

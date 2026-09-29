@@ -15,9 +15,7 @@ the following checklist, in order. Every step either passes or tells you exactly
    pgr_drivingDistance, pgr_withPointsDD, pgr_kruskal, pgr_prim, pgr_breadthFirstSearch,
    pgr_depthFirstSearch, pgr_ksp, pgr_withPointsKSP, pgr_dijkstraVia, pgr_withPointsVia,
    pgr_trsp, pgr_trsp_withPoints, pgr_trspVia, pgr_trspVia_withPoints, pgr_turnRestrictedPath,
-   pgr_TSP, pgr_TSPeuclidean, pgr_strongComponents, pgr_biconnectedComponents,
-   pgr_articulationPoints, pgr_bridges, pgr_makeConnected, pgr_sequentialVertexColoring,
-   pgr_bipartite, pgr_edgeColoring, pgr_betweennessCentrality)
+   pgr_TSP, pgr_TSPeuclidean)
    onto `do_shortestPath`, delete its case in its
    `src/pg_compat/src/drivers_*.cpp` file, switch that family's rows in its
    `src/functions/*_specs.cpp` table to `DriverKind::SHORTEST_PATH` with the flags its new SQL
@@ -27,6 +25,14 @@ the following checklist, in order. Every step either passes or tells you exactly
    pgr_kingOrdering, pgr_sloanOrdering, pgr_topologicalSort, pgr_johnson, pgr_floydWarshall) are
    called from `src/pg_compat/src/drivers_unified.cpp` with the `Which` value their C entries pass;
    a changed signature of either driver shows up there.
+
+   The graph-analysis functions (pgr_strongComponents, pgr_biconnectedComponents,
+   pgr_articulationPoints, pgr_bridges, pgr_makeConnected, pgr_sequentialVertexColoring,
+   pgr_bipartite, pgr_edgeColoring, pgr_betweennessCentrality) call their own per-family drivers
+   from `src/pg_compat/src/drivers_graph.cpp`; if upstream moves one onto a unified driver (for
+   example `do_coloring` or `do_metrics`), call it from `src/pg_compat/src/drivers_unified.cpp`
+   with the `Which` value its C entry passes, and drop its per-family driver file from
+   `cmake/pgrouting_sources.cmake`.
 2. Update `cmake/pgrouting_sources.cmake` for added or removed upstream files, one entry at a
    time. Never glob: the list is deliberately explicit so that a new upstream file is a decision
    rather than an accident. Do not list a `*_process.cpp` (those talk to PostgreSQL and this

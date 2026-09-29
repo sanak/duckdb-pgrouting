@@ -112,25 +112,33 @@ SELECT edge, color FROM pgr_edgeColoring('SELECT id, source, target, cost, rever
 18	1
 
 # What every valid answer shares, whatever the edge order: no usable edge joins two vertices of one
-# color, and no two edges sharing a vertex share a color.
+# color, and no two edges sharing a vertex share a color. Each function is called once (CTE,
+# materialized) and self-joined, so two differently-ordered calls of the same function can never
+# disagree with each other.
 query II
 SELECT
-  (SELECT count(*) FROM edges e
-     JOIN pgr_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges') a ON a.node = e.source
-     JOIN pgr_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges') b ON b.node = e.target
+  (WITH c AS MATERIALIZED (
+     SELECT * FROM pgr_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges'))
+   SELECT count(*) FROM edges e
+     JOIN c a ON a.node = e.source
+     JOIN c b ON b.node = e.target
    WHERE a.color = b.color),
-  (SELECT count(*) FROM edges e
-     JOIN pgr_sequentialVertexColoring('SELECT id, source, target, cost, reverse_cost FROM edges') a ON a.node = e.source
-     JOIN pgr_sequentialVertexColoring('SELECT id, source, target, cost, reverse_cost FROM edges') b ON b.node = e.target
+  (WITH c AS MATERIALIZED (
+     SELECT * FROM pgr_sequentialVertexColoring('SELECT id, source, target, cost, reverse_cost FROM edges'))
+   SELECT count(*) FROM edges e
+     JOIN c a ON a.node = e.source
+     JOIN c b ON b.node = e.target
    WHERE a.color = b.color);
 ----
 0	0
 
 query I
+WITH c AS MATERIALIZED (
+  SELECT * FROM pgr_edgeColoring('SELECT id, source, target, cost, reverse_cost FROM edges'))
 SELECT count(*) FROM edges e1 JOIN edges e2 ON e1.id < e2.id
   AND (e1.source IN (e2.source, e2.target) OR e1.target IN (e2.source, e2.target))
-JOIN pgr_edgeColoring('SELECT id, source, target, cost, reverse_cost FROM edges') c1 ON c1.edge = e1.id
-JOIN pgr_edgeColoring('SELECT id, source, target, cost, reverse_cost FROM edges') c2 ON c2.edge = e2.id
+JOIN c c1 ON c1.edge = e1.id
+JOIN c c2 ON c2.edge = e2.id
 WHERE c1.color = c2.color;
 ----
 0

@@ -136,7 +136,7 @@ WHERE to_vid <> 0;
 ----
 0
 
-# An empty edge query is an error for all three, with the query as the hint.
+# An empty edge query is an error for all three.
 statement error
 SELECT * FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges
   WHERE id < 0) e) AS edges), edges_sql := 'SELECT nothing', driver := 'johnson');
