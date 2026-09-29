@@ -301,6 +301,12 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "the new vertices get negative ids.",
      "SELECT * FROM pgr_lineGraphFull('SELECT id, source, target, cost, reverse_cost FROM edges WHERE "
      "id IN (4, 7, 8, 10)')"},
+    {"pgr_transitiveClosure",
+     "For each vertex of a directed graph, the list of vertices it can reach; the order inside each "
+     "list depends on the order the edges are read in, and memory grows with the square of the number "
+     "of vertices.",
+     "SELECT * FROM pgr_transitiveClosure('SELECT id, source, target, cost, reverse_cost FROM edges "
+     "WHERE id IN (2, 3, 5, 11, 12, 13, 15)')"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "

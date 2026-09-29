@@ -85,6 +85,7 @@ pgr_sequentialVertexColoring	pgr_sequentialVertexColoring
 pgr_sloanOrdering	pgr_sloanOrdering
 pgr_strongComponents	pgr_strongComponents
 pgr_topologicalSort	pgr_topologicalSort
+pgr_transitiveClosure	pgr_transitiveClosure
 pgr_trsp	pgr_trsp
 pgr_trspVia	pgr_trspVia
 pgr_trspVia_withPoints	pgr_trspVia_withPoints

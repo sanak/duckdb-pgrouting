@@ -175,6 +175,7 @@ extern const duckdb::vector<FunctionSpec> BD_ASTAR_SPECS;             // bd_asta
 extern const duckdb::vector<FunctionSpec> DRIVING_DISTANCE_SPECS;     // driving_distance_specs.cpp
 extern const duckdb::vector<FunctionSpec> SPANNING_TREE_SPECS;        // spanning_tree_specs.cpp
 extern const duckdb::vector<FunctionSpec> TRAVERSAL_SPECS;            // traversal_specs.cpp
+extern const duckdb::vector<FunctionSpec> TRANSITIVE_CLOSURE_SPECS;   // transitive_closure_specs.cpp
 extern const duckdb::vector<FunctionSpec> KSP_SPECS;                  // ksp_specs.cpp
 extern const duckdb::vector<FunctionSpec> LINE_GRAPH_SPECS;           // line_graph_specs.cpp
 extern const duckdb::vector<FunctionSpec> TRSP_SPECS;                 // trsp_specs.cpp

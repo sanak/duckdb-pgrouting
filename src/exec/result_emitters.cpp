@@ -9,6 +9,7 @@
 #include "c_types/ii_t_rt.h"
 #include "c_types/iid_t_rt.h"
 #include "c_types/line_graph_full_rt.h"
+#include "c_types/transitiveClosure_rt.h"
 #include "c_types/mst_rt.h"
 #include "c_types/path_rt.h"
 #include "c_types/routes_t.h"
@@ -257,6 +258,36 @@ void EmitLineGraphFull(const DriverResult &result, EmitState &state, idx_t n, Da
 	}
 }
 
+// src/transitiveClosure/transitiveClosure.c numbers the rows from 1 and builds a BIGINT[] from each
+// row's target_array. Every row's list entry points into the chunk's own child vector, so a row and
+// its targets always leave in the same chunk.
+void EmitTransitiveClosure(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<TransitiveClosure_rt>();
+	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
+	auto vid = FlatVector::GetData<int64_t>(output.data[1]);
+	auto &targets = output.data[2];
+	auto entries = FlatVector::GetData<list_entry_t>(targets);
+	const idx_t base = ListVector::GetListSize(targets);
+	idx_t size = base;
+	for (idx_t i = 0; i < n; i++) {
+		const auto &row = rows[state.offset + i];
+		seq[i] = NumericCast<int32_t>(state.offset + i + 1);
+		vid[i] = row.vid;
+		const auto count = NumericCast<idx_t>(row.target_array_size);
+		entries[i] = list_entry_t(size, count);
+		size += count;
+	}
+	ListVector::Reserve(targets, size);
+	auto child = FlatVector::GetData<int64_t>(ListVector::GetEntry(targets));
+	for (idx_t i = 0; i < n; i++) {
+		const auto &row = rows[state.offset + i];
+		for (idx_t j = 0; j < entries[i].length; j++) {
+			child[entries[i].offset + j] = row.target_array[j];
+		}
+	}
+	ListVector::SetListSize(targets, size);
+}
+
 } // namespace
 
 void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
@@ -316,6 +347,10 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		         LogicalType::BIGINT};
 		names = {"seq", "source", "target", "cost", "edge"};
 		return;
+	case ResultShape::TRANSITIVE_CLOSURE:
+		types = {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::LIST(LogicalType::BIGINT)};
+		names = {"seq", "vid", "target_array"};
+		return;
 	}
 	throw InternalException("pgrouting: unhandled ResultShape");
 }
@@ -357,6 +392,9 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::LINE_GRAPH_FULL:
 		EmitLineGraphFull(result, state, n, output);
+		break;
+	case ResultShape::TRANSITIVE_CLOSURE:
+		EmitTransitiveClosure(result, state, n, output);
 		break;
 	}
 	state.offset += n;

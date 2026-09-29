@@ -9,6 +9,7 @@
 #include "driver_groups.hpp"
 
 #include "drivers/lineGraph/lineGraphFull_driver.h"
+#include "drivers/transitiveClosure/transitiveClosure_driver.h"
 #include "drivers/lineGraph/lineGraph_driver.h"
 #include "drivers/planar/isPlanar_driver.h"
 
@@ -35,6 +36,9 @@ bool CallAnalysisDriver(const DriverRequest &request, const DriverArrays &, Driv
 		// reaches DUCKDB_LOG_DEBUG like every driver log.
 		pgr_do_lineGraphFull(edges, &call.line_graph_full_rows, &call.count, &call.log, &call.notice,
 		                     &call.err);
+		return true;
+	case DriverKind::TRANSITIVE_CLOSURE:
+		pgr_do_transitiveClosure(edges, &call.closure_rows, &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	default:
 		return false;

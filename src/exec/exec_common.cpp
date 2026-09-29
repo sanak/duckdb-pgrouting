@@ -10,6 +10,7 @@
 #include "duckdb/logging/logger.hpp"
 
 #include "c_types/path_rt.h"
+#include "c_types/transitiveClosure_rt.h"
 #include "drivers/shortestPath_driver.hpp"
 #include "pgrouting/driver_input.hpp"
 #include "pgrouting/family_drivers.hpp"
@@ -44,6 +45,15 @@ DriverResult &DriverResult::operator=(DriverResult &&other) noexcept {
 // error path that drops partial results releases them too.
 void DriverResult::Release() {
 	switch (shape) {
+	case ResultShape::TRANSITIVE_CLOSURE: {
+		// Each row's target_array is its own malloc'd block (pgr_alloc in
+		// src/transitiveClosure/transitiveClosure_driver.cpp), zero elements included.
+		auto *closure = static_cast<TransitiveClosure_rt *>(rows);
+		for (std::size_t k = 0; closure != nullptr && k < count; k++) {
+			std::free(closure[k].target_array);
+		}
+		break;
+	}
 	case ResultShape::PATH:
 	case ResultShape::PAIRS:
 	case ResultShape::MST:

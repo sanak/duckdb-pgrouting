@@ -21,6 +21,7 @@ struct MST_rt;
 struct Path_rt;
 struct Routes_t;
 struct TSP_tour_rt;
+struct TransitiveClosure_rt;
 
 namespace duckdb_pgrouting {
 
@@ -37,6 +38,7 @@ struct DriverCall {
 	IID_t_rt *triple_rows = nullptr;
 	Edge_rt *edge_rows = nullptr;
 	Line_graph_full_rt *line_graph_full_rows = nullptr;
+	TransitiveClosure_rt *closure_rows = nullptr;
 	std::size_t count = 0;
 	char *log = nullptr;
 	char *notice = nullptr;

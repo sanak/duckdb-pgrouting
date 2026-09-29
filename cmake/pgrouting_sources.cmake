@@ -85,6 +85,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/spanningTree/kruskal_driver.cpp
     ${PGROUTING_DIR}/src/spanningTree/prim_driver.cpp
     ${PGROUTING_DIR}/src/traversal/depthFirstSearch_driver.cpp
+    ${PGROUTING_DIR}/src/transitiveClosure/transitiveClosure_driver.cpp
     ${PGROUTING_DIR}/src/trsp/trsp_driver.cpp
     ${PGROUTING_DIR}/src/trsp/trsp_withPoints_driver.cpp
     ${PGROUTING_DIR}/src/trsp/trspVia_driver.cpp

@@ -26,7 +26,7 @@ public:
 	// The rows as the upstream struct `shape` names: Path_rt for PATH and KSP, MST_rt for MST,
 	// Routes_t for ROUTES, TSP_tour_rt for TSP_TOUR, int64_t for IDS, II_t_rt for PAIRS and
 	// ID_VALUE, IID_t_rt for TRIPLES, Edge_rt for EDGE,
-	// Line_graph_full_rt for LINE_GRAPH_FULL.
+	// Line_graph_full_rt for LINE_GRAPH_FULL, TransitiveClosure_rt for TRANSITIVE_CLOSURE.
 	template <class T>
 	const T *Rows() const {
 		return static_cast<const T *>(rows);

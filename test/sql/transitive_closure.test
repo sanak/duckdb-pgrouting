@@ -1,0 +1,121 @@
+# name: test/sql/transitive_closure.test
+# description: pgr_transitiveClosure: TRANSITIVE_CLOSURE rows, their BIGINT[] column, order dependence, long answers
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+statement ok
+CREATE MACRO q1() AS 'SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (2, 3, 5, 11, 12, 13, 15)';
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM _pgr_exec((SELECT (SELECT list(e) FROM (
+  SELECT * FROM edges) e) AS edges), edges_sql := 'sample', driver := 'transitive_closure'));
+----
+seq	INTEGER
+vid	BIGINT
+target_array	BIGINT[]
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_transitiveClosure('SELECT * FROM edges'));
+----
+node	BIGINT
+targets	BIGINT[]
+
+# Upstream's q1, row for row: each array in the order the driver fills it, a vertex that reaches
+# nothing with an empty one.
+query IT
+SELECT * FROM pgr_transitiveClosure(q1()) ORDER BY node;
+----
+6	[]
+8	[12, 17, 16]
+10	[12, 17, 16, 11, 6]
+11	[12, 17, 16]
+12	[17, 16]
+15	[12, 17, 16, 10, 11, 6]
+16	[17, 16]
+17	[17, 16]
+
+# The driver's own row order is the order the vertices entered the graph.
+query IIT
+SELECT seq, vid, target_array FROM _pgr_exec((SELECT (SELECT list(e ORDER BY id) FROM (
+  SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (2, 3, 5, 11, 12, 13, 15)) e) AS edges),
+  edges_sql := 'q1', driver := 'transitive_closure') ORDER BY seq;
+----
+1	6	[]
+2	10	[12, 17, 16, 11, 6]
+3	15	[12, 17, 16, 10, 11, 6]
+4	11	[12, 17, 16]
+5	12	[17, 16]
+6	8	[12, 17, 16]
+7	17	[17, 16]
+8	16	[17, 16]
+
+# The same edges in reverse: other orders, the same reachable sets.
+query IT
+SELECT vid, list_sort(target_array) FROM _pgr_exec((SELECT (SELECT list(e ORDER BY id DESC) FROM (
+  SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (2, 3, 5, 11, 12, 13, 15)) e) AS edges),
+  edges_sql := 'q1 reversed', driver := 'transitive_closure') ORDER BY seq;
+----
+16	[16, 17]
+17	[16, 17]
+12	[16, 17]
+8	[12, 16, 17]
+11	[12, 16, 17]
+10	[6, 11, 12, 16, 17]
+15	[6, 10, 11, 12, 16, 17]
+6	[]
+
+# The whole sample graph: two-way edges make three strongly connected parts.
+query II
+SELECT len(targets), count(*) FROM pgr_transitiveClosure('SELECT * FROM edges') GROUP BY ALL ORDER BY 1;
+----
+2	4
+13	13
+
+# Self-loops: a directed one puts the vertex in its own array; a two-way one is two directed loops,
+# so the vertex appears twice.
+query IT
+SELECT * FROM pgr_transitiveClosure('SELECT * FROM (VALUES (1, 1, 1, 1.0, -1.0), (2, 1, 2, 1, -1))
+  t(id, source, target, cost, reverse_cost)') ORDER BY node;
+----
+1	[2, 1]
+2	[]
+
+query IT
+SELECT * FROM pgr_transitiveClosure('SELECT 1 AS id, 1 AS source, 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost');
+----
+1	[1, 1]
+
+# No rows, rows without a usable edge (no vertex enters the graph), and STRICT.
+query III
+SELECT (SELECT count(*) FROM pgr_transitiveClosure('SELECT * FROM edges WHERE id < 0')),
+       (SELECT count(*) FROM pgr_transitiveClosure(
+          'SELECT 1 AS id, 1 AS source, 2 AS target, -1.0 AS cost, -1.0 AS reverse_cost')),
+       (SELECT count(*) FROM pgr_transitiveClosure(NULL::VARCHAR));
+----
+0	0	0
+
+# More than one 2048-row output chunk: 2100 separate one-way edges give 4200 vertices, each list
+# staying with its own row across chunks.
+statement ok
+CREATE TABLE pairs2100 AS SELECT i AS id, 2 * i AS source, 2 * i + 1 AS target, 1.0 AS cost, -1.0 AS reverse_cost
+FROM range(1, 2101) t(i);
+
+query IIIII
+SELECT count(*), max(seq), sum(len(target_array)), count(*) FILTER (WHERE len(target_array) = 0),
+       count(*) FILTER (WHERE target_array = [vid + 1])
+FROM _pgr_exec((SELECT (SELECT list(e ORDER BY id) FROM pairs2100 e) AS edges), edges_sql := 'pairs',
+  driver := 'transitive_closure');
+----
+4200	4200	2100	2100	2100

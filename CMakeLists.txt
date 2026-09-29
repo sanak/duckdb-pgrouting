@@ -53,6 +53,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/spec_functions.cpp
     src/functions/sql_template.cpp
     src/functions/traversal_specs.cpp
+    src/functions/transitive_closure_specs.cpp
     src/functions/trsp_specs.cpp
     src/functions/tsp_specs.cpp
     src/functions/withpoints_specs.cpp
