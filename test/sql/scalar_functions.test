@@ -170,3 +170,89 @@ pgr_bandwidth	macro	pgr_bandwidth
 pgr_bandwidth	table	pgr_bandwidth
 pgr_isPlanar	macro	pgr_isPlanar
 pgr_isPlanar	table	pgr_isPlanar
+
+# pgr_maxFlow: five signatures, two argument counts. The sample edges with their capacities.
+statement ok
+CREATE TABLE flow_edges (id BIGINT, source BIGINT, target BIGINT, capacity BIGINT, reverse_capacity BIGINT);
+
+statement ok
+INSERT INTO flow_edges VALUES
+  (1,5,6,80,130),(2,6,10,-1,100),(3,10,15,-1,130),(4,6,7,100,50),(5,10,11,130,-1),(6,1,3,50,100),
+  (7,3,7,50,130),(8,7,11,100,130),(9,11,16,130,80),(10,7,8,130,50),(11,11,12,130,-1),(12,8,12,100,-1),
+  (13,12,17,100,-1),(14,8,9,80,130),(15,16,17,80,50),(16,15,16,80,80),(17,2,4,130,100),(18,13,14,50,130);
+
+statement ok
+CREATE TABLE combinations (source BIGINT, target BIGINT);
+
+statement ok
+INSERT INTO combinations VALUES (5, 6), (5, 10), (6, 5), (6, 15), (6, 14);
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_maxFlow('SELECT * FROM flow_edges', 11, 12));
+----
+pgr_maxflow	BIGINT
+
+# Upstream's q1-q4, q51 and q6: one macro of three arguments serves all four vertex/array combinations.
+query IIIIII
+SELECT pgr_maxFlow('SELECT * FROM flow_edges', 11, 12),
+       pgr_maxFlow('SELECT * FROM flow_edges', 11, ARRAY[5, 10, 12]),
+       pgr_maxFlow('SELECT * FROM flow_edges', ARRAY[11, 3, 17], 12),
+       pgr_maxFlow('SELECT * FROM flow_edges', ARRAY[11, 3, 17], ARRAY[5, 10, 12]),
+       pgr_maxFlow('SELECT * FROM flow_edges', 'SELECT * FROM combinations WHERE target NOT IN (5, 6)'),
+       pgr_maxFlow('SELECT * FROM flow_edges',
+                   'SELECT * FROM (VALUES (5, 10), (6, 15), (6, 14)) AS t(source, target)');
+----
+230	340	230	360	80	80
+
+query I
+SELECT pgr_maxflow FROM pgr_maxFlow('SELECT * FROM flow_edges', ARRAY[11, 3, 17], ARRAY[5, 10, 12]);
+----
+360
+
+# By name, as the macro's parameters are named.
+query I
+SELECT pgr_maxFlow(edges_sql := 'SELECT * FROM flow_edges', start_vids := 11, end_vids := 12);
+----
+230
+
+# No edges: NULL (no row). Empty arrays or an unreachable target: 0.
+query TII
+SELECT pgr_maxFlow('SELECT * FROM flow_edges WHERE id < 0', 11, 12) IS NULL,
+       pgr_maxFlow('SELECT * FROM flow_edges', 11, []::BIGINT[]),
+       pgr_maxFlow('SELECT * FROM flow_edges', 11, 14);
+----
+true	0	0
+
+# STRICT: NULL.
+query TT
+SELECT pgr_maxFlow(NULL::VARCHAR, 11, 12) IS NULL, pgr_maxFlow('SELECT * FROM flow_edges', NULL::BIGINT, 12) IS NULL;
+----
+true	true
+
+statement error
+SELECT pgr_maxFlow('SELECT * FROM flow_edges', 11, 11);
+----
+A source found as sink
+
+statement ok
+PREPARE max_flow AS SELECT pgr_maxFlow(?::VARCHAR, ?::BIGINT, ?::BIGINT);
+
+query I
+EXECUTE max_flow('SELECT * FROM flow_edges', 11, 12);
+----
+230
+
+# One macro per argument count, with the parameter names the overloads share.
+query TT
+SELECT function_type, parameters FROM duckdb_functions()
+WHERE function_name = 'pgr_maxFlow' AND function_type = 'macro' ORDER BY len(parameters);
+----
+macro	[edges_sql, combinations_sql]
+macro	[edges_sql, start_vids, end_vids]
+
+query TT
+SELECT DISTINCT function_type, tags['pgrouting_name'] FROM duckdb_functions()
+WHERE function_name = 'pgr_maxFlow' AND tags['ext'] = 'pgrouting' ORDER BY 1;
+----
+macro	pgr_maxFlow
+table	pgr_maxFlow

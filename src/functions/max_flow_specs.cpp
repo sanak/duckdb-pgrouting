@@ -5,6 +5,8 @@
 // combinations form, and select `seq, edge_id, source, target, flow, residual_capacity` as `seq,
 // edge, start_vid, end_vid, flow, residual_capacity`: the flowed arc's tail and head, not the
 // query's sources. A one-vertex argument becomes a one-element array.
+// pgr_maxFlow calls the same with algorithm 1 and only_flow, and selects the one row's flow; this driver
+// takes only_cost in its place.
 
 #include "function_spec.hpp"
 
@@ -16,6 +18,13 @@ DriverFlags MaxFlowFlags(int32_t algorithm) {
 	auto flags = ColumnsFlags(DriverKind::MAX_FLOW,
 	                          "seq, edge, source AS start_vid, target AS end_vid, flow, residual_capacity");
 	flags.algorithm = algorithm;
+	return flags;
+}
+
+DriverFlags MaxFlowTotalFlags() {
+	auto flags = ColumnsFlags(DriverKind::MAX_FLOW, "flow AS pgr_maxflow");
+	flags.algorithm = 1;
+	flags.only_cost = true;
 	return flags;
 }
 
@@ -47,6 +56,17 @@ const duckdb::vector<FunctionSpec> MAX_FLOW_SPECS = {
     {"pgr_edmondsKarp", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {}, MaxFlowFlags(EDMONDS_KARP)},
     {"pgr_edmondsKarp", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {}, MaxFlowFlags(EDMONDS_KARP)},
     {"pgr_edmondsKarp", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {}, MaxFlowFlags(EDMONDS_KARP)},
+
+    // pgr_maxFlow: RETURNS BIGINT, so the column is the function's lower-case name.
+    {"pgr_maxFlow", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {}, MaxFlowTotalFlags(),
+     "pgr_maxflow"},
+    {"pgr_maxFlow", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {}, MaxFlowTotalFlags(),
+     "pgr_maxflow"},
+    {"pgr_maxFlow", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {}, MaxFlowTotalFlags(),
+     "pgr_maxflow"},
+    {"pgr_maxFlow", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {}, MaxFlowTotalFlags(),
+     "pgr_maxflow"},
+    {"pgr_maxFlow", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {}, MaxFlowTotalFlags(), "pgr_maxflow"},
 };
 
 } // namespace duckdb_pgrouting
