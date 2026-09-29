@@ -8,6 +8,8 @@
 
 #include "driver_groups.hpp"
 
+#include "drivers/lineGraph/lineGraphFull_driver.h"
+#include "drivers/lineGraph/lineGraph_driver.h"
 #include "drivers/planar/isPlanar_driver.h"
 
 namespace duckdb_pgrouting {
@@ -24,6 +26,16 @@ bool CallAnalysisDriver(const DriverRequest &request, const DriverArrays &, Driv
 		}
 		return true;
 	}
+	case DriverKind::LINE_GRAPH:
+		pgr_do_lineGraph(edges, request.directed, &call.edge_rows, &call.count, &call.log, &call.notice,
+		                 &call.err);
+		return true;
+	case DriverKind::LINE_GRAPH_FULL:
+		// The driver writes its whole line graph into the log (a debugging `#if 1` upstream), which
+		// reaches DUCKDB_LOG_DEBUG like every driver log.
+		pgr_do_lineGraphFull(edges, &call.line_graph_full_rows, &call.count, &call.log, &call.notice,
+		                     &call.err);
+		return true;
 	default:
 		return false;
 	}

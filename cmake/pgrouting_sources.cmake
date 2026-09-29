@@ -72,6 +72,8 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/ksp/ksp_driver.cpp
     ${PGROUTING_DIR}/src/ksp/turnRestrictedPath_driver.cpp
     ${PGROUTING_DIR}/src/ksp/withPoints_ksp_driver.cpp
+    ${PGROUTING_DIR}/src/lineGraph/lineGraphFull_driver.cpp
+    ${PGROUTING_DIR}/src/lineGraph/lineGraph_driver.cpp
     ${PGROUTING_DIR}/src/metrics/betweennessCentrality_driver.cpp
     ${PGROUTING_DIR}/src/metrics/metrics_driver.cpp
     ${PGROUTING_DIR}/src/ordering/cuthillMckeeOrdering.cpp

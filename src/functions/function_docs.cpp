@@ -289,6 +289,18 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "Whether an undirected graph can be drawn in the plane without crossing edges (the "
      "Boyer-Myrvold test); false for an empty edge set; one value, also callable as a scalar function.",
      "SELECT pgr_isPlanar('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_lineGraph",
+     "The line graph of a graph: one vertex per edge, joined where one edge can follow another; "
+     "reverse_cost marks a pair that joins both ways. Which way a two-way pair is written depends on "
+     "the order the edges are read in.",
+     "SELECT * FROM pgr_lineGraph('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN "
+     "(2, 4, 5, 8)', false)"},
+    {"pgr_lineGraphFull",
+     "The full line graph of a directed graph: each vertex becomes one vertex per incident edge end, "
+     "joined by zero-cost turns, so turn costs and restrictions can be added before routing on it; "
+     "the new vertices get negative ids.",
+     "SELECT * FROM pgr_lineGraphFull('SELECT id, source, target, cost, reverse_cost FROM edges WHERE "
+     "id IN (4, 7, 8, 10)')"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "

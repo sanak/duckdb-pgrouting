@@ -74,6 +74,8 @@ pgr_kruskalBFS	pgr_kruskalBFS
 pgr_kruskalDD	pgr_kruskalDD
 pgr_kruskalDFS	pgr_kruskalDFS
 pgr_ksp	pgr_ksp
+pgr_lineGraph	pgr_lineGraph
+pgr_lineGraphFull	pgr_lineGraphFull
 pgr_makeConnected	pgr_makeConnected
 pgr_prim	pgr_prim
 pgr_primBFS	pgr_primBFS

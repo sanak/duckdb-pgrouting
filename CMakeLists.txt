@@ -44,6 +44,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/find_close_edges.cpp
     src/functions/function_docs.cpp
     src/functions/ksp_specs.cpp
+    src/functions/line_graph_specs.cpp
     src/functions/meta_functions.cpp
     src/functions/metrics_specs.cpp
     src/functions/ordering_specs.cpp

@@ -210,7 +210,8 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::TRAVERSAL_SPECS,         &duckdb_pgrouting::KSP_SPECS,
 	    &duckdb_pgrouting::TRSP_SPECS,              &duckdb_pgrouting::TSP_SPECS,
 	    &duckdb_pgrouting::ORDERING_SPECS,          &duckdb_pgrouting::ALLPAIRS_SPECS,
-	    &duckdb_pgrouting::METRICS_SPECS,           &duckdb_pgrouting::PLANAR_SPECS};
+	    &duckdb_pgrouting::METRICS_SPECS,           &duckdb_pgrouting::PLANAR_SPECS,
+	    &duckdb_pgrouting::LINE_GRAPH_SPECS};
 	return TABLES;
 }
 

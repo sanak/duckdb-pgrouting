@@ -57,7 +57,9 @@ enum class DriverKind : uint8_t {
 	FLOYD_WARSHALL,
 	BETWEENNESS_CENTRALITY,
 	BANDWIDTH,
-	IS_PLANAR
+	IS_PLANAR,
+	LINE_GRAPH,
+	LINE_GRAPH_FULL
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -76,7 +78,9 @@ enum class ResultShape : uint8_t {
 	TSP_TOUR, // TSP_tour_rt
 	IDS,      // int64_t, as seq, id
 	ID_VALUE, // II_t_rt, as seq, d1.id, d2.value
-	TRIPLES   // IID_t_rt, as from_vid, to_vid, cost
+	TRIPLES,  // IID_t_rt, as from_vid, to_vid, cost
+	EDGE,            // Edge_rt, as its C entry (src/lineGraph/lineGraph.c) emits it: seq, then all but id
+	LINE_GRAPH_FULL  // Line_graph_full_rt, as src/lineGraph/lineGraphFull.c emits it: seq, then all but id
 };
 
 // A check upstream's C entry runs on the parameters before it calls the driver, even when the
@@ -164,6 +168,8 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::BETWEENNESS_CENTRALITY, "betweenness_centrality", ResultShape::TRIPLES, RequestCheck::NONE},
     {DriverKind::BANDWIDTH, "bandwidth", ResultShape::IDS, RequestCheck::NONE},
     {DriverKind::IS_PLANAR, "is_planar", ResultShape::IDS, RequestCheck::NONE},
+    {DriverKind::LINE_GRAPH, "line_graph", ResultShape::EDGE, RequestCheck::NONE},
+    {DriverKind::LINE_GRAPH_FULL, "line_graph_full", ResultShape::LINE_GRAPH_FULL, RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -178,7 +184,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::IS_PLANAR) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::LINE_GRAPH_FULL) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

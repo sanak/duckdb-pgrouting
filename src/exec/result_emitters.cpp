@@ -5,8 +5,10 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 
+#include "c_types/edge_rt.h"
 #include "c_types/ii_t_rt.h"
 #include "c_types/iid_t_rt.h"
+#include "c_types/line_graph_full_rt.h"
 #include "c_types/mst_rt.h"
 #include "c_types/path_rt.h"
 #include "c_types/routes_t.h"
@@ -217,6 +219,44 @@ void EmitTriples(const DriverResult &result, EmitState &state, idx_t n, DataChun
 	}
 }
 
+// Upstream's line-graph C entry (src/lineGraph/lineGraph.c) numbers the rows from 1 and passes
+// source, target, cost and reverse_cost through; Edge_rt's id is not emitted.
+void EmitEdge(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<Edge_rt>();
+	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
+	auto source = FlatVector::GetData<int64_t>(output.data[1]);
+	auto target = FlatVector::GetData<int64_t>(output.data[2]);
+	auto cost = FlatVector::GetData<double>(output.data[3]);
+	auto reverse_cost = FlatVector::GetData<double>(output.data[4]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		seq[i] = NumericCast<int32_t>(k + 1);
+		source[i] = rows[k].source;
+		target[i] = rows[k].target;
+		cost[i] = rows[k].cost;
+		reverse_cost[i] = rows[k].reverse_cost;
+	}
+}
+
+// src/lineGraph/lineGraphFull.c: the rows numbered from 1, then source, target, cost and edge;
+// Line_graph_full_rt's id is not emitted.
+void EmitLineGraphFull(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<Line_graph_full_rt>();
+	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
+	auto source = FlatVector::GetData<int64_t>(output.data[1]);
+	auto target = FlatVector::GetData<int64_t>(output.data[2]);
+	auto cost = FlatVector::GetData<double>(output.data[3]);
+	auto edge = FlatVector::GetData<int64_t>(output.data[4]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		seq[i] = NumericCast<int32_t>(k + 1);
+		source[i] = rows[k].source;
+		target[i] = rows[k].target;
+		cost[i] = rows[k].cost;
+		edge[i] = rows[k].edge;
+	}
+}
+
 } // namespace
 
 void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
@@ -266,6 +306,16 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE};
 		names = {"from_vid", "to_vid", "cost"};
 		return;
+	case ResultShape::EDGE:
+		types = {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE,
+		         LogicalType::DOUBLE};
+		names = {"seq", "source", "target", "cost", "reverse_cost"};
+		return;
+	case ResultShape::LINE_GRAPH_FULL:
+		types = {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE,
+		         LogicalType::BIGINT};
+		names = {"seq", "source", "target", "cost", "edge"};
+		return;
 	}
 	throw InternalException("pgrouting: unhandled ResultShape");
 }
@@ -301,6 +351,12 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::TRIPLES:
 		EmitTriples(result, state, n, output);
+		break;
+	case ResultShape::EDGE:
+		EmitEdge(result, state, n, output);
+		break;
+	case ResultShape::LINE_GRAPH_FULL:
+		EmitLineGraphFull(result, state, n, output);
 		break;
 	}
 	state.offset += n;

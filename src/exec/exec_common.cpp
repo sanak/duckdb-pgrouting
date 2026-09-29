@@ -53,6 +53,8 @@ void DriverResult::Release() {
 	case ResultShape::IDS:
 	case ResultShape::ID_VALUE:
 	case ResultShape::TRIPLES:
+	case ResultShape::EDGE:
+	case ResultShape::LINE_GRAPH_FULL:
 		break; // flat rows
 	}
 	std::free(rows);

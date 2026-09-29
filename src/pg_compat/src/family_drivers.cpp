@@ -47,6 +47,10 @@ void *RowsOf(const DriverCall &call, ResultShape shape) {
 		return call.id_rows;
 	case ResultShape::TRIPLES:
 		return call.triple_rows;
+	case ResultShape::EDGE:
+		return call.edge_rows;
+	case ResultShape::LINE_GRAPH_FULL:
+		return call.line_graph_full_rows;
 	}
 	return nullptr;
 }
@@ -71,6 +75,8 @@ bool DropWrongShapeRows(DriverCall &call, ResultShape shape) {
 	drop(call.tour_rows, shape == ResultShape::TSP_TOUR);
 	drop(call.id_rows, shape == ResultShape::IDS);
 	drop(call.triple_rows, shape == ResultShape::TRIPLES);
+	drop(call.edge_rows, shape == ResultShape::EDGE);
+	drop(call.line_graph_full_rows, shape == ResultShape::LINE_GRAPH_FULL);
 	return wrong;
 }
 

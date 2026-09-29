@@ -13,8 +13,10 @@
 
 #include "pgrouting/family_drivers.hpp"
 
+struct Edge_rt;
 struct II_t_rt;
 struct IID_t_rt;
+struct Line_graph_full_rt;
 struct MST_rt;
 struct Path_rt;
 struct Routes_t;
@@ -33,6 +35,8 @@ struct DriverCall {
 	TSP_tour_rt *tour_rows = nullptr;
 	int64_t *id_rows = nullptr;
 	IID_t_rt *triple_rows = nullptr;
+	Edge_rt *edge_rows = nullptr;
+	Line_graph_full_rt *line_graph_full_rows = nullptr;
 	std::size_t count = 0;
 	char *log = nullptr;
 	char *notice = nullptr;
