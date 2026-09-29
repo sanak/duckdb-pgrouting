@@ -24,7 +24,8 @@ the following checklist, in order. Every step either passes or tells you exactly
    The functions on upstream's unified `do_ordering`, `do_allpairs` and `do_metrics`
    (pgr_cuthillMckeeOrdering, pgr_kingOrdering, pgr_sloanOrdering, pgr_topologicalSort, pgr_johnson,
    pgr_floydWarshall, pgr_bandwidth) are called from `src/pg_compat/src/drivers_unified.cpp` with
-   the `Which` value their C entries pass; a changed signature of either driver shows up there.
+   the `Which` value their C entries pass; a changed signature of any of the three
+   drivers shows up there.
 
    The graph-analysis functions (pgr_strongComponents, pgr_biconnectedComponents,
    pgr_articulationPoints, pgr_bridges, pgr_makeConnected, pgr_sequentialVertexColoring,
@@ -59,8 +60,8 @@ the following checklist, in order. Every step either passes or tells you exactly
 5. Re-diff the three PL/pgSQL functions this extension reimplements:
    `git -C third_party/pgrouting diff <old tag> <new tag> -- sql/utilities/extractVertices.sql sql/utilities/findCloseEdges.sql sql/metrics/degree.sql`.
    Carry any change to their column checks, modes, error texts or query into
-   `src/functions/extract_vertices.cpp`, `src/functions/find_close_edges.cpp` /
-   `src/functions/degree.cpp`. The generated `test/sql/pgrouting/utilities/*.test` and
+   `src/functions/extract_vertices.cpp`, `src/functions/find_close_edges.cpp`
+   and `src/functions/degree.cpp`. The generated `test/sql/pgrouting/utilities/*.test` and
    `metrics/degree.test` cover only the documented queries, so a silent change elsewhere would go
    unnoticed. Also re-diff `src/common/check_parameters.c`, transcribed into the A* request check in
    `src/exec/exec_function.cpp`, and the A* SQL wrappers' constant flags (`normal := false` in the

@@ -62,8 +62,8 @@ value: a one-row table function, and a scalar macro of the same name over it (a 
 `scalar_column`). `pgr_extractVertices`, `pgr_findCloseEdges` and `pgr_degree`, which upstream
 writes in PL/pgSQL, are reimplemented as bind_replace functions. Each binds the caller's edge query,
 picks one of upstream's modes, and rewrites the call into a fixed DuckDB query
-(`src/functions/sql_template.cpp`). Their geometry work calls duckdb-spatial's `ST_*` functions at
-run time. Every public function carries a catalog description and an example
+(`src/functions/sql_template.cpp`). The geometry work of the first two calls duckdb-spatial's `ST_*`
+functions at run time. Every public function carries a catalog description and an example
 (`duckdb_functions().description` / `.examples`), registered from `src/functions/function_docs.cpp`.
 
 ## Layout

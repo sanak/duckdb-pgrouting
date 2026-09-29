@@ -657,7 +657,7 @@ void TagFunctions(ExtensionLoader &loader) {
 	}
 }
 
-// P4: (SELECT <scalar_column> FROM <name>(<arg>, ..., <optional> := <optional>, ...)), a scalar
+// (SELECT <scalar_column> FROM <name>(<arg>, ..., <optional> := <optional>, ...)), a scalar
 // macro of the table function's own name. The body is built from the spec row's fixed text, never a
 // caller's, and parsed here once, at load. A defaulted parameter keeps its name and its default, so
 // callers pass it positionally or by name as they would to the table function; a NULL argument

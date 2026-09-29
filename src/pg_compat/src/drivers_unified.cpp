@@ -2,11 +2,11 @@
 
 // Upstream's unified C++ drivers, each serving several public functions: do_ordering
 // (src/ordering/ordering_driver.cpp), do_allpairs (src/allpairs/allpairs_driver.cpp) and do_metrics
-// (src/metrics/metrics_driver.cpp). Unlike the
-// per-family drivers they report through std::ostringstream; their process files
-// (ordering_process.cpp, allpairs_process.cpp) hand the streams to report_messages, and here they
-// become DriverCall's malloc'd messages instead. Each case passes the Which value its C entry
-// (src/ordering/*.c, src/allpairs/*.c) passes.
+// (src/metrics/metrics_driver.cpp). Unlike the per-family drivers they report through
+// std::ostringstream; their process files (ordering_process.cpp, allpairs_process.cpp,
+// metrics_process.cpp) hand the streams to report_messages, and here they become DriverCall's
+// malloc'd messages instead. Each case passes the Which value its C entry (src/ordering/*.c,
+// src/allpairs/*.c, src/metrics/bandwidth.c) passes.
 
 #include "driver_groups.hpp"
 
