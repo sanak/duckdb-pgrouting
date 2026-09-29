@@ -52,7 +52,10 @@ enum class DriverKind : uint8_t {
 	CUTHILL_MCKEE_ORDERING,
 	KING_ORDERING,
 	SLOAN_ORDERING,
-	TOPOLOGICAL_SORT
+	TOPOLOGICAL_SORT,
+	JOHNSON,
+	FLOYD_WARSHALL,
+	BETWEENNESS_CENTRALITY
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -68,7 +71,8 @@ enum class ResultShape : uint8_t {
 	ROUTES,   // Routes_t
 	TSP_TOUR, // TSP_tour_rt
 	IDS,      // int64_t, as seq, id
-	ID_VALUE  // II_t_rt, as seq, d1.id, d2.value
+	ID_VALUE, // II_t_rt, as seq, d1.id, d2.value
+	TRIPLES   // IID_t_rt, as from_vid, to_vid, cost
 };
 
 // A check upstream's C entry runs on the parameters before it calls the driver, even when the
@@ -151,6 +155,9 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::KING_ORDERING, "king_ordering", ResultShape::IDS, RequestCheck::NONE},
     {DriverKind::SLOAN_ORDERING, "sloan_ordering", ResultShape::IDS, RequestCheck::NONE},
     {DriverKind::TOPOLOGICAL_SORT, "topological_sort", ResultShape::IDS, RequestCheck::NONE},
+    {DriverKind::JOHNSON, "johnson", ResultShape::TRIPLES, RequestCheck::NONE},
+    {DriverKind::FLOYD_WARSHALL, "floyd_warshall", ResultShape::TRIPLES, RequestCheck::NONE},
+    {DriverKind::BETWEENNESS_CENTRALITY, "betweenness_centrality", ResultShape::TRIPLES, RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -165,7 +172,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::TOPOLOGICAL_SORT) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::BETWEENNESS_CENTRALITY) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

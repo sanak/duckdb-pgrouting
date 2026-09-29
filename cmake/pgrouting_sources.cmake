@@ -40,6 +40,7 @@ set(PGROUTING_SOURCES
 # Sources that reach PostgreSQL only through symbols this extension replaces
 # (src/pg_compat provides the stub headers and the replaced definitions).
 list(APPEND PGROUTING_SOURCES
+    ${PGROUTING_DIR}/src/allpairs/allpairs_driver.cpp
     ${PGROUTING_DIR}/src/astar/astar_driver.cpp
     ${PGROUTING_DIR}/src/bdAstar/bdAstar_driver.cpp
     ${PGROUTING_DIR}/src/bdDijkstra/bdDijkstra_driver.cpp
@@ -71,6 +72,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/ksp/ksp_driver.cpp
     ${PGROUTING_DIR}/src/ksp/turnRestrictedPath_driver.cpp
     ${PGROUTING_DIR}/src/ksp/withPoints_ksp_driver.cpp
+    ${PGROUTING_DIR}/src/metrics/betweennessCentrality_driver.cpp
     ${PGROUTING_DIR}/src/ordering/cuthillMckeeOrdering.cpp
     ${PGROUTING_DIR}/src/ordering/kingOrdering.cpp
     ${PGROUTING_DIR}/src/ordering/ordering_driver.cpp

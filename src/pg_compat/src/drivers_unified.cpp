@@ -12,6 +12,7 @@
 #include <sstream>
 
 #include "cpp_common/alloc.hpp"
+#include "drivers/allpairs_driver.hpp"
 #include "drivers/ordering_driver.hpp"
 
 namespace duckdb_pgrouting {
@@ -31,7 +32,8 @@ bool CallUnifiedDriver(const DriverRequest &request, const DriverArrays &, Drive
 		// Boost's sloan_ordering (src/ordering/sloanOrdering.cpp) crashes the process on a graph
 		// whose vertices have no edge between them -- an edge query whose every row has both costs
 		// negative, since do_ordering still extracts those rows' vertices. Nothing is ordered; the
-		// driver is not called.
+		// driver is not called. Boost sizes a vector by the graph's maximum degree and indexes it by
+		// degree; with no inserted edge that vector is empty.
 		const auto census = CountEdges(request);
 		if (census.readable && census.rows > 0 && census.inserted == 0) {
 			return true;
@@ -41,6 +43,13 @@ bool CallUnifiedDriver(const DriverRequest &request, const DriverArrays &, Drive
 	}
 	case DriverKind::TOPOLOGICAL_SORT:
 		do_ordering(request.edges_sql, TOPOSORT, call.id_rows, call.count, log, notice, err);
+		break;
+	case DriverKind::JOHNSON:
+		// allpairs_process.cpp: which = 0 is Johnson, 1 is Floyd-Warshall. No notice stream.
+		do_allpairs(request.edges_sql, request.directed, 0, call.triple_rows, call.count, log, err);
+		break;
+	case DriverKind::FLOYD_WARSHALL:
+		do_allpairs(request.edges_sql, request.directed, 1, call.triple_rows, call.count, log, err);
 		break;
 	default:
 		return false;

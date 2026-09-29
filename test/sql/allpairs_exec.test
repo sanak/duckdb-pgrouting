@@ -1,0 +1,198 @@
+# name: test/sql/allpairs_exec.test
+# description: _pgr_exec with the all-pairs and betweenness drivers: TRIPLES rows, edges without id, errors
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# Edges 1 to 4: upstream's query for all three functions.
+statement ok
+CREATE TABLE ex4 AS SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges
+  WHERE id < 5) e) AS edges;
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM _pgr_exec((SELECT edges FROM ex4), edges_sql := 'id < 5',
+  driver := 'johnson'));
+----
+from_vid	BIGINT
+to_vid	BIGINT
+cost	DOUBLE
+
+# Upstream's johnson q1: no id column (the all-pairs drivers read the edges with id optional), and
+# without reverse_cost every edge is one-way, so the two edges of cost -1 are gone.
+query IIR
+SELECT from_vid, to_vid, cost FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT source, target, cost FROM edges
+  WHERE id < 5) e) AS edges), edges_sql := 'johnson q1', driver := 'johnson')
+ORDER BY 1, 2;
+----
+5	6	1
+5	7	2
+6	7	1
+
+# Upstream's floydWarshall q1, and Johnson's identical answer to the same edges.
+query TIIR
+SELECT 'floyd', from_vid, to_vid, cost FROM _pgr_exec((SELECT edges FROM ex4), edges_sql := 'id < 5',
+  driver := 'floyd_warshall')
+UNION ALL
+SELECT 'johnson', from_vid, to_vid, cost FROM _pgr_exec((SELECT edges FROM ex4), edges_sql := 'id < 5',
+  driver := 'johnson')
+ORDER BY 1, 2, 3;
+----
+floyd	5	6	1
+floyd	5	7	2
+floyd	6	5	1
+floyd	6	7	1
+floyd	7	5	2
+floyd	7	6	1
+floyd	10	5	2
+floyd	10	6	1
+floyd	10	7	2
+floyd	15	5	3
+floyd	15	6	2
+floyd	15	7	3
+floyd	15	10	1
+johnson	5	6	1
+johnson	5	7	2
+johnson	6	5	1
+johnson	6	7	1
+johnson	7	5	2
+johnson	7	6	1
+johnson	10	5	2
+johnson	10	6	1
+johnson	10	7	2
+johnson	15	5	3
+johnson	15	6	2
+johnson	15	7	3
+johnson	15	10	1
+
+# Undirected: the path 5 - 6 - 10 - 15 with 7 hanging off 6 has 20 ordered pairs, 36 in total.
+query TIR
+SELECT 'floyd', count(*), sum(cost) FROM _pgr_exec((SELECT edges FROM ex4), edges_sql := 'id < 5',
+  driver := 'floyd_warshall', directed := false)
+UNION ALL
+SELECT 'johnson', count(*), sum(cost) FROM _pgr_exec((SELECT edges FROM ex4), edges_sql := 'id < 5',
+  driver := 'johnson', directed := false)
+ORDER BY 1;
+----
+floyd	20	36
+johnson	20	36
+
+# Upstream's betweennessCentrality q1 and pgTAP cases: from_vid is the vertex, cost its centrality,
+# to_vid always 0.
+query IR
+SELECT from_vid, round(cost, 6) FROM _pgr_exec((SELECT edges FROM ex4), edges_sql := 'id < 5',
+  driver := 'betweenness_centrality')
+ORDER BY 1;
+----
+5	0
+6	0.5
+7	0
+10	0.25
+15	0
+
+query IR
+SELECT from_vid, round(cost, 6) FROM _pgr_exec((SELECT edges FROM ex4), edges_sql := 'id < 5',
+  driver := 'betweenness_centrality', directed := false)
+ORDER BY 1;
+----
+5	0
+6	0.833333
+7	0
+10	0.5
+15	0
+
+query IR
+SELECT from_vid, round(cost, 6) FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost
+  FROM edges WHERE id < 4) e) AS edges), edges_sql := 'id < 4', driver := 'betweenness_centrality')
+ORDER BY 1;
+----
+5	0
+6	0.333333
+10	0.333333
+15	0
+
+query IR
+SELECT from_vid, round(cost, 6) FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost
+  FROM edges WHERE id < 3) e) AS edges), edges_sql := 'id < 3', driver := 'betweenness_centrality', directed := false)
+ORDER BY 1;
+----
+5	0
+6	1
+10	0
+
+query I
+SELECT count(*) FROM _pgr_exec((SELECT edges FROM ex4), edges_sql := 'id < 5', driver := 'betweenness_centrality')
+WHERE to_vid <> 0;
+----
+0
+
+# An empty edge query is an error for all three, with the query as the hint.
+statement error
+SELECT * FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges
+  WHERE id < 0) e) AS edges), edges_sql := 'SELECT nothing', driver := 'johnson');
+----
+No edges found
+
+statement error
+SELECT * FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges
+  WHERE id < 0) e) AS edges), edges_sql := 'SELECT nothing', driver := 'floyd_warshall');
+----
+No edges found
+
+statement error
+SELECT * FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges
+  WHERE id < 0) e) AS edges), edges_sql := 'SELECT nothing', driver := 'betweenness_centrality');
+----
+No edges found
+
+# A graph of one vertex has no pair: upstream's error for the all-pairs functions, while its
+# betweenness is one row of 0.
+statement error
+SELECT * FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT 1 AS id, 1 AS source, 1 AS target, 1.0 AS cost) e) AS edges),
+  edges_sql := 'self-loop', driver := 'johnson');
+----
+No result generated, report this error
+
+statement error
+SELECT * FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT 1 AS id, 1 AS source, 1 AS target, 1.0 AS cost) e) AS edges),
+  edges_sql := 'self-loop', driver := 'floyd_warshall');
+----
+No result generated, report this error
+
+query IIR
+SELECT from_vid, to_vid, cost FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT 1 AS id, 1 AS source, 1 AS target,
+  1.0 AS cost) e) AS edges), edges_sql := 'self-loop', driver := 'betweenness_centrality');
+----
+1	0	0
+
+# More than one 2048-row chunk: a two-way path of 50 vertices has 2450 ordered pairs, whose
+# distances add up to 41650.
+statement ok
+CREATE TABLE path50 AS SELECT (SELECT list({'id': i, 'source': i, 'target': i + 1, 'cost': 1.0,
+  'reverse_cost': 1.0} ORDER BY i) FROM range(1, 50) t(i)) AS edges;
+
+query TIR
+SELECT 'floyd', count(*), sum(cost) FROM _pgr_exec((SELECT edges FROM path50), edges_sql := 'path50',
+  driver := 'floyd_warshall')
+UNION ALL
+SELECT 'johnson', count(*), sum(cost) FROM _pgr_exec((SELECT edges FROM path50), edges_sql := 'path50',
+  driver := 'johnson')
+ORDER BY 1;
+----
+floyd	2450	41650
+johnson	2450	41650
+
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), edges_sql := '', driver := 'johnson', null_input := true);
+----
+0

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// The per-family drivers whose rows are not paths: components, connectivity and coloring. Each
-// case passes exactly the arguments its upstream C entry (src/components/*.c, src/coloring/*.c)
-// passes.
+// The per-family drivers whose rows are not paths: components, connectivity, coloring and
+// betweenness. Each case passes exactly the arguments its upstream C entry (src/components/*.c,
+// src/coloring/*.c, src/metrics/betweennessCentrality.c) passes.
 
 #include "driver_groups.hpp"
 
@@ -17,6 +17,7 @@
 #include "drivers/components/connectedComponents_driver.h"
 #include "drivers/components/makeConnected_driver.h"
 #include "drivers/components/strongComponents_driver.h"
+#include "drivers/metrics/betweennessCentrality_driver.h"
 #include "pgrouting/input_access.hpp"
 
 namespace duckdb_pgrouting {
@@ -103,6 +104,10 @@ bool CallGraphDriver(const DriverRequest &request, const DriverArrays &, DriverC
 		return true;
 	case DriverKind::EDGE_COLORING:
 		pgr_do_edgeColoring(edges, &call.pair_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::BETWEENNESS_CENTRALITY:
+		// This driver has a log and an err, no notice.
+		pgr_do_betweennessCentrality(edges, request.directed, &call.triple_rows, &call.count, &call.log, &call.err);
 		return true;
 	default:
 		return false;

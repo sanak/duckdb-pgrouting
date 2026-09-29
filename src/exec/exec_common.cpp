@@ -52,6 +52,7 @@ void DriverResult::Release() {
 	case ResultShape::TSP_TOUR:
 	case ResultShape::IDS:
 	case ResultShape::ID_VALUE:
+	case ResultShape::TRIPLES:
 		break; // flat rows
 	}
 	std::free(rows);

@@ -6,6 +6,7 @@
 #include "duckdb/common/types/vector.hpp"
 
 #include "c_types/ii_t_rt.h"
+#include "c_types/iid_t_rt.h"
 #include "c_types/mst_rt.h"
 #include "c_types/path_rt.h"
 #include "c_types/routes_t.h"
@@ -200,6 +201,22 @@ void EmitIdValue(const DriverResult &result, EmitState &state, idx_t n, DataChun
 	}
 }
 
+// IID_t_rt as (from_vid, to_vid, cost): the all-pairs C entries (src/allpairs/*.c) pass the three
+// through; the betweenness C entry (src/metrics/betweennessCentrality.c) passes from_vid and cost,
+// its to_vid being 0.
+void EmitTriples(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<IID_t_rt>();
+	auto from_vid = FlatVector::GetData<int64_t>(output.data[0]);
+	auto to_vid = FlatVector::GetData<int64_t>(output.data[1]);
+	auto cost = FlatVector::GetData<double>(output.data[2]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		from_vid[i] = rows[k].from_vid;
+		to_vid[i] = rows[k].to_vid;
+		cost[i] = rows[k].cost;
+	}
+}
+
 } // namespace
 
 void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
@@ -245,6 +262,10 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
 		names = {"seq", "id", "value"};
 		return;
+	case ResultShape::TRIPLES:
+		types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE};
+		names = {"from_vid", "to_vid", "cost"};
+		return;
 	}
 	throw InternalException("pgrouting: unhandled ResultShape");
 }
@@ -277,6 +298,9 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::ID_VALUE:
 		EmitIdValue(result, state, n, output);
+		break;
+	case ResultShape::TRIPLES:
+		EmitTriples(result, state, n, output);
 		break;
 	}
 	state.offset += n;
