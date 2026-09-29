@@ -121,6 +121,11 @@
       "reason": "which edge-disjoint paths come back depends on the order the edges are read in, and upstream's transcript was made from another order; test/sql/edge_disjoint_paths.test asserts upstream's number of paths per pair"
     }
   },
+  "max_flow/maxCardinalityMatch.pg": {
+    "q2": {
+      "reason": "which of several maximum matchings comes back follows the C++ standard library's sort of equal-degree edges (Linux and macOS differ); test/sql/max_cardinality_match.test asserts its size, that no two matched edges share a vertex and that every matched edge is usable"
+    }
+  },
   "metrics/bandwidth.pg": {
     "q4": {
       "reason": "reads my_edges1, which blocks q2 and q3 create and fill; the generator runs only blocks that return a result set (test/sql/scalar_functions.test measures the same edges)"

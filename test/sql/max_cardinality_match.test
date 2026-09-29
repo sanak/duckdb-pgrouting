@@ -1,5 +1,5 @@
 # name: test/sql/max_cardinality_match.test
-# description: pgr_maxCardinalityMatch: matched edge ids, the legacy going/coming columns, order dependence, long answers
+# description: pgr_maxCardinalityMatch: a valid maximum matching on every platform, the legacy going/coming columns, order dependence, long answers
 # group: [sql]
 
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -28,31 +28,37 @@ SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM _pgr_exec(
 seq	BIGINT
 id	BIGINT
 
-# Upstream's q2: the matched edges, sorted by id.
-query I
-SELECT * FROM pgr_maxCardinalityMatch('SELECT id, source, target, cost, reverse_cost FROM edges');
+# Upstream's q2 has 8 matched edges. Which of several maximum matchings comes back follows the C++
+# standard library's sort (it differs between Linux and macOS), so only what every maximum matching
+# shares is asserted: 8 edges, sorted and distinct, no vertex in two of them, each one usable.
+statement ok
+CREATE TABLE m_cost AS SELECT row_number() OVER () AS k, edge FROM pgr_maxCardinalityMatch('SELECT id, source, target, cost, reverse_cost FROM edges');
+
+query ITTT
+SELECT count(*),
+       bool_and(x.edge > coalesce(x.prev, -1)),
+       (SELECT count(*) FROM (SELECT v FROM (SELECT e.source AS v FROM m_cost m JOIN edges e ON e.id = m.edge
+                                             UNION ALL SELECT e.target FROM m_cost m JOIN edges e ON e.id = m.edge)
+                              GROUP BY v HAVING count(*) > 1)) = 0,
+       bool_and(e.cost > 0 OR e.reverse_cost > 0)
+FROM (SELECT edge, lag(edge) OVER (ORDER BY k) AS prev FROM m_cost) x JOIN edges e ON e.id = x.edge;
 ----
-1
-5
-6
-13
-14
-16
-17
-18
+8	true	true	true
 
 # The legacy form: without a cost column, an edge is used when going or coming is positive.
-query I
-SELECT * FROM pgr_maxCardinalityMatch('SELECT id, source, target, cost AS going, reverse_cost AS coming FROM edges');
+statement ok
+CREATE TABLE m_going AS SELECT row_number() OVER () AS k, edge FROM pgr_maxCardinalityMatch('SELECT id, source, target, cost AS going, reverse_cost AS coming FROM edges');
+
+query ITTT
+SELECT count(*),
+       bool_and(x.edge > coalesce(x.prev, -1)),
+       (SELECT count(*) FROM (SELECT v FROM (SELECT e.source AS v FROM m_going m JOIN edges e ON e.id = m.edge
+                                             UNION ALL SELECT e.target FROM m_going m JOIN edges e ON e.id = m.edge)
+                              GROUP BY v HAVING count(*) > 1)) = 0,
+       bool_and(e.cost > 0 OR e.reverse_cost > 0)
+FROM (SELECT edge, lag(edge) OVER (ORDER BY k) AS prev FROM m_going) x JOIN edges e ON e.id = x.edge;
 ----
-1
-5
-6
-13
-14
-16
-17
-18
+8	true	true	true
 
 # Which edges are matched can depend on the edge order; how many cannot.
 query I

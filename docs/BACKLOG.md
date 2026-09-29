@@ -134,8 +134,10 @@ decision rather than an oversight.
   algorithms and `pgr_maxFlow` report none.
 - **Which edges carry a maximum flow, which disjoint paths, which matched edges and where the
   Postman's tour starts depend on the edge order.** The values do not: a flow's value and cost,
-  the number of paths per pair, the size of the matching, and the tour's length and cost. The
-  tests assert those wherever the answer is not forced.
+  the number of paths per pair, the size of the matching, and the tour's length and cost. Which
+  maximum matching `pgr_maxCardinalityMatch` returns also depends on the C++ standard library:
+  Boost's greedy start sorts equal-degree edges with an unstable sort, so Linux and macOS return
+  different matchings of the same size. The tests assert those wherever the answer is not forced.
 - **A Chinese Postman tour of thousands of steps can exhaust a thread's stack.** Upstream's
   `EulerCircuitDFS` (`include/chinese/chinesePostman.hpp`) recurses once per step of the tour: on
   a 512 KB stack (a macOS worker thread) a tour of 5000 to 8000 steps overflows it and ends the
@@ -322,10 +324,11 @@ Each of these would be a change no test could observe, so none of them is made:
   more than two thousand frames deep, which a macOS worker thread under ASan, or a Wasm build, may
   not hold (see the stack entry above); its rows are `PATH` rows, whose chunk continuity
   `test/sql/dijkstra_long_input.test` already covers.
-- **`max_flow/edgeDisjointPaths.pg` q4, q51, q6 and `chinese/chinesePostman.pg` q1 are skipped**
-  (see `test/pgrouting_skip.json`): their answers depend on the edge order and upstream's
-  transcripts were made from another one. `test/sql/edge_disjoint_paths.test` and
-  `chinese_postman.test` assert their order-free facts.
+- **`max_flow/edgeDisjointPaths.pg` q4, q51, q6, `max_flow/maxCardinalityMatch.pg` q2 and
+  `chinese/chinesePostman.pg` q1 are skipped** (see `test/pgrouting_skip.json`): their answers
+  depend on the edge order (the matching's also on the C++ standard library) and upstream's
+  transcripts were made from another one. `test/sql/edge_disjoint_paths.test`,
+  `max_cardinality_match.test` and `chinese_postman.test` assert their order-free facts.
 
 ## Open decision
 

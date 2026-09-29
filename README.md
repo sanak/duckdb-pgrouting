@@ -145,8 +145,9 @@ Functions deliberately not ported are listed, each with its reason, in
   is the `seq` of the dominator's row, not a vertex id). So do which edges carry
   `pgr_pushRelabel`'s, `pgr_boykovKolmogorov`'s, `pgr_edmondsKarp`'s and `pgr_maxFlowMinCost`'s
   flow (never its value or cost), which paths `pgr_edgeDisjointPaths` returns (never how many),
-  which edges `pgr_maxCardinalityMatch` picks (never how many), and where `pgr_chinesePostman`'s
-  tour starts: at the first edge row's source. Every answer is valid for its problem; see
+  which edges `pgr_maxCardinalityMatch` picks (never how many; the choice also follows the C++
+  standard library, so it can differ between platforms), and where `pgr_chinesePostman`'s tour
+  starts: at the first edge row's source. Every answer is valid for its problem; see
   `docs/BACKLOG.md` for the upstream behaviours these functions keep.
 - **`pgr_degree` returns its rows sorted by vertex**; upstream's order is unspecified.
 - **`pgr_edgeDisjointPaths` with many sources and one target swaps `start_vid` and `end_vid`**,
