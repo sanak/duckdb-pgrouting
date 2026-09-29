@@ -73,11 +73,13 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/ksp/turnRestrictedPath_driver.cpp
     ${PGROUTING_DIR}/src/ksp/withPoints_ksp_driver.cpp
     ${PGROUTING_DIR}/src/metrics/betweennessCentrality_driver.cpp
+    ${PGROUTING_DIR}/src/metrics/metrics_driver.cpp
     ${PGROUTING_DIR}/src/ordering/cuthillMckeeOrdering.cpp
     ${PGROUTING_DIR}/src/ordering/kingOrdering.cpp
     ${PGROUTING_DIR}/src/ordering/ordering_driver.cpp
     ${PGROUTING_DIR}/src/ordering/sloanOrdering.cpp
     ${PGROUTING_DIR}/src/ordering/topologicalSort.cpp
+    ${PGROUTING_DIR}/src/planar/isPlanar_driver.cpp
     ${PGROUTING_DIR}/src/spanningTree/kruskal_driver.cpp
     ${PGROUTING_DIR}/src/spanningTree/prim_driver.cpp
     ${PGROUTING_DIR}/src/traversal/depthFirstSearch_driver.cpp

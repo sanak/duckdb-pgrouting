@@ -36,6 +36,7 @@ pgr_aStar	pgr_aStar
 pgr_aStarCost	pgr_aStarCost
 pgr_aStarCostMatrix	pgr_aStarCostMatrix
 pgr_articulationPoints	pgr_articulationPoints
+pgr_bandwidth	pgr_bandwidth
 pgr_bdAstar	pgr_bdAstar
 pgr_bdAstarCost	pgr_bdAstarCost
 pgr_bdAstarCostMatrix	pgr_bdAstarCostMatrix
@@ -65,6 +66,7 @@ pgr_edwardMoore	pgr_edwardMoore
 pgr_extractVertices	pgr_extractVertices
 pgr_findCloseEdges	pgr_findCloseEdges
 pgr_floydWarshall	pgr_floydWarshall
+pgr_isPlanar	pgr_isPlanar
 pgr_johnson	pgr_johnson
 pgr_kingOrdering	pgr_kingOrdering
 pgr_kruskal	pgr_kruskal

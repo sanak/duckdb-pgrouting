@@ -55,7 +55,9 @@ enum class DriverKind : uint8_t {
 	TOPOLOGICAL_SORT,
 	JOHNSON,
 	FLOYD_WARSHALL,
-	BETWEENNESS_CENTRALITY
+	BETWEENNESS_CENTRALITY,
+	BANDWIDTH,
+	IS_PLANAR
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -63,6 +65,8 @@ enum class DriverKind : uint8_t {
 // The generic shapes (IDS, ID_VALUE) name their columns after the struct's fields rather than
 // after one public function; each public overload over them renames the columns the way
 // upstream's SQL wrapper selects them (Projection::COLUMNS, src/functions/function_spec.hpp).
+// A driver that returns one value rather than rows (pgr_bandwidth, pgr_isPlanar) fills a single IDS
+// row.
 enum class ResultShape : uint8_t {
 	PATH,     // Path_rt
 	PAIRS,    // II_t_rt, as seq, d2.value (component), d1.id (node)
@@ -158,6 +162,8 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::JOHNSON, "johnson", ResultShape::TRIPLES, RequestCheck::NONE},
     {DriverKind::FLOYD_WARSHALL, "floyd_warshall", ResultShape::TRIPLES, RequestCheck::NONE},
     {DriverKind::BETWEENNESS_CENTRALITY, "betweenness_centrality", ResultShape::TRIPLES, RequestCheck::NONE},
+    {DriverKind::BANDWIDTH, "bandwidth", ResultShape::IDS, RequestCheck::NONE},
+    {DriverKind::IS_PLANAR, "is_planar", ResultShape::IDS, RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -172,7 +178,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::BETWEENNESS_CENTRALITY) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::IS_PLANAR) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

@@ -149,6 +149,11 @@ struct FunctionSpec {
 	duckdb::vector<ArgKind> args;
 	duckdb::vector<OptionalParam> optionals; // upstream's declaration order
 	DriverFlags flags;
+	// Upstream returns one value rather than a set (RETURNS BIGINT, RETURNS BOOLEAN): the function
+	// is then also registered as a same-name scalar macro over this one-row table function,
+	// selecting this column, so that both SELECT pgr_x(...) and SELECT * FROM pgr_x(...) work. The
+	// overload's column list must be exactly this one column. nullptr: the function returns a set.
+	const char *scalar_column = nullptr;
 };
 
 // One table per upstream sql/ directory, each defined in the file named beside it.
@@ -164,6 +169,7 @@ extern const duckdb::vector<FunctionSpec> COLORING_SPECS;             // colorin
 extern const duckdb::vector<FunctionSpec> ORDERING_SPECS;             // ordering_specs.cpp
 extern const duckdb::vector<FunctionSpec> ALLPAIRS_SPECS;             // allpairs_specs.cpp
 extern const duckdb::vector<FunctionSpec> METRICS_SPECS;              // metrics_specs.cpp
+extern const duckdb::vector<FunctionSpec> PLANAR_SPECS;               // planar_specs.cpp
 extern const duckdb::vector<FunctionSpec> ASTAR_SPECS;                // astar_specs.cpp
 extern const duckdb::vector<FunctionSpec> BD_ASTAR_SPECS;             // bd_astar_specs.cpp
 extern const duckdb::vector<FunctionSpec> DRIVING_DISTANCE_SPECS;     // driving_distance_specs.cpp

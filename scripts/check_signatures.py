@@ -149,6 +149,10 @@ def collect_variants(db):
     test/pgrouting_not_ported.json) record. This extension's own `pgrouting_name` tag keeps
     upstream's CREATE FUNCTION spelling verbatim (camelCase and all), so it has to be folded here
     to line up with the already-folded signature file.
+
+    A one-value upstream function is also registered as a scalar macro of the same name and tags
+    (spec rows with a `scalar_column`); the macro is a second way to call the same signature, not
+    a variant of it, and reports no parameter types, so it is left out here.
     """
     result = db.query(
         "SELECT tags['pgrouting_name'], "
@@ -156,6 +160,7 @@ def collect_variants(db):
         "array_to_string(parameter_types, chr(31)) "
         "FROM duckdb_functions() "
         "WHERE tags['ext'] = 'pgrouting' AND tags['pgrouting_name'] IS NOT NULL "
+        "AND function_type <> 'macro' "
         "ORDER BY 1, 2, 3;"
     )
     variants = {}

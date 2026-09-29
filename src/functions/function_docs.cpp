@@ -280,6 +280,15 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "For each vertex, the share of shortest paths between other vertices that pass through it "
      "(Brandes' algorithm, normalized by the number of vertex pairs).",
      "SELECT * FROM pgr_betweennessCentrality('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 5')"},
+    {"pgr_bandwidth",
+     "The bandwidth of an undirected graph: the largest gap between the positions of two joined "
+     "vertices when the vertices are numbered in ascending id order; one value, also callable as a "
+     "scalar function.",
+     "SELECT pgr_bandwidth('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_isPlanar",
+     "Whether an undirected graph can be drawn in the plane without crossing edges (the "
+     "Boyer-Myrvold test); false for an empty edge set; one value, also callable as a scalar function.",
+     "SELECT pgr_isPlanar('SELECT id, source, target, cost, reverse_cost FROM edges')"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "

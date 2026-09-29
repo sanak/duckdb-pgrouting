@@ -7,6 +7,9 @@
 
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <string>
 
 #include "pgrouting/family_drivers.hpp"
 
@@ -60,6 +63,17 @@ struct EdgeCensus {
 };
 EdgeCensus CountEdges(const DriverRequest &request);
 
+// A driver that returns one value rather than rows (pgr_bandwidth's, pgr_isPlanar's) hands it on as
+// the single row of ResultShape::IDS; the public overload names and types that column.
+inline int64_t *SingleIdRow(int64_t value) {
+	auto *row = static_cast<int64_t *>(std::malloc(sizeof(int64_t)));
+	if (row == nullptr) {
+		throw std::string("Out of memory!");
+	}
+	*row = value;
+	return row;
+}
+
 // Each calls request.driver if it belongs to the group and returns false otherwise.
 bool CallPathDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallGraphDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
@@ -68,5 +82,6 @@ bool CallRoutesDriver(const DriverRequest &request, const DriverArrays &arrays, 
 bool CallTrspDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallTspDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 bool CallUnifiedDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
+bool CallAnalysisDriver(const DriverRequest &request, const DriverArrays &arrays, DriverCall &call);
 
 } // namespace duckdb_pgrouting

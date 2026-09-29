@@ -47,6 +47,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/meta_functions.cpp
     src/functions/metrics_specs.cpp
     src/functions/ordering_specs.cpp
+    src/functions/planar_specs.cpp
     src/functions/spanning_tree_specs.cpp
     src/functions/spec_functions.cpp
     src/functions/sql_template.cpp
@@ -54,6 +55,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/trsp_specs.cpp
     src/functions/tsp_specs.cpp
     src/functions/withpoints_specs.cpp
+    src/pg_compat/src/drivers_analysis.cpp
     src/pg_compat/src/drivers_graph.cpp
     src/pg_compat/src/drivers_path.cpp
     src/pg_compat/src/drivers_routes.cpp

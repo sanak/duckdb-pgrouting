@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
@@ -29,6 +30,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -208,7 +210,7 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::TRAVERSAL_SPECS,         &duckdb_pgrouting::KSP_SPECS,
 	    &duckdb_pgrouting::TRSP_SPECS,              &duckdb_pgrouting::TSP_SPECS,
 	    &duckdb_pgrouting::ORDERING_SPECS,          &duckdb_pgrouting::ALLPAIRS_SPECS,
-	    &duckdb_pgrouting::METRICS_SPECS};
+	    &duckdb_pgrouting::METRICS_SPECS,           &duckdb_pgrouting::PLANAR_SPECS};
 	return TABLES;
 }
 
@@ -299,6 +301,17 @@ Value ResolveOptional(const duckdb_pgrouting::FunctionSpec &spec, TableFunctionB
 	return Value(param.default_value).DefaultCastAs(TypeOf(param.type));
 }
 
+// A positional argument's name in a scalar macro: upstream's parameter name. Only the argument kinds
+// a one-value upstream function takes are named; CheckSpec rejects a scalar_column row with another.
+const char *MacroParameterName(duckdb_pgrouting::ArgKind kind) {
+	switch (kind) {
+	case duckdb_pgrouting::ArgKind::EDGES_SQL:
+		return "edges_sql";
+	default:
+		return nullptr;
+	}
+}
+
 // Every column a COLUMNS select list reads must be one of the shape's own, unqualified.
 void CheckColumnRefs(const ParsedExpression &expr, const vector<string> &names, const char *function_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
@@ -363,6 +376,25 @@ void CheckSpec(const duckdb_pgrouting::FunctionSpec &spec) {
 		}
 		break;
 	}
+	}
+	if (spec.scalar_column != nullptr) {
+		// The macro selects scalar_column from the table function, so the overload must return
+		// exactly that one column.
+		bool single = spec.flags.projection == duckdb_pgrouting::Projection::COLUMNS;
+		if (single) {
+			auto list = Parser::ParseExpressionList(spec.flags.columns);
+			single = list.size() == 1 && list[0]->GetAlias() == spec.scalar_column;
+		}
+		if (!single) {
+			throw InternalException("pgrouting: %s's scalar column %s is not its one selected column",
+			                        spec.upstream_name, spec.scalar_column);
+		}
+		for (auto kind : spec.args) {
+			if (MacroParameterName(kind) == nullptr) {
+				throw InternalException("pgrouting: %s's scalar macro has an argument it cannot name",
+				                        spec.upstream_name);
+			}
+		}
 	}
 }
 
@@ -603,8 +635,55 @@ void TagFunctions(ExtensionLoader &loader) {
 			// duckdb_functions(), instead of keeping its own list of them in a script.
 			function_entry.tags.insert("ext", "pgrouting");
 			function_entry.tags.insert("pgrouting_name", spec.upstream_name);
+			if (spec.scalar_column != nullptr) {
+				// The scalar macro is the same upstream function; untagged, collisions.test would
+				// take it for another extension's name.
+				auto macro = schema.GetEntry(transaction, CatalogType::MACRO_ENTRY, spec.upstream_name);
+				if (!macro) {
+					throw InternalException("pgrouting: scalar macro %s was not registered", spec.upstream_name);
+				}
+				auto &macro_entry = macro->Cast<FunctionEntry>();
+				macro_entry.tags.insert("ext", "pgrouting");
+				macro_entry.tags.insert("pgrouting_name", spec.upstream_name);
+			}
 		}
 	}
+}
+
+// P4: (SELECT <scalar_column> FROM <name>(<arg>, ..., <optional> := <optional>, ...)), a scalar
+// macro of the table function's own name. The body is built from the spec row's fixed text, never a
+// caller's, and parsed here once, at load. A defaulted parameter keeps its name and its default, so
+// callers pass it positionally or by name as they would to the table function; a NULL argument
+// yields no row there, and the scalar subquery then yields NULL, as a STRICT function returns.
+void RegisterScalarMacro(ExtensionLoader &loader, const duckdb_pgrouting::FunctionSpec &spec) {
+	auto macro = make_uniq<ScalarMacroFunction>();
+	string arguments;
+	auto add_argument = [&](const string &text) {
+		arguments += arguments.empty() ? text : ", " + text;
+	};
+	for (auto kind : spec.args) {
+		const string name = MacroParameterName(kind);
+		macro->parameters.push_back(make_uniq<ColumnRefExpression>(name));
+		add_argument(name);
+	}
+	for (const auto &param : spec.optionals) {
+		const string name = param.name;
+		macro->parameters.push_back(make_uniq<ColumnRefExpression>(name));
+		macro->default_parameters.insert(
+		    make_pair(name, Constant(Value(param.default_value).DefaultCastAs(TypeOf(param.type)))));
+		add_argument(name + " := " + name);
+	}
+	auto body = Parser::ParseExpressionList("(SELECT " + string(spec.scalar_column) + " FROM " +
+	                                        spec.upstream_name + "(" + arguments + "))");
+	macro->expression = std::move(body[0]);
+
+	CreateMacroInfo info(CatalogType::MACRO_ENTRY);
+	info.schema = DEFAULT_SCHEMA;
+	info.name = spec.upstream_name;
+	info.internal = true;
+	info.descriptions.push_back(duckdb_pgrouting::DescriptionOf(spec.upstream_name));
+	info.macros.push_back(std::move(macro));
+	loader.RegisterFunction(info);
 }
 
 } // namespace
@@ -651,6 +730,13 @@ void RegisterSpecFunctions(ExtensionLoader &loader) {
 		// What ExtensionLoader::RegisterFunction(TableFunctionSet) sets before delegating here.
 		info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 		loader.RegisterFunction(std::move(info));
+	}
+	for (const auto *table : SpecTables()) {
+		for (const auto &spec : *table) {
+			if (spec.scalar_column != nullptr) {
+				RegisterScalarMacro(loader, spec);
+			}
+		}
 	}
 	TagFunctions(loader);
 }

@@ -1,0 +1,172 @@
+# name: test/sql/scalar_functions.test
+# description: pgr_bandwidth and pgr_isPlanar: one-row table functions and their same-name scalar macros
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+statement ok
+CREATE TABLE ex AS SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges;
+
+# The driver's one value travels as the single row of the IDS shape.
+query II
+SELECT seq, id FROM _pgr_exec((SELECT edges FROM ex), edges_sql := 'sample', driver := 'bandwidth');
+----
+1	5
+
+query II
+SELECT seq, id FROM _pgr_exec((SELECT edges FROM ex), edges_sql := 'sample', driver := 'is_planar');
+----
+1	1
+
+# The table form: one row, one column, named as PostgreSQL names it (pgr_bandwidth declares OUT
+# bandwidth; pgr_isPlanar declares none, so its column is the function's lower-case name).
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_bandwidth(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+bandwidth	BIGINT
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_isPlanar(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+pgr_isplanar	BOOLEAN
+
+# Upstream's q1 of each, in both forms.
+query II
+SELECT (SELECT bandwidth FROM pgr_bandwidth('SELECT id, source, target, cost, reverse_cost FROM edges')),
+       pgr_bandwidth('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+5	5
+
+query TT
+SELECT (SELECT pgr_isplanar FROM pgr_isPlanar('SELECT id, source, target, cost, reverse_cost FROM edges')),
+       pgr_isPlanar('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+true	true
+
+# Upstream's bandwidth q4 and q7 (its my_edges1 and my_edges2, numbered as SERIAL numbers them).
+statement ok
+CREATE TABLE my_edges1 (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO my_edges1 VALUES
+  (1, 4, 7, 1, 1), (2, 7, 4, 1, 1), (3, 7, 9, 1, 1), (4, 9, 7, 1, 1), (5, 7, 0, 1, 1), (6, 0, 7, 1, 1),
+  (7, 0, 2, 1, 1), (8, 2, 0, 1, 1), (9, 2, 5, 1, 1), (10, 5, 2, 1, 1), (11, 5, 9, 1, 1), (12, 9, 5, 1, 1),
+  (13, 9, 8, 1, 1), (14, 8, 9, 1, 1), (15, 9, 1, 1, 1), (16, 1, 9, 1, 1), (17, 5, 1, 1, 1), (18, 1, 5, 1, 1),
+  (19, 9, 6, 1, 1), (20, 6, 9, 1, 1), (21, 6, 3, 1, 1), (22, 3, 6, 1, 1), (23, 1, 3, 1, 1), (24, 3, 1, 1, 1);
+
+statement ok
+CREATE TABLE my_edges2 (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO my_edges2 VALUES
+  (1, 0, 1, 1, 1), (2, 1, 0, 1, 1), (3, 1, 3, 1, 1), (4, 3, 1, 1, 1), (5, 1, 2, 1, 1), (6, 2, 1, 1, 1),
+  (7, 2, 4, 1, 1), (8, 4, 2, 1, 1), (9, 4, 8, 1, 1), (10, 8, 4, 1, 1), (11, 8, 3, 1, 1), (12, 3, 8, 1, 1),
+  (13, 3, 5, 1, 1), (14, 5, 3, 1, 1), (15, 3, 6, 1, 1), (16, 6, 3, 1, 1), (17, 3, 7, 1, 1), (18, 7, 3, 1, 1),
+  (19, 8, 7, 1, 1), (20, 7, 8, 1, 1), (21, 6, 9, 1, 1), (22, 9, 6, 1, 1), (23, 7, 9, 1, 1), (24, 9, 7, 1, 1);
+
+# The vertices are numbered by ascending id whatever order the edges come in, so the answer never
+# depends on the edge order.
+query III
+SELECT pgr_bandwidth('SELECT * FROM my_edges1'), pgr_bandwidth('SELECT * FROM my_edges2'),
+       pgr_bandwidth('SELECT * FROM my_edges1 ORDER BY id DESC');
+----
+8	5	8
+
+# Upstream's isPlanar q3: the sample graph plus q2's six edges; and the two Kuratowski graphs.
+statement ok
+CREATE TABLE more AS SELECT * FROM edges UNION ALL SELECT * FROM (VALUES
+  (19, 10, 16, 1.0, 1.0), (20, 10, 13, 1, 1), (21, 15, 11, 1, 1), (22, 15, 13, 1, 1), (23, 11, 13, 1, 1),
+  (24, 16, 13, 1, 1)) t(id, source, target, cost, reverse_cost);
+
+statement ok
+CREATE TABLE k5 AS SELECT row_number() OVER (ORDER BY a, b) AS id, a AS source, b AS target, 1.0 AS cost,
+  1.0 AS reverse_cost FROM range(1, 6) s(a), range(1, 6) t(b) WHERE a < b;
+
+statement ok
+CREATE TABLE k33 AS SELECT row_number() OVER (ORDER BY a, b) AS id, a AS source, b AS target, 1.0 AS cost,
+  1.0 AS reverse_cost FROM range(1, 4) s(a), range(4, 7) t(b);
+
+query TTT
+SELECT pgr_isPlanar('SELECT * FROM more'), pgr_isPlanar('SELECT * FROM k5'), pgr_isPlanar('SELECT * FROM k33');
+----
+false	false	false
+
+# Degenerate graphs. No rows: bandwidth raises upstream's error, isPlanar answers false silently.
+statement error
+SELECT pgr_bandwidth('SELECT * FROM edges WHERE id < 0');
+----
+No edges found
+
+query T
+SELECT pgr_isPlanar('SELECT * FROM edges WHERE id < 0');
+----
+false
+
+# Rows but no usable edge (both costs negative), and a lone self-loop.
+query IT
+SELECT pgr_bandwidth('SELECT 1 AS id, 1 AS source, 2 AS target, -1.0 AS cost, -1.0 AS reverse_cost'),
+       pgr_isPlanar('SELECT 1 AS id, 1 AS source, 2 AS target, -1.0 AS cost, -1.0 AS reverse_cost');
+----
+0	true
+
+query IT
+SELECT pgr_bandwidth('SELECT 1 AS id, 1 AS source, 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost'),
+       pgr_isPlanar('SELECT 1 AS id, 1 AS source, 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost');
+----
+0	true
+
+# Both read the edges with id optional, as upstream's drivers do.
+query IT
+SELECT pgr_bandwidth('SELECT source, target, cost, reverse_cost FROM edges'),
+       pgr_isPlanar('SELECT source, target, cost, reverse_cost FROM edges');
+----
+5	true
+
+# STRICT: a NULL argument gives no row in the table form and NULL in the scalar form.
+query II
+SELECT (SELECT count(*) FROM pgr_bandwidth(NULL::VARCHAR)), (SELECT count(*) FROM pgr_isPlanar(NULL::VARCHAR));
+----
+0	0
+
+query TT
+SELECT pgr_bandwidth(NULL::VARCHAR) IS NULL, pgr_isPlanar(NULL) IS NULL;
+----
+true	true
+
+# The scalar form takes prepared parameters.
+statement ok
+PREPARE planar AS SELECT pgr_isPlanar(?);
+
+query T
+EXECUTE planar('SELECT * FROM k5');
+----
+false
+
+# Like every table function here, it does not take a column as its argument.
+statement error
+SELECT pgr_bandwidth(q) FROM (VALUES ('SELECT * FROM edges')) t(q);
+----
+lateral join
+
+# In the catalog: a table function and a macro under each name, both tagged as this extension's.
+query TTT
+SELECT function_name, function_type, tags['pgrouting_name'] FROM duckdb_functions()
+WHERE function_name IN ('pgr_bandwidth', 'pgr_isPlanar') AND tags['ext'] = 'pgrouting' ORDER BY 1, 2;
+----
+pgr_bandwidth	macro	pgr_bandwidth
+pgr_bandwidth	table	pgr_bandwidth
+pgr_isPlanar	macro	pgr_isPlanar
+pgr_isPlanar	table	pgr_isPlanar

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // Upstream's unified C++ drivers, each serving several public functions: do_ordering
-// (src/ordering/ordering_driver.cpp) and do_allpairs (src/allpairs/allpairs_driver.cpp). Unlike the
+// (src/ordering/ordering_driver.cpp), do_allpairs (src/allpairs/allpairs_driver.cpp) and do_metrics
+// (src/metrics/metrics_driver.cpp). Unlike the
 // per-family drivers they report through std::ostringstream; their process files
 // (ordering_process.cpp, allpairs_process.cpp) hand the streams to report_messages, and here they
 // become DriverCall's malloc'd messages instead. Each case passes the Which value its C entry
@@ -13,6 +14,7 @@
 
 #include "cpp_common/alloc.hpp"
 #include "drivers/allpairs_driver.hpp"
+#include "drivers/metrics_driver.hpp"
 #include "drivers/ordering_driver.hpp"
 
 namespace duckdb_pgrouting {
@@ -51,6 +53,17 @@ bool CallUnifiedDriver(const DriverRequest &request, const DriverArrays &, Drive
 	case DriverKind::FLOYD_WARSHALL:
 		do_allpairs(request.edges_sql, request.directed, 1, call.triple_rows, call.count, log, err);
 		break;
+	case DriverKind::BANDWIDTH: {
+		// metrics_process.cpp: which = 0 is bandwidth. Its C entry (src/metrics/bandwidth.c) returns
+		// the value itself; here it becomes one row. do_metrics has no notice stream, and returns 0
+		// with err set on failure.
+		const uint64_t bandwidth = do_metrics(request.edges_sql, 0, log, err);
+		if (err.str().empty()) {
+			call.id_rows = SingleIdRow(static_cast<int64_t>(bandwidth));
+			call.count = 1;
+		}
+		break;
+	}
 	default:
 		return false;
 	}
