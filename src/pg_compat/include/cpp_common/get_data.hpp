@@ -11,6 +11,7 @@
 
 #include "c_types/ii_t_rt.h"
 #include "c_types/iid_t_rt.h"
+#include "c_types/edge_bool_t_rt.h"
 #include "cpp_common/coordinate_t.hpp"
 #include "cpp_common/costFlow_t.hpp"
 #include "cpp_common/edge_t.hpp"
@@ -66,6 +67,10 @@ template <> inline std::string InputKind<Coordinate_t>() {
 
 // The minimum-cost flow families' edges (get_costFlow_edges) come from the edge query too.
 template <> inline std::string InputKind<CostFlow_t>() {
+	return duckdb_pgrouting::KIND_EDGES;
+}
+// pgr_maxCardinalityMatch's edges (get_basic_edges) come from the edge query too.
+template <> inline std::string InputKind<Edge_bool_t>() {
 	return duckdb_pgrouting::KIND_EDGES;
 }
 

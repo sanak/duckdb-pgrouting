@@ -1,0 +1,101 @@
+# name: test/sql/max_cardinality_match.test
+# description: pgr_maxCardinalityMatch: matched edge ids, the legacy going/coming columns, order dependence, long answers
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_maxCardinalityMatch('SELECT * FROM edges'));
+----
+edge	BIGINT
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM edges) e) AS edges), edges_sql := 'sample',
+  driver := 'max_cardinality_match'));
+----
+seq	BIGINT
+id	BIGINT
+
+# Upstream's q2: the matched edges, sorted by id.
+query I
+SELECT * FROM pgr_maxCardinalityMatch('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+1
+5
+6
+13
+14
+16
+17
+18
+
+# The legacy form: without a cost column, an edge is used when going or coming is positive.
+query I
+SELECT * FROM pgr_maxCardinalityMatch('SELECT id, source, target, cost AS going, reverse_cost AS coming FROM edges');
+----
+1
+5
+6
+13
+14
+16
+17
+18
+
+# Which edges are matched can depend on the edge order; how many cannot.
+query I
+SELECT count(*) FROM pgr_maxCardinalityMatch('SELECT * FROM edges ORDER BY id DESC');
+----
+8
+
+# Among parallel edges, the one read first; no usable edge, a lone self-loop or no rows: nothing.
+query T
+SELECT list(edge) FROM pgr_maxCardinalityMatch(
+  'SELECT * FROM (VALUES (1, 1, 2, 1.0, -1.0), (2, 1, 2, 1.0, -1.0)) t(id, source, target, cost, reverse_cost)');
+----
+[1]
+
+query III
+SELECT (SELECT count(*) FROM pgr_maxCardinalityMatch('SELECT 1 AS id, 1 AS source, 2 AS target, -1.0 AS cost')),
+       (SELECT count(*) FROM pgr_maxCardinalityMatch('SELECT 1 AS id, 1 AS source, 1 AS target, 1.0 AS cost')),
+       (SELECT count(*) FROM pgr_maxCardinalityMatch('SELECT * FROM edges WHERE id < 0'));
+----
+0	0	0
+
+# Neither cost nor going: upstream reads going anyway, and a column the query lacks reads as NULL.
+statement error
+SELECT * FROM pgr_maxCardinalityMatch('SELECT id, source, target FROM edges');
+----
+Unexpected Null value in column going
+
+statement error
+SELECT * FROM pgr_maxCardinalityMatch('SELECT source, target, cost FROM edges');
+----
+Column 'id' not Found
+
+query I
+SELECT count(*) FROM pgr_maxCardinalityMatch(NULL::VARCHAR);
+----
+0
+
+# More than one output chunk: 2100 separate edges are all matched.
+statement ok
+CREATE TABLE pairs AS SELECT i AS id, 2 * i - 1 AS source, 2 * i AS target, 1.0 AS cost, -1.0 AS reverse_cost
+FROM range(1, 2101) t(i);
+
+query IIII
+SELECT count(*), count(DISTINCT edge), min(edge), max(edge) FROM pgr_maxCardinalityMatch('SELECT * FROM pairs');
+----
+2100	2100	1	2100

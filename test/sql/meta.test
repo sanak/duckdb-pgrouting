@@ -83,6 +83,7 @@ pgr_lengauerTarjanDominatorTree	pgr_lengauerTarjanDominatorTree
 pgr_lineGraph	pgr_lineGraph
 pgr_lineGraphFull	pgr_lineGraphFull
 pgr_makeConnected	pgr_makeConnected
+pgr_maxCardinalityMatch	pgr_maxCardinalityMatch
 pgr_maxFlow	pgr_maxFlow
 pgr_maxFlowMinCost	pgr_maxFlowMinCost
 pgr_maxFlowMinCost_Cost	pgr_maxFlowMinCost_Cost

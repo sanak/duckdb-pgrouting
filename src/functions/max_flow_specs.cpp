@@ -12,6 +12,7 @@
 // pgr_edgeDisjointPaths calls _pgr_edgeDisjointPaths(edges, starts, ends, directed) and returns its
 // columns, except that its many-to-one wrapper selects `end_vid, start_vid` into `start_vid, end_vid`,
 // which is kept.
+// pgr_maxCardinalityMatch selects the edge ids of _pgr_maxCardinalityMatch_v4(edges).
 
 #include "function_spec.hpp"
 
@@ -120,6 +121,8 @@ const duckdb::vector<FunctionSpec> MAX_FLOW_SPECS = {
     {"pgr_edgeDisjointPaths", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {DIRECTED},
      EdgeDisjointFlags()},
     {"pgr_edgeDisjointPaths", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED}, EdgeDisjointFlags()},
+
+    {"pgr_maxCardinalityMatch", {ArgKind::EDGES_SQL}, {}, ColumnsFlags(DriverKind::MAX_CARDINALITY_MATCH, "id AS edge")},
 };
 
 } // namespace duckdb_pgrouting

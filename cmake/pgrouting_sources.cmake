@@ -65,6 +65,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/cpp_common/pgdata_getters.cpp
     ${PGROUTING_DIR}/src/cpp_common/to_postgres.cpp
     ${PGROUTING_DIR}/src/cpp_common/undirectedHasCostBG.cpp
+    ${PGROUTING_DIR}/src/cpp_common/undirectedNoCostBG.cpp
     ${PGROUTING_DIR}/src/dagShortestPath/dagShortestPath_driver.cpp
     ${PGROUTING_DIR}/src/dijkstra/dijkstraVia_driver.cpp
     ${PGROUTING_DIR}/src/dijkstra/shortestPath_driver.cpp
@@ -80,6 +81,8 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/max_flow/flowgraph.cpp
     ${PGROUTING_DIR}/src/max_flow/max_flow_driver.cpp
     ${PGROUTING_DIR}/src/max_flow/maxflow.cpp
+    ${PGROUTING_DIR}/src/max_flow/maximum_cardinality_matching_driver.cpp
+    ${PGROUTING_DIR}/src/max_flow/maximumcardinalitymatching.cpp
     ${PGROUTING_DIR}/src/max_flow/minCostMaxFlow.cpp
     ${PGROUTING_DIR}/src/max_flow/minCostMaxFlow_driver.cpp
     ${PGROUTING_DIR}/src/metrics/betweennessCentrality_driver.cpp

@@ -9,6 +9,7 @@
 
 #include "drivers/max_flow/edge_disjoint_paths_driver.h"
 #include "drivers/max_flow/max_flow_driver.h"
+#include "drivers/max_flow/maximum_cardinality_matching_driver.h"
 #include "drivers/max_flow/minCostMaxFlow_driver.h"
 
 namespace duckdb_pgrouting {
@@ -32,6 +33,10 @@ bool CallFlowDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 		// -1, which differs only for negative edge ids of the caller's own.
 		pgr_do_edge_disjoint_paths(edges, combinations, arrays.starts, arrays.ends, request.directed,
 		                           &call.path_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::MAX_CARDINALITY_MATCH:
+		// v4.0 has no directed: the graph is undirected, and the rows are the matched edge ids, sorted.
+		pgr_do_maximum_cardinality_matching(edges, &call.id_rows, &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	default:
 		return false;

@@ -58,6 +58,13 @@ const char *ExpectedName(expectType expected) {
 	return "UNKNOWN";
 }
 
+// A column the query does not have reads as NULL. fetch_column_info leaves an optional column it did
+// not find at -1, and upstream's fetch_basic_edge still reads the legacy `going` column when the
+// query has neither `cost` nor `going`.
+bool IsAbsent(const HeapTuple tuple, const Column_info_t &info) {
+	return info.colNumber == -1 || duckdb_pgrouting::IsNull(*tuple->input, tuple->row, info.colNumber);
+}
+
 } // namespace
 
 void fetch_column_info(const TupleDesc &tupdesc, std::vector<Column_info_t> &info) {
@@ -77,21 +84,21 @@ void fetch_column_info(const TupleDesc &tupdesc, std::vector<Column_info_t> &inf
 }
 
 int64_t getBigInt(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info) {
-	if (duckdb_pgrouting::IsNull(*tuple->input, tuple->row, info.colNumber)) {
+	if (IsAbsent(tuple, info)) {
 		throw std::string("Unexpected Null value in column ") + info.name;
 	}
 	return duckdb_pgrouting::ReadInt64(*tuple->input, tuple->row, info.colNumber);
 }
 
 double getFloat8(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info) {
-	if (duckdb_pgrouting::IsNull(*tuple->input, tuple->row, info.colNumber)) {
+	if (IsAbsent(tuple, info)) {
 		throw std::string("Unexpected Null value in column ") + info.name;
 	}
 	return duckdb_pgrouting::ReadDouble(*tuple->input, tuple->row, info.colNumber);
 }
 
 char getChar(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info, bool strict, char default_value) {
-	if (duckdb_pgrouting::IsNull(*tuple->input, tuple->row, info.colNumber)) {
+	if (IsAbsent(tuple, info)) {
 		if (strict) {
 			throw std::string("Unexpected Null value in column ") + info.name;
 		}
@@ -101,7 +108,7 @@ char getChar(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info
 }
 
 char *getText(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info) {
-	if (duckdb_pgrouting::IsNull(*tuple->input, tuple->row, info.colNumber)) {
+	if (IsAbsent(tuple, info)) {
 		throw std::string("Unexpected Null value in column ") + info.name;
 	}
 	return to_pg_msg(duckdb_pgrouting::ReadText(*tuple->input, tuple->row, info.colNumber));
@@ -112,7 +119,7 @@ char *getText(const HeapTuple tuple, const TupleDesc &, const Column_info_t &inf
 // frees the array, so the input registry keeps it (KeepArray) instead of pgr_alloc.
 int64_t *getBigIntArr(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info, size_t *size) {
 	*size = 0;
-	if (duckdb_pgrouting::IsNull(*tuple->input, tuple->row, info.colNumber)) {
+	if (IsAbsent(tuple, info)) {
 		return nullptr;
 	}
 	auto values = duckdb_pgrouting::ReadInt64Array(*tuple->input, tuple->row, info.colNumber);

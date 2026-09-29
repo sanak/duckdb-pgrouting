@@ -359,6 +359,10 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "of each path; which paths come back can depend on the order the edges are read in. Given many "
      "sources and one target, start_vid and end_vid come out swapped, as in pgRouting.",
      "SELECT * FROM pgr_edgeDisjointPaths('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 12)"},
+    {"pgr_maxCardinalityMatch",
+     "A largest set of edges of an undirected graph no two of which share a vertex, as sorted edge ids; "
+     "which edges are chosen can depend on the order the edges are read in, how many cannot.",
+     "SELECT * FROM pgr_maxCardinalityMatch('SELECT id, source, target, cost, reverse_cost FROM edges')"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "
