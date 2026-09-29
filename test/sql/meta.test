@@ -35,6 +35,7 @@ pgr_TSPeuclidean	pgr_TSPeuclidean
 pgr_aStar	pgr_aStar
 pgr_aStarCost	pgr_aStarCost
 pgr_aStarCostMatrix	pgr_aStarCostMatrix
+pgr_articulationPoints	pgr_articulationPoints
 pgr_bdAstar	pgr_bdAstar
 pgr_bdAstarCost	pgr_bdAstarCost
 pgr_bdAstarCostMatrix	pgr_bdAstarCostMatrix
@@ -42,8 +43,11 @@ pgr_bdDijkstra	pgr_bdDijkstra
 pgr_bdDijkstraCost	pgr_bdDijkstraCost
 pgr_bdDijkstraCostMatrix	pgr_bdDijkstraCostMatrix
 pgr_bellmanFord	pgr_bellmanFord
+pgr_biconnectedComponents	pgr_biconnectedComponents
 pgr_binaryBreadthFirstSearch	pgr_binaryBreadthFirstSearch
+pgr_bipartite	pgr_bipartite
 pgr_breadthFirstSearch	pgr_breadthFirstSearch
+pgr_bridges	pgr_bridges
 pgr_connectedComponents	pgr_connectedComponents
 pgr_dagShortestPath	pgr_dagShortestPath
 pgr_depthFirstSearch	pgr_depthFirstSearch
@@ -54,6 +58,7 @@ pgr_dijkstraNear	pgr_dijkstraNear
 pgr_dijkstraNearCost	pgr_dijkstraNearCost
 pgr_dijkstraVia	pgr_dijkstraVia
 pgr_drivingDistance	pgr_drivingDistance
+pgr_edgeColoring	pgr_edgeColoring
 pgr_edwardMoore	pgr_edwardMoore
 pgr_extractVertices	pgr_extractVertices
 pgr_findCloseEdges	pgr_findCloseEdges
@@ -62,10 +67,13 @@ pgr_kruskalBFS	pgr_kruskalBFS
 pgr_kruskalDD	pgr_kruskalDD
 pgr_kruskalDFS	pgr_kruskalDFS
 pgr_ksp	pgr_ksp
+pgr_makeConnected	pgr_makeConnected
 pgr_prim	pgr_prim
 pgr_primBFS	pgr_primBFS
 pgr_primDD	pgr_primDD
 pgr_primDFS	pgr_primDFS
+pgr_sequentialVertexColoring	pgr_sequentialVertexColoring
+pgr_strongComponents	pgr_strongComponents
 pgr_trsp	pgr_trsp
 pgr_trspVia	pgr_trspVia
 pgr_trspVia_withPoints	pgr_trspVia_withPoints

@@ -10,6 +10,8 @@
 
 #include "pgrouting/register.hpp"
 
+#include <algorithm>
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/function_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -28,6 +30,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -199,30 +202,40 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::DIJKSTRA_SPECS,          &duckdb_pgrouting::WITH_POINTS_SPECS,
 	    &duckdb_pgrouting::BD_DIJKSTRA_SPECS,       &duckdb_pgrouting::BELLMAN_FORD_SPECS,
 	    &duckdb_pgrouting::DAG_SHORTEST_PATH_SPECS, &duckdb_pgrouting::BREADTH_FIRST_SEARCH_SPECS,
-	    &duckdb_pgrouting::COMPONENTS_SPECS,        &duckdb_pgrouting::ASTAR_SPECS,
-	    &duckdb_pgrouting::BD_ASTAR_SPECS,          &duckdb_pgrouting::DRIVING_DISTANCE_SPECS,
-	    &duckdb_pgrouting::SPANNING_TREE_SPECS,     &duckdb_pgrouting::TRAVERSAL_SPECS,
-	    &duckdb_pgrouting::KSP_SPECS,               &duckdb_pgrouting::TRSP_SPECS,
-	    &duckdb_pgrouting::TSP_SPECS};
+	    &duckdb_pgrouting::COMPONENTS_SPECS,        &duckdb_pgrouting::COLORING_SPECS,
+	    &duckdb_pgrouting::ASTAR_SPECS,             &duckdb_pgrouting::BD_ASTAR_SPECS,
+	    &duckdb_pgrouting::DRIVING_DISTANCE_SPECS,  &duckdb_pgrouting::SPANNING_TREE_SPECS,
+	    &duckdb_pgrouting::TRAVERSAL_SPECS,         &duckdb_pgrouting::KSP_SPECS,
+	    &duckdb_pgrouting::TRSP_SPECS,              &duckdb_pgrouting::TSP_SPECS};
 	return TABLES;
 }
 
-vector<string> ProjectionColumns(const duckdb_pgrouting::FunctionSpec &spec) {
+// The outer SELECT list of a public overload over _pgr_exec's columns.
+vector<unique_ptr<ParsedExpression>> ProjectionList(const duckdb_pgrouting::FunctionSpec &spec) {
+	vector<string> names;
 	switch (spec.flags.projection) {
 	case duckdb_pgrouting::Projection::ALL: {
 		vector<LogicalType> types;
-		vector<string> names;
 		ShapeColumns(duckdb_pgrouting::InfoOf(spec.flags.driver).shape, types, names);
-		return names;
+		break;
 	}
 	case duckdb_pgrouting::Projection::COST:
 	case duckdb_pgrouting::Projection::COST_OF_PATH:
 	case duckdb_pgrouting::Projection::COST_SORTED:
-		return {"start_vid", "end_vid", "agg_cost"};
+		names = {"start_vid", "end_vid", "agg_cost"};
+		break;
 	case duckdb_pgrouting::Projection::EDGE_COST:
-		return {"edge", "cost"};
+		names = {"edge", "cost"};
+		break;
+	case duckdb_pgrouting::Projection::COLUMNS:
+		// Fixed text from a spec table, never the caller's; CheckSpec parsed it at load.
+		return Parser::ParseExpressionList(spec.flags.columns);
 	}
-	throw InternalException("Unhandled Projection");
+	vector<unique_ptr<ParsedExpression>> list;
+	for (auto &name : names) {
+		list.push_back(make_uniq<ColumnRefExpression>(name));
+	}
+	return list;
 }
 
 LogicalType TypeOf(duckdb_pgrouting::ArgKind kind) {
@@ -283,6 +296,19 @@ Value ResolveOptional(const duckdb_pgrouting::FunctionSpec &spec, TableFunctionB
 	return Value(param.default_value).DefaultCastAs(TypeOf(param.type));
 }
 
+// Every column a COLUMNS select list reads must be one of the shape's own, unqualified.
+void CheckColumnRefs(const ParsedExpression &expr, const vector<string> &names, const char *function_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto &ref = expr.Cast<ColumnRefExpression>();
+		if (ref.IsQualified() || std::find(names.begin(), names.end(), ref.GetColumnName()) == names.end()) {
+			throw InternalException("pgrouting: %s selects %s, which its driver does not return", function_name,
+			                        ref.ToString());
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { CheckColumnRefs(child, names, function_name); });
+}
+
 // A spec row is data. These are the ways it can disagree with the rest of the extension; checked
 // once at load, they fail every test instead of only a call to the one overload.
 void CheckSpec(const duckdb_pgrouting::FunctionSpec &spec) {
@@ -298,6 +324,10 @@ void CheckSpec(const duckdb_pgrouting::FunctionSpec &spec) {
 			throw InternalException("pgrouting: %s's parameter %s has default '%s', not a %s", spec.upstream_name,
 			                        param.name, param.default_value, TypeOf(param.type).ToString());
 		}
+	}
+	if ((spec.flags.columns != nullptr) != (spec.flags.projection == duckdb_pgrouting::Projection::COLUMNS)) {
+		throw InternalException("pgrouting: %s has a column list without Projection::COLUMNS, or the reverse",
+		                        spec.upstream_name);
 	}
 	const auto shape = duckdb_pgrouting::InfoOf(spec.flags.driver).shape;
 	switch (spec.flags.projection) {
@@ -317,6 +347,19 @@ void CheckSpec(const duckdb_pgrouting::FunctionSpec &spec) {
 			                        spec.upstream_name);
 		}
 		break;
+	case duckdb_pgrouting::Projection::COLUMNS: {
+		vector<LogicalType> types;
+		vector<string> names;
+		ShapeColumns(shape, types, names);
+		auto list = Parser::ParseExpressionList(spec.flags.columns);
+		if (list.empty()) {
+			throw InternalException("pgrouting: %s has an empty column list", spec.upstream_name);
+		}
+		for (auto &expr : list) {
+			CheckColumnRefs(*expr, names, spec.upstream_name);
+		}
+		break;
+	}
 	}
 }
 
@@ -518,9 +561,7 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	fref->function = make_uniq<FunctionExpression>("_pgr_exec", std::move(args));
 
 	auto outer = make_uniq<SelectNode>();
-	for (const auto &column : ProjectionColumns(spec)) {
-		outer->select_list.push_back(make_uniq<ColumnRefExpression>(column));
-	}
+	outer->select_list = ProjectionList(spec);
 	outer->from_table = std::move(fref);
 	if (spec.flags.projection == duckdb_pgrouting::Projection::COST_OF_PATH) {
 		// The driver ran in path mode (see the COST_OF_PATH comment in function_spec.hpp); keep

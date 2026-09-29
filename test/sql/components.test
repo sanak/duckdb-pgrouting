@@ -1,0 +1,203 @@
+# name: test/sql/components.test
+# description: pgr_articulationPoints, pgr_bridges, pgr_biconnectedComponents, pgr_strongComponents, pgr_makeConnected
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+# One upstream signature each, with no defaulted parameter: one variant each.
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name IN ('pgr_articulationPoints', 'pgr_biconnectedComponents', 'pgr_bridges', 'pgr_makeConnected',
+                        'pgr_strongComponents')
+  AND tags['ext'] = 'pgrouting' GROUP BY ALL ORDER BY 1;
+----
+pgr_articulationPoints	1
+pgr_biconnectedComponents	1
+pgr_bridges	1
+pgr_makeConnected	1
+pgr_strongComponents	1
+
+# Upstream's columns, every one BIGINT.
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_articulationPoints(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+node	BIGINT
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_bridges(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+edge	BIGINT
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_biconnectedComponents(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+seq	BIGINT
+component	BIGINT
+edge	BIGINT
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_strongComponents(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+seq	BIGINT
+component	BIGINT
+node	BIGINT
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_makeConnected(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+seq	BIGINT
+start_vid	BIGINT
+end_vid	BIGINT
+
+# Upstream's q1 of each.
+query I
+SELECT node FROM pgr_articulationPoints('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+3
+6
+7
+8
+
+query I
+SELECT edge FROM pgr_bridges('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+1
+6
+7
+14
+17
+18
+
+query III
+SELECT * FROM pgr_biconnectedComponents('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+1	1	1
+2	2	2
+3	2	3
+4	2	4
+5	2	5
+6	2	8
+7	2	9
+8	2	10
+9	2	11
+10	2	12
+11	2	13
+12	2	15
+13	2	16
+14	6	6
+15	7	7
+16	14	14
+17	17	17
+18	18	18
+
+query III
+SELECT * FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+1	1	1
+2	1	3
+3	1	5
+4	1	6
+5	1	7
+6	1	8
+7	1	9
+8	1	10
+9	1	11
+10	1	12
+11	1	15
+12	1	16
+13	1	17
+14	2	2
+15	2	4
+16	13	13
+17	13	14
+
+# Which vertices makeConnected joins depends on the order the edges are read in (upstream's
+# transcript, read in another order, joins 5 and 2); what does not is that the added edges join the
+# graph into one component.
+query III
+SELECT * FROM pgr_makeConnected('SELECT id, source, target, cost, reverse_cost FROM edges');
+----
+1	9	2
+2	4	13
+
+query I
+SELECT count(DISTINCT component) FROM pgr_connectedComponents(
+  $$SELECT id, source, target, cost, reverse_cost FROM edges
+    UNION ALL
+    SELECT 100 + seq, start_vid, end_vid, 1, 1
+    FROM pgr_makeConnected('SELECT id, source, target, cost, reverse_cost FROM edges')$$);
+----
+1
+
+# An edge whose cost and reverse_cost differ is two parallel edges in the undirected graph, as
+# upstream builds it: never a bridge, listed twice by pgr_biconnectedComponents.
+query T
+SELECT string_agg(edge::VARCHAR, ' ' ORDER BY edge) FROM pgr_bridges(
+  'SELECT * FROM (VALUES (1, 1, 2, 1.0, 1.0), (2, 2, 3, 1.0, 2.0), (3, 3, 4, 1.0, 1.0)) AS t(id, source, target, cost, reverse_cost)');
+----
+1 3
+
+query T
+SELECT string_agg(component || ':' || edge, ' ' ORDER BY seq) FROM pgr_biconnectedComponents(
+  'SELECT * FROM (VALUES (1, 1, 2, 1.0, 1.0), (2, 2, 3, 1.0, 2.0), (3, 3, 4, 1.0, 1.0)) AS t(id, source, target, cost, reverse_cost)');
+----
+1:1 2:2 2:2 2:3
+
+# A graph of self-loops only has no biconnected component (upstream would crash on it).
+query I
+SELECT count(*) FROM pgr_biconnectedComponents('SELECT 1 AS id, 1 AS source, 1 AS target, 1.0 AS cost');
+----
+0
+
+statement error
+SELECT * FROM pgr_bridges('SELECT source, target, cost FROM edges');
+----
+Column 'id' not Found
+
+# More than one 2048-row output chunk.
+statement ok
+CREATE TABLE long_path AS SELECT i AS id, i AS source, i + 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost
+FROM range(1, 3000) t(i);
+
+statement ok
+CREATE TABLE many_pairs AS SELECT i + 1 AS id, 2 * i + 1 AS source, 2 * i + 2 AS target, 1.0 AS cost,
+  1.0 AS reverse_cost FROM range(3000) t(i);
+
+query III
+SELECT (SELECT count(*) FROM pgr_articulationPoints('SELECT * FROM long_path')),
+       (SELECT count(*) FROM pgr_bridges('SELECT * FROM long_path')),
+       (SELECT count(*) FROM pgr_strongComponents('SELECT * FROM long_path'));
+----
+2998	2999	3000
+
+query IIIII
+SELECT count(*), min(seq), max(seq), count(DISTINCT seq), count(*) FILTER (WHERE end_vid <> start_vid + 1)
+FROM pgr_makeConnected('SELECT * FROM many_pairs');
+----
+2999	1	2999	2999	0
+
+# STRICT: a NULL argument gives no rows.
+query IIIII
+SELECT (SELECT count(*) FROM pgr_articulationPoints(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_bridges(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_biconnectedComponents(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_strongComponents(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_makeConnected(NULL::VARCHAR));
+----
+0	0	0	0	0

@@ -1,0 +1,161 @@
+# name: test/sql/coloring.test
+# description: pgr_bipartite, pgr_sequentialVertexColoring, pgr_edgeColoring
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+query II
+SELECT function_name, count(*) FROM duckdb_functions()
+WHERE function_name IN ('pgr_bipartite', 'pgr_edgeColoring', 'pgr_sequentialVertexColoring')
+  AND tags['ext'] = 'pgrouting' GROUP BY ALL ORDER BY 1;
+----
+pgr_bipartite	1
+pgr_edgeColoring	1
+pgr_sequentialVertexColoring	1
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_bipartite(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+node	BIGINT
+color	BIGINT
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_sequentialVertexColoring(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+node	BIGINT
+color	BIGINT
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_edgeColoring(
+  'SELECT id, source, target, cost, reverse_cost FROM edges'));
+----
+edge	BIGINT
+color	BIGINT
+
+# Upstream's q1 of each. The three answers depend on the order the edges are read in; this is
+# upstream's order, which the sample table here is inserted in.
+query II
+SELECT * FROM pgr_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges') ORDER BY node;
+----
+1	0
+2	0
+3	1
+4	1
+5	0
+6	1
+7	0
+8	1
+9	0
+10	0
+11	1
+12	0
+13	0
+14	1
+15	1
+16	0
+17	1
+
+query II
+SELECT * FROM pgr_sequentialVertexColoring('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id');
+----
+1	1
+2	1
+3	2
+4	2
+5	1
+6	2
+7	1
+8	2
+9	1
+10	1
+11	2
+12	1
+13	1
+14	2
+15	2
+16	1
+17	2
+
+query II
+SELECT edge, color FROM pgr_edgeColoring('SELECT id, source, target, cost, reverse_cost FROM edges ORDER BY id');
+----
+1	3
+2	2
+3	3
+4	4
+5	4
+6	1
+7	2
+8	1
+9	2
+10	5
+11	5
+12	3
+13	2
+14	1
+15	3
+16	1
+17	1
+18	1
+
+# What every valid answer shares, whatever the edge order: no usable edge joins two vertices of one
+# color, and no two edges sharing a vertex share a color.
+query II
+SELECT
+  (SELECT count(*) FROM edges e
+     JOIN pgr_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges') a ON a.node = e.source
+     JOIN pgr_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges') b ON b.node = e.target
+   WHERE a.color = b.color),
+  (SELECT count(*) FROM edges e
+     JOIN pgr_sequentialVertexColoring('SELECT id, source, target, cost, reverse_cost FROM edges') a ON a.node = e.source
+     JOIN pgr_sequentialVertexColoring('SELECT id, source, target, cost, reverse_cost FROM edges') b ON b.node = e.target
+   WHERE a.color = b.color);
+----
+0	0
+
+query I
+SELECT count(*) FROM edges e1 JOIN edges e2 ON e1.id < e2.id
+  AND (e1.source IN (e2.source, e2.target) OR e1.target IN (e2.source, e2.target))
+JOIN pgr_edgeColoring('SELECT id, source, target, cost, reverse_cost FROM edges') c1 ON c1.edge = e1.id
+JOIN pgr_edgeColoring('SELECT id, source, target, cost, reverse_cost FROM edges') c2 ON c2.edge = e2.id
+WHERE c1.color = c2.color;
+----
+0
+
+# Upstream's q2 adds the edge 5 - 1, closing an odd cycle: no longer bipartite, no rows (its q3).
+query I
+SELECT count(*) FROM pgr_bipartite(
+  'SELECT id, source, target, cost, reverse_cost FROM edges UNION ALL SELECT 19, 5, 1, 1, 1');
+----
+0
+
+# More than one 2048-row output chunk: a path of 3000 vertices alternates two colors.
+statement ok
+CREATE TABLE long_path AS SELECT i AS id, i AS source, i + 1 AS target, 1.0 AS cost, 1.0 AS reverse_cost
+FROM range(1, 3000) t(i);
+
+query III
+SELECT count(*), count(DISTINCT color), count(*) FILTER (WHERE color <> 2 - node % 2)
+FROM pgr_sequentialVertexColoring('SELECT * FROM long_path');
+----
+3000	2	0
+
+query III
+SELECT (SELECT count(*) FROM pgr_bipartite(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_sequentialVertexColoring(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_edgeColoring(NULL::VARCHAR));
+----
+0	0	0

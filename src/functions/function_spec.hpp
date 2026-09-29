@@ -94,7 +94,11 @@ enum class Projection : uint8_t {
 	// COST, ORDER BY start_vid, end_vid: pgr_aStarCost's wrapper sorts (sql/astar/astarCost.sql).
 	COST_SORTED,
 	// edge, cost of the MST shape: pgr_kruskal and pgr_prim (sql/spanningTree/kruskal.sql, prim.sql).
-	EDGE_COST
+	EDGE_COST,
+	// DriverFlags::columns, a select list over the driver's own columns: an overload over a generic
+	// shape (IDS, ID_VALUE, TRIPLES, PAIRS) renames and picks them the way upstream's SQL wrapper
+	// selects from its internal _pgr_* function.
+	COLUMNS
 };
 
 // The request fields that are fixed per overload rather than chosen by the caller. n_goals, global
@@ -115,6 +119,10 @@ struct DriverFlags {
 	// non-empty array before anything else, and drop 0 from the answer.
 	bool root_zero = false;
 	Projection projection = Projection::ALL;
+	// With Projection::COLUMNS, the outer SELECT list, written as SQL over the columns of the
+	// driver's result shape (ShapeColumns). Spec-table text only, never a caller's: CheckSpec parses
+	// it at load and checks every column it names.
+	const char *columns = nullptr;
 	DriverKind driver = DriverKind::SHORTEST_PATH;
 };
 
@@ -126,6 +134,13 @@ inline DriverFlags FamilyFlags(DriverKind driver, bool only_cost, Projection pro
 	flags.normal = normal;
 	flags.projection = projection;
 	flags.driver = driver;
+	return flags;
+}
+
+// A per-family wrapper that selects `columns` from the driver's result (Projection::COLUMNS).
+inline DriverFlags ColumnsFlags(DriverKind driver, const char *columns) {
+	auto flags = FamilyFlags(driver, false, Projection::COLUMNS);
+	flags.columns = columns;
 	return flags;
 }
 
@@ -145,6 +160,7 @@ extern const duckdb::vector<FunctionSpec> BELLMAN_FORD_SPECS;         // bellman
 extern const duckdb::vector<FunctionSpec> DAG_SHORTEST_PATH_SPECS;    // dag_shortest_path_specs.cpp
 extern const duckdb::vector<FunctionSpec> BREADTH_FIRST_SEARCH_SPECS; // breadth_first_search_specs.cpp
 extern const duckdb::vector<FunctionSpec> COMPONENTS_SPECS;           // components_specs.cpp
+extern const duckdb::vector<FunctionSpec> COLORING_SPECS;             // coloring_specs.cpp
 extern const duckdb::vector<FunctionSpec> ASTAR_SPECS;                // astar_specs.cpp
 extern const duckdb::vector<FunctionSpec> BD_ASTAR_SPECS;             // bd_astar_specs.cpp
 extern const duckdb::vector<FunctionSpec> DRIVING_DISTANCE_SPECS;     // driving_distance_specs.cpp

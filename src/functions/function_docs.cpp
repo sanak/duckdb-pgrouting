@@ -119,6 +119,24 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "Groups the vertices of an undirected graph into connected components, one row per vertex; each "
      "component is numbered by its smallest vertex id.",
      "SELECT * FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_strongComponents",
+     "Groups the vertices of a directed graph into strongly connected components, in which every "
+     "vertex can reach every other; each component is numbered by its smallest vertex id.",
+     "SELECT * FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_biconnectedComponents",
+     "Groups the edges of an undirected graph into biconnected components, which stay connected when "
+     "any single vertex is removed; each component is numbered by its smallest edge id.",
+     "SELECT * FROM pgr_biconnectedComponents('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_articulationPoints",
+     "The vertices of an undirected graph whose removal would split the part of the graph they are in.",
+     "SELECT * FROM pgr_articulationPoints('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_bridges",
+     "The edges of an undirected graph whose removal would split the part of the graph they are in.",
+     "SELECT * FROM pgr_bridges('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_makeConnected",
+     "The fewest new edges, as vertex pairs, that would join all the connected parts of an undirected "
+     "graph into one; which vertices they join depends on the order the edges are read in.",
+     "SELECT * FROM pgr_makeConnected('SELECT id, source, target, cost, reverse_cost FROM edges')"},
     {"pgr_drivingDistance",
      "Every vertex reachable from one or more root vertices within a cost limit, with the "
      "shortest-path tree that reaches it: predecessor, depth and cost from its root.",
@@ -220,6 +238,18 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "Visits the graph depth-first from the given roots, one row per vertex reached with its "
      "predecessor and depth, optionally only to a maximum depth.",
      "SELECT * FROM pgr_depthFirstSearch('SELECT id, source, target, cost, reverse_cost FROM edges', 6)"},
+    {"pgr_sequentialVertexColoring",
+     "Colors the vertices one by one so that no edge joins two vertices of the same color, colors "
+     "numbered from 1; the coloring found depends on the order the edges are read in.",
+     "SELECT * FROM pgr_sequentialVertexColoring('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_bipartite",
+     "Splits the vertices into two sides, color 0 and color 1, so that every edge joins the two sides; "
+     "returns no rows when the graph cannot be split that way.",
+     "SELECT * FROM pgr_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges')"},
+    {"pgr_edgeColoring",
+     "Colors the edges of an undirected graph so that no two edges meeting at a vertex share a color, "
+     "colors numbered from 1; the coloring found depends on the order the edges are read in.",
+     "SELECT * FROM pgr_edgeColoring('SELECT id, source, target, cost, reverse_cost FROM edges')"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "
