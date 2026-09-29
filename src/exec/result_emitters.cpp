@@ -313,6 +313,32 @@ void EmitStoerWagner(const DriverResult &result, EmitState &state, idx_t n, Data
 // src/circuits/hawickCircuits.c numbers the rows from 1 and passes circuits_rt through: the driver
 // numbers the circuits (path_id, from 1) and the rows within each (path_seq, from 0), and closes each
 // circuit with a row of edge -1 back at its start.
+void EmitCircuits(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<circuits_rt>();
+	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
+	auto path_id = FlatVector::GetData<int32_t>(output.data[1]);
+	auto path_seq = FlatVector::GetData<int32_t>(output.data[2]);
+	auto start_vid = FlatVector::GetData<int64_t>(output.data[3]);
+	auto end_vid = FlatVector::GetData<int64_t>(output.data[4]);
+	auto node = FlatVector::GetData<int64_t>(output.data[5]);
+	auto edge = FlatVector::GetData<int64_t>(output.data[6]);
+	auto cost = FlatVector::GetData<double>(output.data[7]);
+	auto agg_cost = FlatVector::GetData<double>(output.data[8]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		const auto &row = rows[k];
+		seq[i] = NumericCast<int32_t>(k + 1);
+		path_id[i] = row.circuit_id;
+		path_seq[i] = row.circuit_path_seq;
+		start_vid[i] = row.start_vid;
+		end_vid[i] = row.end_vid;
+		node[i] = row.node;
+		edge[i] = row.edge;
+		cost[i] = row.cost;
+		agg_cost[i] = row.agg_cost;
+	}
+}
+
 // src/max_flow/minCostMaxFlow.c numbers the rows from 1 and passes Flow_t through;
 // src/max_flow/max_flow.c emits the same rows without cost and agg_cost, which its wrappers never
 // select.
@@ -335,32 +361,6 @@ void EmitFlow(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		target[i] = row.target;
 		flow[i] = row.flow;
 		residual_capacity[i] = row.residual_capacity;
-		cost[i] = row.cost;
-		agg_cost[i] = row.agg_cost;
-	}
-}
-
-void EmitCircuits(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
-	const auto *rows = result.Rows<circuits_rt>();
-	auto seq = FlatVector::GetData<int32_t>(output.data[0]);
-	auto path_id = FlatVector::GetData<int32_t>(output.data[1]);
-	auto path_seq = FlatVector::GetData<int32_t>(output.data[2]);
-	auto start_vid = FlatVector::GetData<int64_t>(output.data[3]);
-	auto end_vid = FlatVector::GetData<int64_t>(output.data[4]);
-	auto node = FlatVector::GetData<int64_t>(output.data[5]);
-	auto edge = FlatVector::GetData<int64_t>(output.data[6]);
-	auto cost = FlatVector::GetData<double>(output.data[7]);
-	auto agg_cost = FlatVector::GetData<double>(output.data[8]);
-	for (idx_t i = 0; i < n; i++) {
-		const auto k = state.offset + i;
-		const auto &row = rows[k];
-		seq[i] = NumericCast<int32_t>(k + 1);
-		path_id[i] = row.circuit_id;
-		path_seq[i] = row.circuit_path_seq;
-		start_vid[i] = row.start_vid;
-		end_vid[i] = row.end_vid;
-		node[i] = row.node;
-		edge[i] = row.edge;
 		cost[i] = row.cost;
 		agg_cost[i] = row.agg_cost;
 	}

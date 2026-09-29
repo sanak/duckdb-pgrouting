@@ -234,6 +234,12 @@ SELECT pgr_maxFlow('SELECT * FROM flow_edges', 11, 11);
 ----
 A source found as sink
 
+# A vertex argument cannot be a column either.
+statement error
+SELECT pgr_maxFlow('SELECT * FROM flow_edges', 11, x) FROM (VALUES (12)) v(x);
+----
+lateral join
+
 statement ok
 PREPARE max_flow AS SELECT pgr_maxFlow(?::VARCHAR, ?::BIGINT, ?::BIGINT);
 

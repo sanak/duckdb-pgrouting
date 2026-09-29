@@ -46,7 +46,10 @@ the following checklist, in order. Every step either passes or tells you exactly
    `include/chinese/chinesePostman.hpp` at every bump: the adapter's `PostmanStartsOffTheGraph`
    guard exists because its constructor crashes when the first edge row's source lies on no
    positive-cost direction and the positive directions are one connected piece or none, and goes
-   once upstream no longer does.
+   once upstream no longer does. `pgr_edgeDisjointPaths(TEXT, ANYARRAY, BIGINT)` copies its SQL
+   wrapper's `start_vid`/`end_vid` swap (`EdgeDisjointSwappedFlags` in
+   `src/functions/max_flow_specs.cpp`); re-read `sql/max_flow/edgeDisjointPaths.sql` at every bump
+   and drop the swap when upstream does.
 2. Update `cmake/pgrouting_sources.cmake` for added or removed upstream files, one entry at a
    time. Never glob: the list is deliberately explicit so that a new upstream file is a decision
    rather than an accident. Do not list a `*_process.cpp` (those talk to PostgreSQL and this

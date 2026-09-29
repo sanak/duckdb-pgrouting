@@ -114,9 +114,9 @@ char *getText(const HeapTuple tuple, const TupleDesc &, const Column_info_t &inf
 	return to_pg_msg(duckdb_pgrouting::ReadText(*tuple->input, tuple->row, info.colNumber));
 }
 
-// Upstream's getBigIntArr: a NULL cell and an empty array both read as no array (nullptr, size 0;
-// get_array(..., allow_empty = true)), which the TRSP drivers then skip (`if (r.via)`). No driver
-// frees the array, so the input registry keeps it (KeepArray) instead of pgr_alloc.
+// Upstream's getBigIntArr: a NULL cell, a column the query lacks and an empty array all read as no
+// array (nullptr, size 0; get_array(..., allow_empty = true)), which the TRSP drivers then skip
+// (`if (r.via)`). No driver frees the array, so the input registry keeps it (KeepArray) instead of pgr_alloc.
 int64_t *getBigIntArr(const HeapTuple tuple, const TupleDesc &, const Column_info_t &info, size_t *size) {
 	*size = 0;
 	if (IsAbsent(tuple, info)) {

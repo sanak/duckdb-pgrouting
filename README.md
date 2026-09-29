@@ -112,9 +112,11 @@ Functions deliberately not ported are listed, each with its reason, in
 - **Named arguments** use DuckDB's `:=` (or `=>`). A `NULL` argument returns no rows, as it does
   for pgRouting's `STRICT` functions.
 - **One-value functions work both ways.** `pgr_bandwidth`, `pgr_isPlanar`, `pgr_maxFlow`,
-  `pgr_maxFlowMinCost_Cost` and `pgr_chinesePostmanCost` return a single value, as in pgRouting: `SELECT pgr_isPlanar('…')` and `SELECT * FROM pgr_isPlanar('…')` both
-  work (a table function of one row and a scalar macro of the same name). Like every function
-  here, none takes a column as its query argument.
+  `pgr_maxFlowMinCost_Cost` and `pgr_chinesePostmanCost` return a single value, as in pgRouting:
+  `SELECT pgr_isPlanar('…')` and `SELECT * FROM pgr_isPlanar('…')` both work (a table function of
+  one row and a scalar macro of the same name). Like every function here, none takes a column as
+  an argument: neither the query nor, for `pgr_maxFlow` and `pgr_maxFlowMinCost_Cost`, the
+  vertices; every argument must be a constant.
 - **Equal-cost ties.** The order in which the inner query's rows reach the algorithm is not fixed
   (DuckDB scans in parallel), so where two routes cost exactly the same, the same query may return
   either one between runs. Every answer is still optimal; PostgreSQL's unordered scans give
