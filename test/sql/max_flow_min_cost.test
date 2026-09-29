@@ -1,0 +1,161 @@
+# name: test/sql/max_flow_min_cost.test
+# description: pgr_maxFlowMinCost and pgr_maxFlowMinCost_Cost: FLOW rows with costs, valid flows in any order, the scalar form, long answers
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE,
+  capacity BIGINT, reverse_capacity BIGINT);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1,80,130),(2,6,10,-1,1,-1,100),(3,10,15,-1,1,-1,130),(4,6,7,1,1,100,50),
+  (5,10,11,1,-1,130,-1),(6,1,3,1,1,50,100),(7,3,7,1,1,50,130),(8,7,11,1,1,100,130),
+  (9,11,16,1,1,130,80),(10,7,8,1,1,130,50),(11,11,12,1,-1,130,-1),(12,8,12,1,-1,100,-1),
+  (13,12,17,1,-1,100,-1),(14,8,9,1,1,80,130),(15,16,17,1,1,80,50),(16,15,16,1,1,80,80),
+  (17,2,4,1,1,130,100),(18,13,14,1,1,50,130);
+
+statement ok
+CREATE TABLE combinations (source BIGINT, target BIGINT);
+
+statement ok
+INSERT INTO combinations VALUES (5, 6), (5, 10), (6, 5), (6, 15), (6, 14);
+
+statement ok
+CREATE MACRO cost_edges() AS 'SELECT id, source, target, capacity, reverse_capacity, cost, reverse_cost FROM edges';
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_maxFlowMinCost(cost_edges(), 11, 12));
+----
+seq	INTEGER
+edge	BIGINT
+source	BIGINT
+target	BIGINT
+flow	BIGINT
+residual_capacity	BIGINT
+cost	DOUBLE
+agg_cost	DOUBLE
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_maxFlowMinCost_Cost(cost_edges(), 11, 12));
+----
+pgr_maxflowmincost_cost	DOUBLE
+
+# Upstream's q1 and q6, row for row.
+query IIIIIIRR
+SELECT * FROM pgr_maxFlowMinCost(cost_edges(), 11, 12);
+----
+1	10	7	8	100	30	100	100
+2	12	8	12	100	0	100	200
+3	8	11	7	100	30	100	300
+4	11	11	12	130	0	130	430
+
+query IIIIIIRR
+SELECT * FROM pgr_maxFlowMinCost(cost_edges(), 'SELECT * FROM (VALUES (5, 10), (6, 15), (6, 14)) AS t(source, target)');
+----
+1	4	6	7	80	20	80	80
+2	8	7	11	80	20	80	160
+3	9	11	16	80	50	80	240
+4	16	16	15	80	0	80	320
+
+# Upstream's _Cost q1-q4, q51 and q6, all through the scalar form.
+query RRRRRR
+SELECT pgr_maxFlowMinCost_Cost(cost_edges(), 11, 12),
+       pgr_maxFlowMinCost_Cost(cost_edges(), 11, ARRAY[5, 10, 12]),
+       pgr_maxFlowMinCost_Cost(cost_edges(), ARRAY[11, 3, 17], 12),
+       pgr_maxFlowMinCost_Cost(cost_edges(), ARRAY[11, 3, 17], ARRAY[5, 10, 12]),
+       pgr_maxFlowMinCost_Cost(cost_edges(), 'SELECT * FROM combinations WHERE target NOT IN (5, 6)'),
+       pgr_maxFlowMinCost_Cost(cost_edges(), 'SELECT * FROM (VALUES (5, 10), (6, 15), (6, 14)) AS t(source, target)');
+----
+430	760	430	820	320	320
+
+# Upstream's q4, whose rows depend on the edge order: every arc's flow fits its capacity, each row
+# costs its flow times its direction's cost, agg_cost runs in seq order, the sources send 360 (the
+# maximum flow) and the total is the _Cost value.
+statement ok
+CREATE TABLE q4 AS SELECT * FROM pgr_maxFlowMinCost(cost_edges(), ARRAY[11, 3, 17], ARRAY[5, 10, 12]);
+
+query II
+SELECT count(*) FILTER (WHERE q4.flow <= 0 OR q4.flow + q4.residual_capacity <>
+         CASE WHEN q4.source = e.source THEN e.capacity ELSE e.reverse_capacity END),
+       count(*) FILTER (WHERE q4.cost <> q4.flow * CASE WHEN q4.source = e.source THEN e.cost ELSE e.reverse_cost END)
+FROM q4 JOIN edges e ON e.id = q4.edge;
+----
+0	0
+
+query IRR
+WITH net AS (SELECT v, sum(f) AS o FROM (SELECT source AS v, flow AS f FROM q4
+                                          UNION ALL SELECT target, -flow FROM q4) GROUP BY v)
+SELECT (SELECT sum(o) FROM net WHERE v IN (11, 3, 17)), (SELECT sum(cost) FROM q4),
+       (SELECT max(agg_cost) FROM q4);
+----
+360	820	820
+
+query I
+SELECT count(*) FROM (SELECT agg_cost, sum(cost) OVER (ORDER BY seq) AS running FROM q4) WHERE agg_cost <> running;
+----
+0
+
+# reverse_capacity and reverse_cost are optional (-1: no reverse arc; 0).
+query I
+SELECT count(*) > 0 FROM pgr_maxFlowMinCost('SELECT id, source, target, capacity, cost FROM edges', 11, 12);
+----
+true
+
+# A negative cost on an arc the flow may use.
+statement error
+SELECT * FROM pgr_maxFlowMinCost('SELECT 1 AS id, 1 AS source, 2 AS target, 10 AS capacity, -1.0 AS cost', 1, 2);
+----
+The graph may not contain an edge with negative weight.
+
+statement error
+SELECT * FROM pgr_maxFlowMinCost('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 12);
+----
+Column 'cost' not Found
+
+statement error
+SELECT pgr_maxFlowMinCost_Cost(cost_edges(), 11, 11);
+----
+A source found as sink
+
+# Nothing to do: no rows (NULL); STRICT: no rows (NULL).
+query ITT
+SELECT (SELECT count(*) FROM pgr_maxFlowMinCost('SELECT * FROM edges WHERE id < 0', 11, 12)),
+       pgr_maxFlowMinCost_Cost('SELECT * FROM edges WHERE id < 0', 11, 12) IS NULL,
+       pgr_maxFlowMinCost_Cost(NULL::VARCHAR, 11, 12) IS NULL;
+----
+0	true	true
+
+query I
+SELECT count(*) FROM pgr_maxFlowMinCost(cost_edges(), 'SELECT * FROM combinations WHERE source < 0');
+----
+0
+
+# More than one output chunk: agg_cost keeps running across it.
+statement ok
+CREATE TABLE fan AS
+  SELECT i AS id, 0 AS source, i AS target, 1 AS capacity, -1 AS reverse_capacity, 1.0 AS cost, 0.0 AS reverse_cost
+  FROM range(1, 1101) t(i)
+  UNION ALL SELECT 1100 + i, i, 1101, 1, -1, 1.0, 0.0 FROM range(1, 1101) t(i);
+
+query IIIRR
+SELECT count(*), count(DISTINCT seq), max(seq), max(agg_cost), pgr_maxFlowMinCost_Cost('SELECT * FROM fan', 0, 1101)
+FROM pgr_maxFlowMinCost('SELECT * FROM fan', 0, 1101);
+----
+2200	2200	2200	2200	2200
+
+query I
+SELECT count(*) FROM (SELECT agg_cost, sum(cost) OVER (ORDER BY seq) AS running
+  FROM pgr_maxFlowMinCost('SELECT * FROM fan', 0, 1101)) WHERE agg_cost <> running;
+----
+0
+
+query TT
+SELECT function_type, parameters FROM duckdb_functions()
+WHERE function_name = 'pgr_maxFlowMinCost_Cost' AND function_type = 'macro' ORDER BY len(parameters);
+----
+macro	[edges_sql, combinations_sql]
+macro	[edges_sql, start_vids, end_vids]

@@ -64,7 +64,8 @@ enum class DriverKind : uint8_t {
 	DOMINATOR_TREE,
 	STOER_WAGNER,
 	HAWICK_CIRCUITS,
-	MAX_FLOW
+	MAX_FLOW,
+	MIN_COST_MAX_FLOW
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -188,6 +189,7 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::STOER_WAGNER, "stoer_wagner", ResultShape::STOER_WAGNER, RequestCheck::NONE},
     {DriverKind::HAWICK_CIRCUITS, "hawick_circuits", ResultShape::CIRCUITS, RequestCheck::NONE},
     {DriverKind::MAX_FLOW, "max_flow", ResultShape::FLOW, RequestCheck::MAX_FLOW_ALGORITHM},
+    {DriverKind::MIN_COST_MAX_FLOW, "min_cost_max_flow", ResultShape::FLOW, RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -202,7 +204,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::MAX_FLOW) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::MIN_COST_MAX_FLOW) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

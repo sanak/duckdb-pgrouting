@@ -8,6 +8,7 @@
 #include "driver_groups.hpp"
 
 #include "drivers/max_flow/max_flow_driver.h"
+#include "drivers/max_flow/minCostMaxFlow_driver.h"
 
 namespace duckdb_pgrouting {
 
@@ -19,6 +20,10 @@ bool CallFlowDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 		// only_cost stands for upstream's only_flow: pgr_maxFlow's single row carries the total.
 		pgr_do_max_flow(edges, combinations, arrays.starts, arrays.ends, request.algorithm, request.only_cost,
 		                &call.flow_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::MIN_COST_MAX_FLOW:
+		pgr_do_minCostMaxFlow(edges, combinations, arrays.starts, arrays.ends, request.only_cost, &call.flow_rows,
+		                      &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	default:
 		return false;

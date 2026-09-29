@@ -7,6 +7,8 @@
 // query's sources. A one-vertex argument becomes a one-element array.
 // pgr_maxFlow calls the same with algorithm 1 and only_flow, and selects the one row's flow; this driver
 // takes only_cost in its place.
+// pgr_maxFlowMinCost calls _pgr_maxFlowMinCost(edges, starts, ends, only_cost) and returns its columns as they are;
+// pgr_maxFlowMinCost_Cost selects the one only_cost row's cost.
 
 #include "function_spec.hpp"
 
@@ -24,6 +26,16 @@ DriverFlags MaxFlowFlags(int32_t algorithm) {
 DriverFlags MaxFlowTotalFlags() {
 	auto flags = ColumnsFlags(DriverKind::MAX_FLOW, "flow AS pgr_maxflow");
 	flags.algorithm = 1;
+	flags.only_cost = true;
+	return flags;
+}
+
+DriverFlags MinCostFlags() {
+	return FamilyFlags(DriverKind::MIN_COST_MAX_FLOW, false, Projection::ALL);
+}
+
+DriverFlags MinCostTotalFlags() {
+	auto flags = ColumnsFlags(DriverKind::MIN_COST_MAX_FLOW, "cost AS pgr_maxflowmincost_cost");
 	flags.only_cost = true;
 	return flags;
 }
@@ -67,6 +79,24 @@ const duckdb::vector<FunctionSpec> MAX_FLOW_SPECS = {
     {"pgr_maxFlow", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {}, MaxFlowTotalFlags(),
      "pgr_maxflow"},
     {"pgr_maxFlow", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {}, MaxFlowTotalFlags(), "pgr_maxflow"},
+
+    {"pgr_maxFlowMinCost", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {}, MinCostFlags()},
+    {"pgr_maxFlowMinCost", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {}, MinCostFlags()},
+    {"pgr_maxFlowMinCost", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {}, MinCostFlags()},
+    {"pgr_maxFlowMinCost", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {}, MinCostFlags()},
+    {"pgr_maxFlowMinCost", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {}, MinCostFlags()},
+
+    // pgr_maxFlowMinCost_Cost: RETURNS FLOAT, so the column is the function's lower-case name.
+    {"pgr_maxFlowMinCost_Cost", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {}, MinCostTotalFlags(),
+     "pgr_maxflowmincost_cost"},
+    {"pgr_maxFlowMinCost_Cost", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {}, MinCostTotalFlags(),
+     "pgr_maxflowmincost_cost"},
+    {"pgr_maxFlowMinCost_Cost", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {}, MinCostTotalFlags(),
+     "pgr_maxflowmincost_cost"},
+    {"pgr_maxFlowMinCost_Cost", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {}, MinCostTotalFlags(),
+     "pgr_maxflowmincost_cost"},
+    {"pgr_maxFlowMinCost_Cost", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {}, MinCostTotalFlags(),
+     "pgr_maxflowmincost_cost"},
 };
 
 } // namespace duckdb_pgrouting

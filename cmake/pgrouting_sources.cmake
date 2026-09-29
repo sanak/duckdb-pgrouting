@@ -79,6 +79,8 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/max_flow/flowgraph.cpp
     ${PGROUTING_DIR}/src/max_flow/max_flow_driver.cpp
     ${PGROUTING_DIR}/src/max_flow/maxflow.cpp
+    ${PGROUTING_DIR}/src/max_flow/minCostMaxFlow.cpp
+    ${PGROUTING_DIR}/src/max_flow/minCostMaxFlow_driver.cpp
     ${PGROUTING_DIR}/src/metrics/betweennessCentrality_driver.cpp
     ${PGROUTING_DIR}/src/metrics/metrics_driver.cpp
     ${PGROUTING_DIR}/src/mincut/stoerWagner_driver.cpp

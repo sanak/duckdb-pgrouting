@@ -83,6 +83,8 @@ pgr_lineGraph	pgr_lineGraph
 pgr_lineGraphFull	pgr_lineGraphFull
 pgr_makeConnected	pgr_makeConnected
 pgr_maxFlow	pgr_maxFlow
+pgr_maxFlowMinCost	pgr_maxFlowMinCost
+pgr_maxFlowMinCost_Cost	pgr_maxFlowMinCost_Cost
 pgr_prim	pgr_prim
 pgr_primBFS	pgr_primBFS
 pgr_primDD	pgr_primDD

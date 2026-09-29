@@ -343,6 +343,17 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "A maximum flow from one or many sources to one or many sinks by the Edmonds-Karp algorithm, one row "
      "per edge direction that carries flow, with the capacity left on it.",
      "SELECT * FROM pgr_edmondsKarp('SELECT id, source, target, capacity, reverse_capacity FROM edges', 11, 12)"},
+    {"pgr_maxFlowMinCost",
+     "A maximum flow of least total cost from one or many sources to one or many sinks, one row per "
+     "edge direction that carries flow, with its cost and the running total; edges need a capacity and "
+     "a non-negative cost.",
+     "SELECT * FROM pgr_maxFlowMinCost('SELECT id, source, target, capacity, reverse_capacity, cost, "
+     "reverse_cost FROM edges', 11, 12)"},
+    {"pgr_maxFlowMinCost_Cost",
+     "The least total cost of a maximum flow from one or many sources to one or many sinks; one value, "
+     "also callable as a scalar function.",
+     "SELECT pgr_maxFlowMinCost_Cost('SELECT id, source, target, capacity, reverse_capacity, cost, "
+     "reverse_cost FROM edges', 11, 12)"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "
