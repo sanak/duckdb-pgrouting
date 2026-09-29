@@ -897,6 +897,16 @@ class TestFlowTieClassification(unittest.TestCase):
         self.assertEqual("IR", gen.flow_directive(columns))
         self.assertEqual([["1", "2.5"]], gen.flow_companion_rows(self._table(columns, upstream), "IIIIIIRR"))
 
+    def test_a_zero_value_circulation_is_asserted_as_zero(self):
+        loop_a = [["1", "1", "1", "2", "1", "0"], ["2", "1", "2", "1", "1", "0"]]
+        loop_b = [[1, 2, 3, 4, 1, 0], [2, 2, 4, 3, 1, 0]]
+        self.assertIn("coalesce(sum(o), 0)", gen.flow_companion_sql(self.SQL, self.COLUMNS))
+        self.assertEqual([["0"]], gen.flow_companion_rows(self._table(self.COLUMNS, loop_a), self.DIRECTIVE))
+        verdict = gen.classify(self._table(self.COLUMNS, loop_a),
+                               self._result(self.COLUMNS, loop_b, ["INTEGER"] + ["BIGINT"] * 5),
+                               self.DIRECTIVE, None, self.SQL)
+        self.assertEqual("flow_tie", verdict)
+
 
 class TestEdgeDisjointPathsHaveNoRouteTie(unittest.TestCase):
     def test_edge_disjoint_paths_are_guarded_like_ksp(self):

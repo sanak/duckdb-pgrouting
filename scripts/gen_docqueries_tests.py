@@ -496,7 +496,7 @@ def flow_companion_sql(sql: str, columns: Sequence[str]) -> str:
         "WITH r AS ({}),\n"
         "n AS (SELECT v, sum(f) AS o FROM (SELECT {} AS v, flow AS f FROM r UNION ALL SELECT {}, -flow FROM r) "
         "GROUP BY v)\n"
-        "SELECT (SELECT sum(o) FROM n WHERE o > 0){};".format(sql.strip().rstrip(";"), ends[0], ends[1], total_cost)
+        "SELECT (SELECT coalesce(sum(o), 0) FROM n WHERE o > 0){};".format(sql.strip().rstrip(";"), ends[0], ends[1], total_cost)
     )
 
 
