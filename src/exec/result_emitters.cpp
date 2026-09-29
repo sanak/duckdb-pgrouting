@@ -171,6 +171,35 @@ void EmitTspTour(const DriverResult &result, EmitState &state, idx_t n, DataChun
 	}
 }
 
+// Upstream's int64_t results. The ordering C entries (src/ordering/*.c) number them from 1 as a
+// BIGINT; pgr_articulationPoints and pgr_bridges (src/components/*.c) number them too, and their
+// wrappers select only the id.
+void EmitIds(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<int64_t>();
+	auto seq = FlatVector::GetData<int64_t>(output.data[0]);
+	auto id = FlatVector::GetData<int64_t>(output.data[1]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		seq[i] = NumericCast<int64_t>(k + 1);
+		id[i] = rows[k];
+	}
+}
+
+// II_t_rt as (d1.id, d2.value) with a seq from 1: pgr_makeConnected's C entry emits (seq, start_vid,
+// end_vid) in that order, the coloring C entries (src/coloring/*.c) the pair without a seq.
+void EmitIdValue(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<II_t_rt>();
+	auto seq = FlatVector::GetData<int64_t>(output.data[0]);
+	auto id = FlatVector::GetData<int64_t>(output.data[1]);
+	auto value = FlatVector::GetData<int64_t>(output.data[2]);
+	for (idx_t i = 0; i < n; i++) {
+		const auto k = state.offset + i;
+		seq[i] = NumericCast<int64_t>(k + 1);
+		id[i] = rows[k].d1.id;
+		value[i] = rows[k].d2.value;
+	}
+}
+
 } // namespace
 
 void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
@@ -208,6 +237,14 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		types = {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
 		names = {"seq", "node", "cost", "agg_cost"};
 		return;
+	case ResultShape::IDS:
+		types = {LogicalType::BIGINT, LogicalType::BIGINT};
+		names = {"seq", "id"};
+		return;
+	case ResultShape::ID_VALUE:
+		types = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
+		names = {"seq", "id", "value"};
+		return;
 	}
 	throw InternalException("pgrouting: unhandled ResultShape");
 }
@@ -234,6 +271,12 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::TSP_TOUR:
 		EmitTspTour(result, state, n, output);
+		break;
+	case ResultShape::IDS:
+		EmitIds(result, state, n, output);
+		break;
+	case ResultShape::ID_VALUE:
+		EmitIdValue(result, state, n, output);
 		break;
 	}
 	state.offset += n;

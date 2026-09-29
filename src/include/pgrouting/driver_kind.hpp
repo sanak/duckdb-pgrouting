@@ -40,18 +40,28 @@ enum class DriverKind : uint8_t {
 	TRSP_VIA_WITH_POINTS,
 	TURN_RESTRICTED_PATH,
 	TSP,
-	EUCLIDEAN_TSP
+	EUCLIDEAN_TSP,
+	ARTICULATION_POINTS,
+	BICONNECTED_COMPONENTS,
+	BRIDGES,
+	STRONG_COMPONENTS,
+	MAKE_CONNECTED
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
 // _pgr_exec's output columns (src/exec/result_emitters.cpp) and how DriverResult frees the rows.
+// The generic shapes (IDS, ID_VALUE) name their columns after the struct's fields rather than
+// after one public function; each public overload over them renames the columns the way
+// upstream's SQL wrapper selects them (Projection::COLUMNS, src/functions/function_spec.hpp).
 enum class ResultShape : uint8_t {
-	PATH,  // Path_rt
-	PAIRS, // II_t_rt
-	MST,   // MST_rt
+	PATH,     // Path_rt
+	PAIRS,    // II_t_rt, as seq, d2.value (component), d1.id (node)
+	MST,      // MST_rt
 	KSP,     // Path_rt, numbered as upstream's K-shortest-path C entries number it (path_id)
 	ROUTES,  // Routes_t
-	TSP_TOUR // TSP_tour_rt
+	TSP_TOUR, // TSP_tour_rt
+	IDS,      // int64_t, as seq, id
+	ID_VALUE  // II_t_rt, as seq, d1.id, d2.value
 };
 
 // A check upstream's C entry runs on the parameters before it calls the driver, even when the
@@ -122,6 +132,11 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::TURN_RESTRICTED_PATH, "turn_restricted_path", ResultShape::KSP, RequestCheck::TURN_RESTRICTED_PATH},
     {DriverKind::TSP, "tsp", ResultShape::TSP_TOUR, RequestCheck::NONE},
     {DriverKind::EUCLIDEAN_TSP, "euclidean_tsp", ResultShape::TSP_TOUR, RequestCheck::NONE},
+    {DriverKind::ARTICULATION_POINTS, "articulation_points", ResultShape::IDS, RequestCheck::NONE},
+    {DriverKind::BICONNECTED_COMPONENTS, "biconnected_components", ResultShape::PAIRS, RequestCheck::NONE},
+    {DriverKind::BRIDGES, "bridges", ResultShape::IDS, RequestCheck::NONE},
+    {DriverKind::STRONG_COMPONENTS, "strong_components", ResultShape::PAIRS, RequestCheck::NONE},
+    {DriverKind::MAKE_CONNECTED, "make_connected", ResultShape::ID_VALUE, RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -136,7 +151,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::EUCLIDEAN_TSP) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::MAKE_CONNECTED) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

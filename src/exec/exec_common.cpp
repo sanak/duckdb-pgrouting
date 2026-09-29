@@ -50,6 +50,8 @@ void DriverResult::Release() {
 	case ResultShape::KSP:
 	case ResultShape::ROUTES:
 	case ResultShape::TSP_TOUR:
+	case ResultShape::IDS:
+	case ResultShape::ID_VALUE:
 		break; // flat rows
 	}
 	std::free(rows);

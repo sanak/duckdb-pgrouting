@@ -35,6 +35,7 @@ void *RowsOf(const DriverCall &call, ResultShape shape) {
 	case ResultShape::KSP:
 		return call.path_rows;
 	case ResultShape::PAIRS:
+	case ResultShape::ID_VALUE:
 		return call.pair_rows;
 	case ResultShape::MST:
 		return call.mst_rows;
@@ -42,13 +43,16 @@ void *RowsOf(const DriverCall &call, ResultShape shape) {
 		return call.route_rows;
 	case ResultShape::TSP_TOUR:
 		return call.tour_rows;
+	case ResultShape::IDS:
+		return call.id_rows;
 	}
 	return nullptr;
 }
 
 // Frees every row pointer a driver of this shape should never have written, and reports whether
 // there was one. A driver that writes one anyway has the wrong shape for its DriverKind, which
-// InfoOf() -- not the driver's own choice -- declares. Path_rt rows belong to two shapes.
+// InfoOf() -- not the driver's own choice -- declares. Path_rt rows belong to two shapes, and so do
+// II_t_rt rows.
 bool DropWrongShapeRows(DriverCall &call, ResultShape shape) {
 	bool wrong = false;
 	auto drop = [&](auto *&rows, bool own) {
@@ -59,10 +63,11 @@ bool DropWrongShapeRows(DriverCall &call, ResultShape shape) {
 		}
 	};
 	drop(call.path_rows, shape == ResultShape::PATH || shape == ResultShape::KSP);
-	drop(call.pair_rows, shape == ResultShape::PAIRS);
+	drop(call.pair_rows, shape == ResultShape::PAIRS || shape == ResultShape::ID_VALUE);
 	drop(call.mst_rows, shape == ResultShape::MST);
 	drop(call.route_rows, shape == ResultShape::ROUTES);
 	drop(call.tour_rows, shape == ResultShape::TSP_TOUR);
+	drop(call.id_rows, shape == ResultShape::IDS);
 	return wrong;
 }
 
