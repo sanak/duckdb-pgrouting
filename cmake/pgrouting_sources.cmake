@@ -76,6 +76,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/ksp/withPoints_ksp_driver.cpp
     ${PGROUTING_DIR}/src/lineGraph/lineGraphFull_driver.cpp
     ${PGROUTING_DIR}/src/lineGraph/lineGraph_driver.cpp
+    ${PGROUTING_DIR}/src/max_flow/edge_disjoint_paths_driver.cpp
     ${PGROUTING_DIR}/src/max_flow/flowgraph.cpp
     ${PGROUTING_DIR}/src/max_flow/max_flow_driver.cpp
     ${PGROUTING_DIR}/src/max_flow/maxflow.cpp

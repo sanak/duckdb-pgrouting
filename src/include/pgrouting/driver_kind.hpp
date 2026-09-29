@@ -65,7 +65,8 @@ enum class DriverKind : uint8_t {
 	STOER_WAGNER,
 	HAWICK_CIRCUITS,
 	MAX_FLOW,
-	MIN_COST_MAX_FLOW
+	MIN_COST_MAX_FLOW,
+	EDGE_DISJOINT_PATHS
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -79,7 +80,7 @@ enum class ResultShape : uint8_t {
 	PATH,     // Path_rt
 	PAIRS,    // II_t_rt, as seq, d2.value (component), d1.id (node)
 	MST,      // MST_rt
-	KSP,      // Path_rt, numbered as upstream's K-shortest-path C entries number it (path_id)
+	KSP,      // Path_rt, numbered as upstream's K-shortest-path and edge-disjoint-paths C entries number it (path_id)
 	ROUTES,   // Routes_t
 	TSP_TOUR, // TSP_tour_rt
 	IDS,      // int64_t, as seq, id
@@ -190,6 +191,7 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::HAWICK_CIRCUITS, "hawick_circuits", ResultShape::CIRCUITS, RequestCheck::NONE},
     {DriverKind::MAX_FLOW, "max_flow", ResultShape::FLOW, RequestCheck::MAX_FLOW_ALGORITHM},
     {DriverKind::MIN_COST_MAX_FLOW, "min_cost_max_flow", ResultShape::FLOW, RequestCheck::NONE},
+    {DriverKind::EDGE_DISJOINT_PATHS, "edge_disjoint_paths", ResultShape::KSP, RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -204,7 +206,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::MIN_COST_MAX_FLOW) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::EDGE_DISJOINT_PATHS) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

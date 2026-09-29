@@ -7,6 +7,7 @@
 
 #include "driver_groups.hpp"
 
+#include "drivers/max_flow/edge_disjoint_paths_driver.h"
 #include "drivers/max_flow/max_flow_driver.h"
 #include "drivers/max_flow/minCostMaxFlow_driver.h"
 
@@ -24,6 +25,13 @@ bool CallFlowDriver(const DriverRequest &request, const DriverArrays &arrays, Dr
 	case DriverKind::MIN_COST_MAX_FLOW:
 		pgr_do_minCostMaxFlow(edges, combinations, arrays.starts, arrays.ends, request.only_cost, &call.flow_rows,
 		                      &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::EDGE_DISJOINT_PATHS:
+		// Each path ends with a row of edge -1. src/max_flow/edge_disjoint_paths.c numbers the rows as
+		// the K-shortest-path C entries do (EmitKsp), except that it restarts path_seq only after edge
+		// -1, which differs only for negative edge ids of the caller's own.
+		pgr_do_edge_disjoint_paths(edges, combinations, arrays.starts, arrays.ends, request.directed,
+		                           &call.path_rows, &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	default:
 		return false;

@@ -64,6 +64,7 @@ pgr_dijkstraNearCost	pgr_dijkstraNearCost
 pgr_dijkstraVia	pgr_dijkstraVia
 pgr_drivingDistance	pgr_drivingDistance
 pgr_edgeColoring	pgr_edgeColoring
+pgr_edgeDisjointPaths	pgr_edgeDisjointPaths
 pgr_edmondsKarp	pgr_edmondsKarp
 pgr_edwardMoore	pgr_edwardMoore
 pgr_extractVertices	pgr_extractVertices

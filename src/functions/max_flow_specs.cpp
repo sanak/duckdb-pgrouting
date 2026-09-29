@@ -9,6 +9,9 @@
 // takes only_cost in its place.
 // pgr_maxFlowMinCost calls _pgr_maxFlowMinCost(edges, starts, ends, only_cost) and returns its columns as they are;
 // pgr_maxFlowMinCost_Cost selects the one only_cost row's cost.
+// pgr_edgeDisjointPaths calls _pgr_edgeDisjointPaths(edges, starts, ends, directed) and returns its
+// columns, except that its many-to-one wrapper selects `end_vid, start_vid` into `start_vid, end_vid`,
+// which is kept.
 
 #include "function_spec.hpp"
 
@@ -38,6 +41,16 @@ DriverFlags MinCostTotalFlags() {
 	auto flags = ColumnsFlags(DriverKind::MIN_COST_MAX_FLOW, "cost AS pgr_maxflowmincost_cost");
 	flags.only_cost = true;
 	return flags;
+}
+
+DriverFlags EdgeDisjointFlags() {
+	return FamilyFlags(DriverKind::EDGE_DISJOINT_PATHS, false, Projection::ALL);
+}
+
+// The (TEXT, ANYARRAY, BIGINT) signature of sql/max_flow/edgeDisjointPaths.sql, as upstream writes it.
+DriverFlags EdgeDisjointSwappedFlags() {
+	return ColumnsFlags(DriverKind::EDGE_DISJOINT_PATHS,
+	                    "seq, path_id, path_seq, end_vid AS start_vid, start_vid AS end_vid, node, edge, cost, agg_cost");
 }
 
 constexpr int32_t PUSH_RELABEL = 1;
@@ -97,6 +110,16 @@ const duckdb::vector<FunctionSpec> MAX_FLOW_SPECS = {
      "pgr_maxflowmincost_cost"},
     {"pgr_maxFlowMinCost_Cost", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {}, MinCostTotalFlags(),
      "pgr_maxflowmincost_cost"},
+
+    {"pgr_edgeDisjointPaths", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VID}, {DIRECTED},
+     EdgeDisjointFlags()},
+    {"pgr_edgeDisjointPaths", {ArgKind::EDGES_SQL, ArgKind::START_VID, ArgKind::END_VIDS}, {DIRECTED},
+     EdgeDisjointFlags()},
+    {"pgr_edgeDisjointPaths", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VID}, {DIRECTED},
+     EdgeDisjointSwappedFlags()},
+    {"pgr_edgeDisjointPaths", {ArgKind::EDGES_SQL, ArgKind::START_VIDS, ArgKind::END_VIDS}, {DIRECTED},
+     EdgeDisjointFlags()},
+    {"pgr_edgeDisjointPaths", {ArgKind::EDGES_SQL, ArgKind::COMBINATIONS_SQL}, {DIRECTED}, EdgeDisjointFlags()},
 };
 
 } // namespace duckdb_pgrouting

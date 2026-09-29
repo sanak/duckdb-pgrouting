@@ -354,6 +354,11 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "also callable as a scalar function.",
      "SELECT pgr_maxFlowMinCost_Cost('SELECT id, source, target, capacity, reverse_capacity, cost, "
      "reverse_cost FROM edges', 11, 12)"},
+    {"pgr_edgeDisjointPaths",
+     "As many paths as possible between each source and target that share no edge, one row per step "
+     "of each path; which paths come back can depend on the order the edges are read in. Given many "
+     "sources and one target, start_vid and end_vid come out swapped, as in pgRouting.",
+     "SELECT * FROM pgr_edgeDisjointPaths('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 12)"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "
