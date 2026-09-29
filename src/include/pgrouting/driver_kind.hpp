@@ -45,7 +45,10 @@ enum class DriverKind : uint8_t {
 	BICONNECTED_COMPONENTS,
 	BRIDGES,
 	STRONG_COMPONENTS,
-	MAKE_CONNECTED
+	MAKE_CONNECTED,
+	SEQUENTIAL_VERTEX_COLORING,
+	BIPARTITE,
+	EDGE_COLORING
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -57,8 +60,8 @@ enum class ResultShape : uint8_t {
 	PATH,     // Path_rt
 	PAIRS,    // II_t_rt, as seq, d2.value (component), d1.id (node)
 	MST,      // MST_rt
-	KSP,     // Path_rt, numbered as upstream's K-shortest-path C entries number it (path_id)
-	ROUTES,  // Routes_t
+	KSP,      // Path_rt, numbered as upstream's K-shortest-path C entries number it (path_id)
+	ROUTES,   // Routes_t
 	TSP_TOUR, // TSP_tour_rt
 	IDS,      // int64_t, as seq, id
 	ID_VALUE  // II_t_rt, as seq, d1.id, d2.value
@@ -137,6 +140,9 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::BRIDGES, "bridges", ResultShape::IDS, RequestCheck::NONE},
     {DriverKind::STRONG_COMPONENTS, "strong_components", ResultShape::PAIRS, RequestCheck::NONE},
     {DriverKind::MAKE_CONNECTED, "make_connected", ResultShape::ID_VALUE, RequestCheck::NONE},
+    {DriverKind::SEQUENTIAL_VERTEX_COLORING, "sequential_vertex_coloring", ResultShape::ID_VALUE, RequestCheck::NONE},
+    {DriverKind::BIPARTITE, "bipartite", ResultShape::ID_VALUE, RequestCheck::NONE},
+    {DriverKind::EDGE_COLORING, "edge_coloring", ResultShape::ID_VALUE, RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -151,7 +157,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::MAKE_CONNECTED) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::EDGE_COLORING) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

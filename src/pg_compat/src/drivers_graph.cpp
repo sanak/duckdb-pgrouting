@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// The per-family drivers whose rows are not paths: components and connectivity. Each case passes
-// exactly the arguments its upstream C entry (src/components/*.c) passes.
+// The per-family drivers whose rows are not paths: components, connectivity and coloring. Each
+// case passes exactly the arguments its upstream C entry (src/components/*.c, src/coloring/*.c)
+// passes.
 
 #include "driver_groups.hpp"
 
 #include <initializer_list>
 
+#include "drivers/coloring/bipartite_driver.h"
+#include "drivers/coloring/edgeColoring_driver.h"
+#include "drivers/coloring/sequentialVertexColoring_driver.h"
 #include "drivers/components/articulationPoints_driver.h"
 #include "drivers/components/biconnectedComponents_driver.h"
 #include "drivers/components/bridges_driver.h"
@@ -90,6 +94,15 @@ bool CallGraphDriver(const DriverRequest &request, const DriverArrays &, DriverC
 		return true;
 	case DriverKind::MAKE_CONNECTED:
 		pgr_do_makeConnected(edges, &call.pair_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::SEQUENTIAL_VERTEX_COLORING:
+		pgr_do_sequentialVertexColoring(edges, &call.pair_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::BIPARTITE:
+		pgr_do_bipartite(edges, &call.pair_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::EDGE_COLORING:
+		pgr_do_edgeColoring(edges, &call.pair_rows, &call.count, &call.log, &call.notice, &call.err);
 		return true;
 	default:
 		return false;

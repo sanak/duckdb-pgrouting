@@ -47,6 +47,10 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/bellman_ford/edwardMoore_driver.cpp
     ${PGROUTING_DIR}/src/breadthFirstSearch/binaryBreadthFirstSearch_driver.cpp
     ${PGROUTING_DIR}/src/breadthFirstSearch/breadthFirstSearch_driver.cpp
+    ${PGROUTING_DIR}/src/coloring/bipartite_driver.cpp
+    ${PGROUTING_DIR}/src/coloring/edgeColoring.cpp
+    ${PGROUTING_DIR}/src/coloring/edgeColoring_driver.cpp
+    ${PGROUTING_DIR}/src/coloring/sequentialVertexColoring_driver.cpp
     ${PGROUTING_DIR}/src/components/articulationPoints_driver.cpp
     ${PGROUTING_DIR}/src/components/biconnectedComponents_driver.cpp
     ${PGROUTING_DIR}/src/components/bridges_driver.cpp

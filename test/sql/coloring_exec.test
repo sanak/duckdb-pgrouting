@@ -1,0 +1,254 @@
+# name: test/sql/coloring_exec.test
+# description: _pgr_exec with the coloring drivers: ID_VALUE rows, colorings that depend on the edge order
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges (id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO edges VALUES
+  (1,5,6,1,1),(2,6,10,-1,1),(3,10,15,-1,1),(4,6,7,1,1),(5,10,11,1,-1),(6,1,3,1,1),
+  (7,3,7,1,1),(8,7,11,1,1),(9,11,16,1,1),(10,7,8,1,1),(11,11,12,1,-1),(12,8,12,1,-1),
+  (13,12,17,1,-1),(14,8,9,1,1),(15,16,17,1,1),(16,15,16,1,1),(17,2,4,1,1),(18,13,14,1,1);
+
+statement ok
+CREATE TABLE ex AS SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges) e) AS edges;
+
+statement ok
+CREATE MACRO q() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+# Small graphs, each one list of edges in id order: upstream's pgTAP edge cases.
+statement ok
+CREATE TABLE g (name VARCHAR, id BIGINT, source BIGINT, target BIGINT, cost DOUBLE, reverse_cost DOUBLE);
+
+statement ok
+INSERT INTO g VALUES
+  ('edge', 7, 3, 7, 1, 1),
+  ('self-loop', 2, 6, 6, -1, 1),
+  ('two self-loops', 1, 2, 2, -1, 1), ('two self-loops', 2, 1, 1, 1, -1),
+  ('path', 1, 1, 2, 1, 1), ('path', 2, 2, 3, 1, 1), ('path', 3, 3, 4, 1, 1),
+  ('triangle', 1, 3, 6, 20, 15), ('triangle', 2, 3, 8, 10, -10), ('triangle', 3, 6, 8, -1, 12),
+  ('cycle', 8, 7, 11, 1, 1), ('cycle', 10, 7, 8, 1, 1), ('cycle', 11, 11, 12, 1, -1), ('cycle', 12, 8, 12, 1, -1),
+  ('K4', 1, 1, 2, 1, 1), ('K4', 2, 2, 3, 1, -1), ('K4', 3, 3, 4, -1, 1), ('K4', 4, 4, 1, 1, 1),
+  ('K4', 5, 1, 3, 1, -1), ('K4', 6, 2, 4, -1, 1);
+
+statement ok
+CREATE TABLE graphs AS SELECT name, list({'id': id, 'source': source, 'target': target, 'cost': cost,
+  'reverse_cost': reverse_cost} ORDER BY id) AS edges FROM g GROUP BY name;
+
+# Upstream's bipartite q1: two sides, 0 and 1.
+query II
+SELECT id, value FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(), driver := 'bipartite') ORDER BY id;
+----
+1	0
+2	0
+3	1
+4	1
+5	0
+6	1
+7	0
+8	1
+9	0
+10	0
+11	1
+12	0
+13	0
+14	1
+15	1
+16	0
+17	1
+
+# Upstream's sequentialVertexColoring q1; the driver returns the vertices by id.
+query III
+SELECT seq, id, value FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(), driver := 'sequential_vertex_coloring')
+ORDER BY seq;
+----
+1	1	1
+2	2	1
+3	3	2
+4	4	2
+5	5	1
+6	6	2
+7	7	1
+8	8	2
+9	9	1
+10	10	1
+11	11	2
+12	12	1
+13	13	1
+14	14	2
+15	15	2
+16	16	1
+17	17	2
+
+# Upstream's edgeColoring q1; the driver returns the edges in the order they were read.
+query III
+SELECT seq, id, value FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(), driver := 'edge_coloring') ORDER BY seq;
+----
+1	1	3
+2	2	2
+3	3	3
+4	4	4
+5	5	4
+6	6	1
+7	7	2
+8	8	1
+9	9	2
+10	10	5
+11	11	5
+12	12	3
+13	13	2
+14	14	1
+15	15	3
+16	16	1
+17	17	1
+18	18	1
+
+# What any valid answer shares, whatever order the edges arrive in: no usable edge joins two vertices
+# of one color, and no two edges that share a vertex share a color.
+query II
+WITH c AS (SELECT id, value FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(), driver := 'bipartite')),
+     s AS (SELECT id, value FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(),
+                                           driver := 'sequential_vertex_coloring'))
+SELECT
+  (SELECT count(*) FROM edges e JOIN c a ON a.id = e.source JOIN c b ON b.id = e.target
+   WHERE a.value = b.value AND (e.cost >= 0 OR e.reverse_cost >= 0)),
+  (SELECT count(*) FROM edges e JOIN s a ON a.id = e.source JOIN s b ON b.id = e.target
+   WHERE a.value = b.value AND (e.cost >= 0 OR e.reverse_cost >= 0));
+----
+0	0
+
+query I
+WITH c AS (SELECT id, value FROM _pgr_exec((SELECT edges FROM ex), edges_sql := q(), driver := 'edge_coloring'))
+SELECT count(*) FROM edges e1 JOIN edges e2 ON e1.id < e2.id
+  AND (e1.source IN (e2.source, e2.target) OR e1.target IN (e2.source, e2.target))
+JOIN c c1 ON c1.id = e1.id JOIN c c2 ON c2.id = e2.id
+WHERE c1.value = c2.value;
+----
+0
+
+# vertex:color. An odd cycle ('triangle', 'K4') or a self-loop makes a graph not bipartite: no rows.
+# Each input row is a literal: _pgr_exec's named arguments must be constants.
+query TT
+SELECT 'cycle', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'cycle'),
+  edges_sql := 'cycle', driver := 'bipartite'))
+UNION ALL SELECT 'edge', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'edge'),
+  edges_sql := 'edge', driver := 'bipartite'))
+UNION ALL SELECT 'K4', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'K4'),
+  edges_sql := 'K4', driver := 'bipartite'))
+UNION ALL SELECT 'path', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'path'),
+  edges_sql := 'path', driver := 'bipartite'))
+UNION ALL SELECT 'self-loop', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'self-loop'),
+  edges_sql := 'self-loop', driver := 'bipartite'))
+UNION ALL SELECT 'triangle', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'triangle'),
+  edges_sql := 'triangle', driver := 'bipartite'))
+UNION ALL SELECT 'two self-loops', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'two self-loops'),
+  edges_sql := 'two self-loops', driver := 'bipartite'))
+ORDER BY 1;
+----
+K4	NULL
+cycle	7:0 8:1 11:1 12:0
+edge	3:0 7:1
+path	1:0 2:1 3:0 4:1
+self-loop	NULL
+triangle	NULL
+two self-loops	NULL
+
+# vertex:color, colors from 1, the vertices colored in the order they enter the graph.
+query TT
+SELECT 'cycle', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'cycle'),
+  edges_sql := 'cycle', driver := 'sequential_vertex_coloring'))
+UNION ALL SELECT 'edge', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'edge'),
+  edges_sql := 'edge', driver := 'sequential_vertex_coloring'))
+UNION ALL SELECT 'K4', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'K4'),
+  edges_sql := 'K4', driver := 'sequential_vertex_coloring'))
+UNION ALL SELECT 'path', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'path'),
+  edges_sql := 'path', driver := 'sequential_vertex_coloring'))
+UNION ALL SELECT 'self-loop', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'self-loop'),
+  edges_sql := 'self-loop', driver := 'sequential_vertex_coloring'))
+UNION ALL SELECT 'triangle', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'triangle'),
+  edges_sql := 'triangle', driver := 'sequential_vertex_coloring'))
+UNION ALL SELECT 'two self-loops', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'two self-loops'),
+  edges_sql := 'two self-loops', driver := 'sequential_vertex_coloring'))
+ORDER BY 1;
+----
+K4	1:1 2:2 3:3 4:4
+cycle	7:1 8:2 11:2 12:1
+edge	3:1 7:2
+path	1:1 2:2 3:1 4:2
+self-loop	6:1
+triangle	3:1 6:2 8:3
+two self-loops	1:1 2:1
+
+# edge:color, colors from 1. A self-loop is never colored; 'path' takes three colors where two
+# would do, as upstream's Boost edge_coloring answers.
+query TT
+SELECT 'cycle', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'cycle'),
+  edges_sql := 'cycle', driver := 'edge_coloring'))
+UNION ALL SELECT 'edge', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'edge'),
+  edges_sql := 'edge', driver := 'edge_coloring'))
+UNION ALL SELECT 'K4', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'K4'),
+  edges_sql := 'K4', driver := 'edge_coloring'))
+UNION ALL SELECT 'path', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'path'),
+  edges_sql := 'path', driver := 'edge_coloring'))
+UNION ALL SELECT 'self-loop', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'self-loop'),
+  edges_sql := 'self-loop', driver := 'edge_coloring'))
+UNION ALL SELECT 'triangle', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'triangle'),
+  edges_sql := 'triangle', driver := 'edge_coloring'))
+UNION ALL SELECT 'two self-loops', (SELECT string_agg(id || ':' || value, ' ' ORDER BY id) FROM _pgr_exec((SELECT edges FROM graphs WHERE name = 'two self-loops'),
+  edges_sql := 'two self-loops', driver := 'edge_coloring'))
+ORDER BY 1;
+----
+K4	1:1 2:2 3:1 4:2 5:3 6:3
+cycle	8:1 10:3 11:3 12:2
+edge	7:1
+path	1:1 2:2 3:3
+self-loop	NULL
+triangle	1:1 2:2 3:3
+two self-loops	NULL
+
+# Upstream's second bipartite example: one more edge, 5 - 1, closes an odd cycle.
+query I
+SELECT count(*) FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost FROM edges
+  UNION ALL SELECT 19, 5, 1, 1, 1) e) AS edges), edges_sql := 'odd cycle', driver := 'bipartite');
+----
+0
+
+# An empty edge query: upstream's notice, no rows.
+query III
+SELECT
+  (SELECT count(*) FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost
+     FROM edges WHERE id < 0) e) AS edges), edges_sql := 'empty', driver := 'bipartite')),
+  (SELECT count(*) FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost
+     FROM edges WHERE id < 0) e) AS edges), edges_sql := 'empty', driver := 'sequential_vertex_coloring')),
+  (SELECT count(*) FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT id, source, target, cost, reverse_cost
+     FROM edges WHERE id < 0) e) AS edges), edges_sql := 'empty', driver := 'edge_coloring'));
+----
+0	0	0
+
+# More than one 2048-row chunk: a path of 3000 vertices alternates colors 1 and 2, and seq stays
+# continuous.
+statement ok
+CREATE TABLE long_path AS SELECT (SELECT list({'id': i, 'source': i, 'target': i + 1, 'cost': 1.0,
+  'reverse_cost': 1.0} ORDER BY i) FROM range(1, 3000) t(i)) AS edges;
+
+query IIII
+SELECT count(*), max(seq), count(*) FILTER (WHERE seq <> id), count(*) FILTER (WHERE value <> 2 - id % 2)
+FROM _pgr_exec((SELECT edges FROM long_path), edges_sql := 'long path', driver := 'sequential_vertex_coloring');
+----
+3000	3000	0	0
+
+statement error
+SELECT * FROM _pgr_exec((SELECT (SELECT list(e) FROM (SELECT source, target, cost FROM edges) e) AS edges),
+  edges_sql := 'no id', driver := 'edge_coloring');
+----
+Column 'id' not Found
+
+query I
+SELECT count(*) FROM _pgr_exec((SELECT NULL AS edges), edges_sql := '', driver := 'bipartite', null_input := true);
+----
+0
