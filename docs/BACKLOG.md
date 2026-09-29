@@ -191,11 +191,6 @@ Each of these would be a change no test could observe, so none of them is made:
 - The "No elements found" text in `get_pgarray` (`src/pg_compat/src/get_check_data.cpp`) has no
   test, because no registered pgr_dijkstra overload reaches it: an empty id list, for example
   `pgr_dijkstra(sql, []::BIGINT[], 3)`, returns zero rows rather than raising.
-- **A list-typed result column would never compare equal between upstream and this build.** Upstream
-  renders one as `{4,7}` in its psql transcript, while a DuckDB list stringifies as `[4, 7]`. No
-  `pgr_dijkstra` documentation query returns a list-typed column today, so nothing exercises this,
-  but the first category that does will meet it and the comparison in `gen_docqueries_tests.py` will
-  need to normalize both sides first.
 - **`to_list_literal`'s empty-but-present array case is unexercised.** `export_sampledata.py`'s
   `to_list_literal` turns PostgreSQL's `{}` into `[]`; an `""` cell (no array text at all) instead
   short-circuits to `""` before that conversion runs. No row in the current fixture set carries an

@@ -173,6 +173,40 @@ def duckdb_wkt(cell: str) -> str:
     return match.group(1) + " " + re.sub(r",(?! )", ", ", body)
 
 
+_PG_ARRAY_RE = re.compile(r"^\{(.*)\}$")
+
+
+def pg_array_cell(cell: str) -> str:
+    """An upstream integer-array cell ({12,17,16}) in DuckDB's list spelling ([12, 17, 16])."""
+    match = _PG_ARRAY_RE.match(cell.strip())
+    if match is None:
+        return cell
+    body = match.group(1).strip()
+    if not body:
+        return "[]"
+    return "[" + ", ".join(part.strip() for part in body.split(",")) + "]"
+
+
+def respell_list_cells(table: pgparse.AlignedTable, duck_types: Sequence[str]) -> pgparse.AlignedTable:
+    """Upstream's table with every cell of an integer-list column in DuckDB's spelling.
+
+    psql prints a BIGINT[] as {4,7}; DuckDB's CLI (read as JSON) and its sqllogictest runner print
+    [4, 7]. Only integer lists are respelled: an element of any other type would need its own
+    quoting rules, and no documentation query returns one. A blank cell (NULL) stays blank.
+    """
+    columns = {
+        index for index, duck_type in enumerate(duck_types)
+        if duck_type.endswith("[]") and duck_type[:-2].strip().upper() in _INTEGER_TYPES
+    }
+    if not columns:
+        return table
+    rows = [
+        [pg_array_cell(cell) if index in columns and cell.strip() else cell for index, cell in enumerate(row)]
+        for row in table.rows
+    ]
+    return pgparse.AlignedTable(table.columns, rows, table.row_count)
+
+
 def spatial_names(db: duckdbcli.DuckDB) -> Set[str]:
     """Lowercase upstream names of the functions whose queries need duckdb-spatial loaded.
 
@@ -229,6 +263,9 @@ def coerce(cell: Optional[str], slt_type: str) -> Any:
 
 def _actual(value: Any, slt_type: str, float_digits: Optional[int] = None) -> Any:
     """One value from DuckDB, brought onto the same footing as a coerced upstream cell.
+
+    An integer list arrives from the CLI's JSON as a Python list, whose str() is DuckDB's own
+    spelling ([4, 7]).
 
     ``float_digits`` is the page's ``SET extra_float_digits`` value (``pgparse.extra_float_digits``),
     or None when the page never set it. PostgreSQL's ``float8out`` prints ``DBL_DIG`` (15)
@@ -806,6 +843,7 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Set[str
         result = db.query(sql)
         check_column_count(category, stem, block.name, table, result)
         directive = slt_types(result.types)
+        table = respell_list_cells(table, result.types)
         if is_forest_call(sql):
             shape = forest_shape(table.columns)
             if shape is None:

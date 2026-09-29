@@ -184,6 +184,44 @@ class TestExpectedCells(unittest.TestCase):
         self.assertEqual([["Infinity"]], gen.expected_cells(table, "T"))
 
 
+class TestListCells(unittest.TestCase):
+    def test_an_integer_array_cell_is_respelled_as_a_duckdb_list(self):
+        self.assertEqual("[12, 17, 16]", gen.pg_array_cell("{12,17,16}"))
+        self.assertEqual("[-1, 2]", gen.pg_array_cell("{-1,2}"))
+        self.assertEqual("[]", gen.pg_array_cell("{}"))
+
+    def test_anything_else_is_left_alone(self):
+        self.assertEqual("abc", gen.pg_array_cell("abc"))
+        self.assertEqual("POINT (1 2)", gen.pg_array_cell("POINT (1 2)"))
+
+    def test_only_integer_list_columns_are_respelled(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["node", "targets"], [["6", "{}"], ["8", "{12,17,16}"]], 2)
+        respelled = gen.respell_list_cells(table, ["BIGINT", "BIGINT[]"])
+        self.assertEqual([["6", "[]"], ["8", "[12, 17, 16]"]], respelled.rows)
+        self.assertEqual(table.rows, gen.respell_list_cells(table, ["BIGINT", "VARCHAR"]).rows)
+        self.assertEqual(table.rows, gen.respell_list_cells(table, ["BIGINT", "VARCHAR[]"]).rows)
+
+    def test_a_blank_list_cell_stays_null(self):
+        import pgparse
+
+        table = pgparse.AlignedTable(["targets"], [[""]], 1)
+        self.assertEqual([[""]], gen.respell_list_cells(table, ["BIGINT[]"]).rows)
+
+    def test_a_list_column_compares_equal_and_emits_duckdbs_spelling(self):
+        import duckdbcli
+        import pgparse
+
+        table = gen.respell_list_cells(
+            pgparse.AlignedTable(["node", "targets"], [["6", "{}"], ["8", "{12,17,16}"]], 2),
+            ["BIGINT", "BIGINT[]"])
+        result = duckdbcli.QueryResult(columns=["node", "targets"], types=["BIGINT", "BIGINT[]"],
+                                       rows=[[6, []], [8, [12, 17, 16]]])
+        self.assertEqual("match", gen.classify(table, result, "IT"))
+        self.assertEqual([["6", "[]"], ["8", "[12, 17, 16]"]], gen.expected_cells(table, "IT"))
+
+
 class TestRender(unittest.TestCase):
     def test_emits_a_well_formed_sqllogictest(self):
         items = [
