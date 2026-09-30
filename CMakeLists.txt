@@ -86,6 +86,20 @@ build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 # Upstream code is compiled unmodified; its warnings are not ours to fix here.
 set_source_files_properties(${PGROUTING_SOURCES} PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/w,-w>")
 
+# contractionGraph.hpp calls target(e, this->graph) unqualified inside Pgr_contractionGraph, whose
+# dependent base Pgr_base_graph has a one-argument member target(E). Upstream is written for GCC and
+# Clang, whose two-phase lookup ignores the dependent base and finds boost::target through ADL.
+# MSVC's default lookup searches the base at instantiation, finds the member and rejects the
+# two-argument call (C2660). /permissive- gives MSVC the standard lookup upstream assumes. It is
+# scoped to the translation units that include that header, so no other one changes, and it is
+# appended so the /w set above is kept.
+set_property(
+  SOURCE ${PGROUTING_DIR}/src/contraction/contract.cpp
+         ${PGROUTING_DIR}/src/contraction/contractGraph_driver.cpp
+         ${PGROUTING_DIR}/src/contraction/contractionHierarchies_driver.cpp
+  APPEND
+  PROPERTY COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/permissive->")
+
 foreach(target ${EXTENSION_NAME} ${LOADABLE_EXTENSION_NAME})
   # A target property, not the CMAKE_CXX_STANDARD cache entry above: DuckDB's own CMakeLists.txt is
   # the top-level project and sets that entry first, so a DuckDB release that defaults to C++11
