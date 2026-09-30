@@ -45,9 +45,9 @@ DriverResult &DriverResult::operator=(DriverResult &&other) noexcept {
 
 namespace {
 
-// Both contraction row structs begin with the same fields; each row's contracted_vertices is its
-// own malloc'd block (pgr_alloc in the contraction drivers), zero elements included, and type points
-// at a string literal that is not freed.
+// Both contraction row structs have a contracted_vertices field, and each row's is its own malloc'd
+// block (pgr_alloc in the contraction drivers, graph_to_tuple in cpp_common/to_postgres.hpp), zero
+// elements included; type points at a string literal that is not freed.
 template <class ROW>
 void FreeContractedArrays(ROW *rows, std::size_t count) {
 	for (std::size_t k = 0; rows != nullptr && k < count; k++) {
@@ -71,15 +71,10 @@ void DriverResult::Release() {
 		break;
 	}
 	case ResultShape::CONTRACTED: {
-		// Each row's contracted_vertices is its own malloc'd block (pgr_alloc in
-		// src/contraction/contractGraph_driver.cpp), zero elements included; type points at a string
-		// literal and is not freed.
 		FreeContractedArrays(static_cast<contracted_rt *>(rows), count);
 		break;
 	}
 	case ResultShape::CONTRACTION_HIERARCHIES: {
-		// As CONTRACTED: graph_to_tuple (cpp_common/to_postgres.hpp) allocates every row's list, the
-		// v rows' empty ones included.
 		FreeContractedArrays(static_cast<contractionHierarchies_rt *>(rows), count);
 		break;
 	}

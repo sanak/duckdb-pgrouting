@@ -28,7 +28,7 @@ public:
 	// ID_VALUE, IID_t_rt for TRIPLES, Edge_rt for EDGE,
 	// Line_graph_full_rt for LINE_GRAPH_FULL, TransitiveClosure_rt for TRANSITIVE_CLOSURE,
 	// StoerWagner_t for STOER_WAGNER, circuits_rt for CIRCUITS, Flow_t for FLOW,
-	// contracted_rt for CONTRACTED.
+	// contracted_rt for CONTRACTED, contractionHierarchies_rt for CONTRACTION_HIERARCHIES.
 	template <class T>
 	const T *Rows() const {
 		return static_cast<const T *>(rows);

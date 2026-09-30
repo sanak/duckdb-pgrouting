@@ -157,9 +157,10 @@ decision rather than an oversight.
 - **`pgr_contractionHierarchies` reads its priority queue after emptying it**
   (`include/contraction/contractionHierarchies.hpp`, the log line and the comparison after the
   last pop). A release build reads the pair it just popped, deterministically; a build with libc++
-  hardening or `_GLIBCXX_ASSERTIONS` aborts on every call, and ASan reports a container-overflow,
-  so relassert runs `test/sql/contraction_hierarchies.test` and the generated contraction pages
-  with `ASAN_OPTIONS=detect_container_overflow=0`. No adapter guard can avoid a read inside the
+  hardening or `_GLIBCXX_ASSERTIONS` aborts on every call that ranks at least one vertex (a call
+  whose vertices are all forbidden does not), and ASan reports a container-overflow, so relassert
+  runs `test/sql/contraction_hierarchies.test` and the generated Hierarchies page with
+  `ASAN_OPTIONS=detect_container_overflow=0`. No adapter guard can avoid a read inside the
   algorithm. A candidate to report upstream.
 - **A Chinese Postman tour of thousands of steps can exhaust a thread's stack.** Upstream's
   `EulerCircuitDFS` (`include/chinese/chinesePostman.hpp`) recurses once per step of the tour: on
@@ -184,7 +185,11 @@ decision rather than an oversight.
   graph, and `pgr_transitiveClosure` holds up to vertices-squared ids. `pgr_pushRelabel`,
   `pgr_boykovKolmogorov`, `pgr_edmondsKarp` and `pgr_maxFlow` poll once before their Boost call,
   `pgr_edgeDisjointPaths` once per pair and `pgr_maxCardinalityMatch` once; the minimum-cost flow
-  functions and the Chinese Postman never do. The contraction functions never poll;
+  functions and the Chinese Postman never do. The contraction functions poll only in
+  two places: the dead-end pass, once per dead end removed, and `pgr_contractionHierarchies`, once
+  per witness search, so Hierarchies can be cancelled between witness searches. Linear contraction
+  and the repetition of `cycles` never poll, and a huge `cycles` (such as 2147483647) is not
+  bounded: where only linear work remains it cannot be cancelled (upstream behaves the same).
   `pgr_contractionHierarchies` over 8000 road segments takes about 16 seconds undirected, and over
   16000 more than two minutes and 2.5 GB.
 - **A turn-restricted path that must be re-routed over thousands of edges can exhaust a thread's

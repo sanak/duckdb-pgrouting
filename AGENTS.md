@@ -30,8 +30,8 @@ Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_
 `pgr_maxFlowMinCost_Cost`, `pgr_edgeDisjointPaths`, `pgr_maxCardinalityMatch`, `pgr_chinesePostman`,
 `pgr_chinesePostmanCost`, `pgr_contraction`, `pgr_contractionDeadEnd`, `pgr_contractionLinear`,
 `pgr_contractionHierarchies`, `pgr_extractVertices`, `pgr_findCloseEdges` and `pgr_degree` —
-pgRouting's two hundred and thirty-two corresponding signatures, each registered once per number of its
-defaulted parameters passed positionally — and `pgr_version()`. The `pgr_dijkstra` and
+pgRouting's two hundred and thirty-two corresponding signatures, each registered once per number of
+its defaulted parameters passed positionally — and `pgr_version()`. The `pgr_dijkstra` and
 `pgr_withPoints` families call pgRouting's unified `do_shortestPath` driver; with points given,
 DuckDB also materializes the two edge queries that driver derives from the edge and points SQL. The
 other sixty-one families call their own per-family `pgr_do_*` drivers, or upstream's unified
@@ -66,18 +66,17 @@ value: a one-row table function, and a scalar macro of the same name over it (a 
 and minimum-cost flow fill a `FLOW` shape (`Flow_t`), edge-disjoint paths reuse `KSP`, matching
 `IDS` and the Chinese Postman `PATH`; `pgr_maxFlow`, `pgr_maxFlowMinCost_Cost` and
 `pgr_chinesePostmanCost` return one value like `pgr_bandwidth`. The adapter answers a Chinese
-Postman start vertex that upstream crashes on with no rows. The contraction functions are called from
-`src/pg_compat/src/drivers_contraction.cpp` and fill two shapes whose rows own a `BIGINT[]` each
-(`CONTRACTED`, and `CONTRACTION_HIERARCHIES` with `metric` and `vertex_order`); their defaulted
+Postman start vertex that upstream crashes on with no rows. The contraction functions are called
+from `src/pg_compat/src/drivers_contraction.cpp` and fill two shapes whose rows own a `BIGINT[]`
+each (`CONTRACTED`, and `CONTRACTION_HIERARCHIES` with `metric` and `vertex_order`); their defaulted
 `methods` and `forbidden` arrays travel in the input row's id-list slots (a list-typed
 `OptionalParam`), and `pgr_contractionDeadEnd` / `pgr_contractionLinear` fix `methods`.
-`pgr_extractVertices`,
-`pgr_findCloseEdges` and `pgr_degree`, which upstream writes in PL/pgSQL, are reimplemented as
-bind_replace functions. Each binds the caller's edge query, picks one of upstream's modes, and
-rewrites the call into a fixed DuckDB query (`src/functions/sql_template.cpp`). The geometry work of
-the first two calls duckdb-spatial's `ST_*` functions at run time. Every public function carries a
-catalog description and an example (`duckdb_functions().description` / `.examples`), registered from
-`src/functions/function_docs.cpp`.
+`pgr_extractVertices`, `pgr_findCloseEdges` and `pgr_degree`, which upstream writes in PL/pgSQL, are
+reimplemented as bind_replace functions. Each binds the caller's edge query, picks one of upstream's
+modes, and rewrites the call into a fixed DuckDB query (`src/functions/sql_template.cpp`). The
+geometry work of the first two calls duckdb-spatial's `ST_*` functions at run time. Every public
+function carries a catalog description and an example (`duckdb_functions().description` /
+`.examples`), registered from `src/functions/function_docs.cpp`.
 
 ## Layout
 

@@ -151,13 +151,12 @@ Functions deliberately not ported are listed, each with its reason, in
   starts: at the first edge row's source. So do the contraction functions' shortcut ids and, in an
   undirected graph, their direction, which vertex a contracted tree collapses onto, and all of
   `pgr_contractionHierarchies`' ranking (`metric`, `vertex_order`) and shortcuts. Every answer is
-  valid for its problem; see
-  `docs/BACKLOG.md` for the upstream behaviours these functions keep.
+  valid for its problem; see `docs/BACKLOG.md` for the upstream behaviours these functions keep.
 - **`pgr_degree` returns its rows sorted by vertex**; upstream's order is unspecified.
 - **`pgr_edgeDisjointPaths` with many sources and one target swaps `start_vid` and `end_vid`**,
   as pgRouting's own SQL wrapper does: `start_vid` shows the target, `end_vid` the source.
 - **`pgr_contractionHierarchies` is slow on large graphs and its output is not a query-ready
-  hierarchy.** Thousands of road segments take seconds to minutes and cannot be cancelled;
+  hierarchy.** Thousands of road segments take seconds to minutes;
   `vertex_order` is not the contraction order, and upstream's shortcuts do not always complete the
   hierarchy. See `docs/BACKLOG.md`.
 - **Memory.** pgRouting's own allocations are not counted against DuckDB's `memory_limit`.

@@ -379,7 +379,7 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "order the edges are read in.",
      "SELECT * FROM pgr_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)"},
     {"pgr_contractionDeadEnd",
-     "Removes dead-end vertices, once: each vertex left lists the vertices it absorbed. In a directed "
+     "Removes dead-end vertices until none is left: each vertex left lists the vertices it absorbed. In a directed "
      "graph a vertex with incoming edges only is a dead end too, listed under every vertex that reaches "
      "it.",
      "SELECT * FROM pgr_contractionDeadEnd('SELECT id, source, target, cost, reverse_cost FROM edges', "
@@ -391,9 +391,10 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "SELECT * FROM pgr_contractionLinear('SELECT id, source, target, cost, reverse_cost FROM edges', "
      "directed => false)"},
     {"pgr_contractionHierarchies",
-     "Ranks every vertex that is not forbidden (vertex_order, with its metric) and returns the shortcut "
-     "edges that keep all shortest distances once lower-ranked vertices are bypassed. The ranking and "
-     "the shortcuts depend on the order the edges are read in; the time grows quickly with the graph.",
+     "Ranks every vertex that is not forbidden (vertex_order, with its metric) and returns shortcut "
+     "edges which, added to the original edges, keep every shortest distance; the ranking is not a "
+     "ready-to-query hierarchy. The ranking and the shortcuts depend on the order the edges are read "
+     "in; the time grows quickly with the graph.",
      "SELECT * FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges', "
      "directed => false)"},
     {"pgr_extractVertices",
