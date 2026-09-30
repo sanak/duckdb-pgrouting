@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // W2: the extension's Wasm build loads into the pinned DuckDB-Wasm and routes on the sample graph.
-// Only tie-insensitive facts are asserted (endpoints, total costs, reached vertices, hop depths,
-// spanning-forest size and weight), because an equal-cost tie may legitimately resolve to another
-// route, tree or tour. One query per function family checks that its driver and result shape work
-// in the browser. The geometry functions run with duckdb-spatial, which the page loads from
-// DuckDB's extension repository: the Wasm unittest skips every spatial test, so this is the only
-// place they run in a browser before a release.
+// Only facts the input order cannot change are asserted (endpoints, total costs, reached vertices,
+// hop depths, spanning-forest size and weight, sets, counts, a clash-free coloring, an ordering
+// that is a permutation), because an equal-cost tie or the order the edges arrive in may
+// legitimately change the rows. One query per function family checks that its driver and result
+// shape work in the browser; the one-value functions are called as scalar macros. The geometry
+// functions run with duckdb-spatial, which the page loads from DuckDB's extension repository: the
+// Wasm unittest skips every spatial test, so this is the only place they run in a browser before
+// a release.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -73,6 +75,39 @@ test('pgrouting loads and routes in DuckDB-Wasm', async ({ page }) => {
   expect(result.tsp[0].node).toBe(5);
   expect(result.tsp.at(-1).node).toBe(5);
   expect([...new Set(result.tsp.map((r) => r.node))].sort((a, b) => a - b)).toEqual([5, 6, 10, 15]);
+  expect(result.articulationPoints).toEqual([{ nodes: '3,6,7,8' }]);
+  expect(result.coloring).toEqual([{ n: 17, clashes: 0 }]);
+  expect(result.cuthillMckee).toEqual([{ n: 17, nodes: 17, first: 1, last: 17 }]);
+  expect(result.floydWarshall).toEqual([{ n: 160, total: 462 }]);
+  expect(result.betweenness).toHaveLength(1);
+  expect(result.betweenness[0]).toMatchObject({ n: 17, top: 7 });
+  expect(result.betweenness[0].centrality).toBeCloseTo(0.3416666666666667, 12);
+  expect(result.isPlanar).toEqual([{ planar: true }]);
+  expect(result.lineGraph).toEqual([{ n: 40 }]);
+  expect(result.transitiveClosure).toEqual([
+    {
+      closure:
+        '6:[] 8:[12, 16, 17] 10:[6, 11, 12, 16, 17] 11:[12, 16, 17] 12:[16, 17] 15:[6, 10, 11, 12, 16, 17] 16:[16, 17] 17:[16, 17]',
+    },
+  ]);
+  // idom is the seq of the dominator's row, so the pairs are read through seq.
+  expect(result.dominator).toEqual([
+    { pairs: '1>3,2>0,3>7,4>0,5>0,6>5,7>6,8>7,9>8,10>15,11>7,12>7,13>0,14>0,15>16,16>7,17>7' },
+  ]);
+  expect(result.hawick).toEqual([{ n: 94, circuits: 20, total: 74 }]);
+  expect(result.stoerWagner).toEqual([{ mincut: 1 }]);
+  expect(result.maxFlow).toEqual([{ flow: 230 }]);
+  expect(result.pushRelabel).toEqual([{ net: 230 }]);
+  expect(result.chinesePostmanCost).toEqual([{ cost: 34 }]);
+  // Which vertex a contracted tree collapses onto depends on the input order; the counts do not.
+  expect(result.contraction).toEqual([
+    { type: 'e', n: 4, absorbed: 6 },
+    { type: 'v', n: 3, absorbed: 4 },
+  ]);
+  expect(result.contractionHierarchies).toEqual([{ ranked: 17 }]);
+  expect(result.degree).toEqual([
+    { degrees: '1:1,2:1,3:2,4:1,5:1,6:3,7:4,8:3,9:1,10:3,11:4,12:3,13:1,14:1,15:2,16:3,17:2' },
+  ]);
   expect(result.vertices).toEqual([{ n: 17 }]);
   expect(result.closeEdges).toHaveLength(1);
   expect(result.closeEdges[0]).toMatchObject({ edge_id: 5, side: 'l' });

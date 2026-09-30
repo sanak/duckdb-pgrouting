@@ -13,6 +13,7 @@ const BUNDLES = {
 
 const EDGES = 'SELECT id, source, target, cost, reverse_cost FROM edges';
 const EDGES_XY = 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges';
+const FLOW_EDGES = 'SELECT id, source, target, capacity, reverse_capacity FROM edges';
 
 // Arrow returns BIGINT as BigInt, which does not survive the trip back to the test.
 function plain(row) {
@@ -96,6 +97,71 @@ window.runW2 = async function runW2(source) {
     out.tsp = await rows(
       conn,
       `SELECT seq, node FROM pgr_TSP('SELECT * FROM pgr_dijkstraCostMatrix(''${EDGES}'', [5, 6, 10, 15], directed := false)', start_id := 5) ORDER BY seq`,
+    );
+    // Families added since v0.3.0. Lists and integer sums are folded into VARCHAR or BIGINT in
+    // SQL, so every value crosses Arrow as a plain scalar.
+    out.articulationPoints = await rows(
+      conn,
+      `SELECT string_agg(CAST(node AS VARCHAR), ',' ORDER BY node) AS nodes FROM pgr_articulationPoints('${EDGES}')`,
+    );
+    out.coloring = await rows(
+      conn,
+      `WITH c AS MATERIALIZED (SELECT * FROM pgr_sequentialVertexColoring('${EDGES}'))
+       SELECT (SELECT count(*) FROM c) AS n, count(*) FILTER (WHERE a.color = b.color) AS clashes
+       FROM edges e JOIN c a ON a.node = e.source JOIN c b ON b.node = e.target`,
+    );
+    out.cuthillMckee = await rows(
+      conn,
+      `SELECT count(*) AS n, count(DISTINCT node) AS nodes, min(seq) AS first, max(seq) AS last FROM pgr_cuthillMckeeOrdering('${EDGES}')`,
+    );
+    out.floydWarshall = await rows(
+      conn,
+      `SELECT count(*) AS n, sum(agg_cost) AS total FROM pgr_floydWarshall('${EDGES}')`,
+    );
+    out.betweenness = await rows(
+      conn,
+      `SELECT count(*) AS n, arg_max(vid, centrality) AS top, max(centrality) AS centrality FROM pgr_betweennessCentrality('${EDGES}')`,
+    );
+    out.isPlanar = await rows(conn, `SELECT pgr_isPlanar('${EDGES}') AS planar`);
+    out.lineGraph = await rows(conn, `SELECT count(*) AS n FROM pgr_lineGraph('${EDGES}')`);
+    out.transitiveClosure = await rows(
+      conn,
+      `SELECT string_agg(node || ':' || CAST(list_sort(targets) AS VARCHAR), ' ' ORDER BY node) AS closure
+       FROM pgr_transitiveClosure('${EDGES} WHERE id IN (2, 3, 5, 11, 12, 13, 15)')`,
+    );
+    out.dominator = await rows(
+      conn,
+      `WITH t AS MATERIALIZED (SELECT * FROM pgr_lengauerTarjanDominatorTree('${EDGES}', 5))
+       SELECT string_agg(t.vertex_id || '>' || coalesce(d.vertex_id, 0), ',' ORDER BY t.vertex_id) AS pairs
+       FROM t LEFT JOIN t d ON t.idom = d.seq`,
+    );
+    out.hawick = await rows(
+      conn,
+      `SELECT count(*) AS n, count(DISTINCT path_id) AS circuits, sum(cost) AS total FROM pgr_hawickCircuits('${EDGES}')`,
+    );
+    out.stoerWagner = await rows(
+      conn,
+      `SELECT max(mincut) AS mincut FROM pgr_stoerWagner('${EDGES} WHERE id < 17')`,
+    );
+    out.maxFlow = await rows(conn, `SELECT pgr_maxFlow('${FLOW_EDGES}', 11, 12) AS flow`);
+    out.pushRelabel = await rows(
+      conn,
+      `SELECT CAST(sum(flow) FILTER (WHERE start_vid = 11) - coalesce(sum(flow) FILTER (WHERE end_vid = 11), 0) AS BIGINT) AS net
+       FROM pgr_pushRelabel('${FLOW_EDGES}', 11, 12)`,
+    );
+    out.chinesePostmanCost = await rows(conn, `SELECT pgr_chinesePostmanCost('${EDGES} WHERE id < 17') AS cost`);
+    out.contraction = await rows(
+      conn,
+      `SELECT type, count(*) AS n, CAST(sum(len(contracted_vertices)) AS BIGINT) AS absorbed
+       FROM pgr_contraction('${EDGES}', false) GROUP BY type ORDER BY type`,
+    );
+    out.contractionHierarchies = await rows(
+      conn,
+      `SELECT count(*) AS ranked FROM pgr_contractionHierarchies('${EDGES}', false) WHERE type = 'v'`,
+    );
+    out.degree = await rows(
+      conn,
+      `SELECT string_agg(node || ':' || degree, ',' ORDER BY node) AS degrees FROM pgr_degree('SELECT id, source, target FROM edges')`,
     );
     // DuckDB-Wasm installs spatial from extensions.duckdb.org on LOAD.
     await conn.query('LOAD spatial');
