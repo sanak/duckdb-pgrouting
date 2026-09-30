@@ -1,0 +1,178 @@
+# name: test/sql/contraction_hierarchies.test
+# description: pgr_contractionHierarchies: its columns, what holds in any edge order, forbidden vertices, degenerate input
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Upstream's contraction reads its priority queue once more after emptying it
+# (include/contraction/contractionHierarchies.hpp); an ASan build reports that as a
+# container-overflow, so run this file there with ASAN_OPTIONS=detect_container_overflow=0.
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT id, source, target, cost, reverse_cost FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE edges_rev AS SELECT * FROM edges ORDER BY id DESC;
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_contractionHierarchies(
+  'SELECT id, source, target, cost FROM edges'));
+----
+type	VARCHAR
+id	BIGINT
+contracted_vertices	BIGINT[]
+source	BIGINT
+target	BIGINT
+cost	DOUBLE
+metric	BIGINT
+vertex_order	BIGINT
+
+# What upstream's output always satisfies, whatever the edge order: one v row per vertex that is not
+# forbidden, with no contracted vertices, their vertex_order a permutation of 1..17; the shortcuts
+# numbered -1..-m, each with a non-empty list and metric and vertex_order -1.
+statement ok
+CREATE TABLE runs AS
+  SELECT 'undirected' AS run, * FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges', directed => false)
+  UNION ALL SELECT 'undirected_rev', * FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges_rev', false)
+  UNION ALL SELECT 'directed', * FROM pgr_contractionHierarchies('SELECT id, source, target, cost, reverse_cost FROM edges')
+  UNION ALL SELECT 'directed_rev', * FROM pgr_contractionHierarchies('SELECT * FROM edges_rev', true);
+
+query TTIIIIT
+SELECT run, CAST(list_sort(list(id) FILTER (WHERE type = 'v')) AS VARCHAR),
+       min(vertex_order) FILTER (WHERE type = 'v'), max(vertex_order) FILTER (WHERE type = 'v'),
+       count(DISTINCT vertex_order) FILTER (WHERE type = 'v'),
+       count(*) FILTER (WHERE (type = 'v' AND (len(contracted_vertices) > 0 OR source <> -1 OR target <> -1))
+                           OR (type = 'e' AND (len(contracted_vertices) = 0 OR metric <> -1 OR vertex_order <> -1))
+                           OR type NOT IN ('v', 'e')),
+       count(*) FILTER (WHERE type = 'e') = -coalesce(min(id) FILTER (WHERE type = 'e'), 0)
+FROM runs GROUP BY run ORDER BY run;
+----
+directed	[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]	1	17	17	0	true
+directed_rev	[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]	1	17	17	0	true
+undirected	[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]	1	17	17	0	true
+undirected_rev	[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]	1	17	17	0	true
+
+# The shortcuts keep every shortest distance: the original graph plus them (one way each, which
+# an undirected search walks both ways) gives the same distance between every pair of vertices.
+# 160 pairs are connected in both cases (the cost-only undirected graph and the directed graph with
+# reverse_cost).
+statement ok
+CREATE TABLE aug_undirected AS SELECT id, source, target, cost FROM edges
+  UNION ALL SELECT 100 - id, source, target, cost FROM runs WHERE run = 'undirected' AND type = 'e';
+
+statement ok
+CREATE TABLE aug_undirected_rev AS SELECT id, source, target, cost FROM edges
+  UNION ALL SELECT 100 - id, source, target, cost FROM runs WHERE run = 'undirected_rev' AND type = 'e';
+
+statement ok
+CREATE TABLE aug_directed AS SELECT id, source, target, cost, reverse_cost FROM edges
+  UNION ALL SELECT 100 - id, source, target, cost, -1 FROM runs WHERE run = 'directed' AND type = 'e';
+
+statement ok
+CREATE TABLE aug_directed_rev AS SELECT id, source, target, cost, reverse_cost FROM edges
+  UNION ALL SELECT 100 - id, source, target, cost, -1 FROM runs WHERE run = 'directed_rev' AND type = 'e';
+
+statement ok
+CREATE TABLE dist AS
+  SELECT 'orig_u' AS g, * FROM pgr_dijkstraCost('SELECT id, source, target, cost FROM edges',
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], false)
+  UNION ALL SELECT 'undirected', * FROM pgr_dijkstraCost('SELECT * FROM aug_undirected',
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], false)
+  UNION ALL SELECT 'undirected_rev', * FROM pgr_dijkstraCost('SELECT * FROM aug_undirected_rev',
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], false)
+  UNION ALL SELECT 'orig_d', * FROM pgr_dijkstraCost('SELECT id, source, target, cost, reverse_cost FROM edges',
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+  UNION ALL SELECT 'directed', * FROM pgr_dijkstraCost('SELECT * FROM aug_directed',
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+  UNION ALL SELECT 'directed_rev', * FROM pgr_dijkstraCost('SELECT * FROM aug_directed_rev',
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+
+# Each run's distances are compared with its original graph's, from both sides: a pair the run lacks
+# or that costs differently, and a pair only the run has. The columns are the run, its number of
+# pairs, and the number of pairs that differ.
+query TII
+WITH pairing(g, o) AS (VALUES ('undirected', 'orig_u'), ('undirected_rev', 'orig_u'),
+                              ('directed', 'orig_d'), ('directed_rev', 'orig_d')),
+     lost AS (
+       SELECT p.g FROM pairing p JOIN dist o ON o.g = p.o
+       LEFT JOIN dist c ON c.g = p.g AND c.start_vid = o.start_vid AND c.end_vid = o.end_vid
+       WHERE c.agg_cost IS DISTINCT FROM o.agg_cost
+       UNION ALL
+       SELECT p.g FROM pairing p JOIN dist c ON c.g = p.g
+       LEFT JOIN dist o ON o.g = p.o AND o.start_vid = c.start_vid AND o.end_vid = c.end_vid
+       WHERE o.start_vid IS NULL)
+SELECT p.g, (SELECT count(*) FROM dist WHERE dist.g = p.g), (SELECT count(*) FROM lost WHERE lost.g = p.g)
+FROM pairing p ORDER BY p.g;
+----
+directed	160	0
+directed_rev	160	0
+undirected	160	0
+undirected_rev	160	0
+
+# forbidden: a forbidden vertex is neither contracted nor listed; one the graph lacks is ignored.
+query TI
+SELECT CAST(list_sort(list(id)) AS VARCHAR), count(*) FILTER (WHERE id = 6)
+FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges', directed => false,
+                                forbidden => [6, 999]) WHERE type = 'v';
+----
+[1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]	0
+
+query III
+SELECT (SELECT count(*) FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges', false,
+          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])),
+       (SELECT count(*) FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges', false)
+          WHERE type = 'v'),
+       (SELECT count(*) FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges',
+          forbidden => []::BIGINT[], directed => false) WHERE type = 'v');
+----
+0	17	17
+
+# Upstream's witness search bound is an integer: with every cost below 1 no shortcut is made.
+query I
+SELECT count(*) FILTER (WHERE type = 'e') FROM pgr_contractionHierarchies(
+  'SELECT id, source, target, cost / 10 AS cost FROM edges', directed => false);
+----
+0
+
+# A graph of one self-loop still ranks its vertex.
+query TIT
+SELECT type, id, contracted_vertices FROM pgr_contractionHierarchies(
+  'SELECT 1 AS id, 1 AS source, 1 AS target, 1.0 AS cost');
+----
+v	1	[]
+
+query I
+SELECT count(*) FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges WHERE id < 0');
+----
+0
+
+statement error
+SELECT * FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges', methods => [1]);
+----
+methods
+
+query III
+SELECT (SELECT count(*) FROM pgr_contractionHierarchies(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges', directed => NULL)),
+       (SELECT count(*) FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges', true,
+                                                        NULL::BIGINT[]));
+----
+0	0	0
+
+# More than one output chunk: a 2049-vertex path ranks every vertex once.
+statement ok
+CREATE TABLE path AS SELECT i AS id, i AS source, i + 1 AS target, 1 AS cost FROM range(1, 2049) t(i);
+
+query IIII
+SELECT count(*), count(DISTINCT id), count(DISTINCT vertex_order), max(vertex_order)
+FROM pgr_contractionHierarchies('SELECT * FROM path', directed => false) WHERE type = 'v';
+----
+2049	2049	2049	2049

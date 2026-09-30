@@ -390,6 +390,12 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "order the edges are read in.",
      "SELECT * FROM pgr_contractionLinear('SELECT id, source, target, cost, reverse_cost FROM edges', "
      "directed => false)"},
+    {"pgr_contractionHierarchies",
+     "Ranks every vertex that is not forbidden (vertex_order, with its metric) and returns the shortcut "
+     "edges that keep all shortest distances once lower-ranked vertices are bypassed. The ranking and "
+     "the shortcuts depend on the order the edges are read in; the time grows quickly with the graph.",
+     "SELECT * FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges', "
+     "directed => false)"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "

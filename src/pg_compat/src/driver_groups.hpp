@@ -17,6 +17,7 @@ struct Edge_rt;
 struct Flow_t;
 struct circuits_rt;
 struct contracted_rt;
+struct contractionHierarchies_rt;
 struct II_t_rt;
 struct IID_t_rt;
 struct Line_graph_full_rt;
@@ -47,6 +48,7 @@ struct DriverCall {
 	circuits_rt *circuit_rows = nullptr;
 	Flow_t *flow_rows = nullptr;
 	contracted_rt *contracted_rows = nullptr;
+	contractionHierarchies_rt *hierarchy_rows = nullptr;
 	std::size_t count = 0;
 	char *log = nullptr;
 	char *notice = nullptr;

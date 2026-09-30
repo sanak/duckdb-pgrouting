@@ -4,7 +4,8 @@
 // _pgr_contraction(edges, methods::BIGINT[], cycles, forbidden, directed) and selects its six
 // columns unchanged. Its defaulted arrays reach the driver through the input row's methods and
 // forbidden columns. pgr_contractionDeadEnd and pgr_contractionLinear call the same function with
-// methods ARRAY[1] and ARRAY[2] and cycles 1.
+// methods ARRAY[1] and ARRAY[2] and cycles 1. pgr_contractionHierarchies calls
+// _pgr_contractionhierarchies(edges, forbidden, directed) and selects its eight columns unchanged.
 
 #include "function_spec.hpp"
 
@@ -32,6 +33,10 @@ const duckdb::vector<FunctionSpec> CONTRACTION_SPECS = {
      FamilyFlags(DriverKind::CONTRACTION, false, Projection::ALL)},
     {"pgr_contractionDeadEnd", {ArgKind::EDGES_SQL}, {DIRECTED, FORBIDDEN}, ContractionFlags(DEAD_END)},
     {"pgr_contractionLinear", {ArgKind::EDGES_SQL}, {DIRECTED, FORBIDDEN}, ContractionFlags(LINEAR)},
+    {"pgr_contractionHierarchies",
+     {ArgKind::EDGES_SQL},
+     {DIRECTED, FORBIDDEN},
+     FamilyFlags(DriverKind::CONTRACTION_HIERARCHIES, false, Projection::ALL)},
 };
 
 } // namespace duckdb_pgrouting

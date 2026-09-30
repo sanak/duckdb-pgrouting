@@ -7,6 +7,7 @@
 
 #include "c_types/circuits_rt.h"
 #include "c_types/contracted_rt.h"
+#include "c_types/contractionHierarchies_rt.h"
 #include "c_types/edge_rt.h"
 #include "c_types/flow_t.h"
 #include "c_types/ii_t_rt.h"
@@ -408,6 +409,17 @@ void EmitContracted(const DriverResult &result, EmitState &state, idx_t n, DataC
 	EmitContractedColumns(result.Rows<contracted_rt>(), state, n, output);
 }
 
+void EmitContractionHierarchies(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	const auto *rows = result.Rows<contractionHierarchies_rt>();
+	EmitContractedColumns(rows, state, n, output);
+	auto metric = FlatVector::GetData<int64_t>(output.data[6]);
+	auto vertex_order = FlatVector::GetData<int64_t>(output.data[7]);
+	for (idx_t i = 0; i < n; i++) {
+		metric[i] = rows[state.offset + i].metric;
+		vertex_order[i] = rows[state.offset + i].vertex_order;
+	}
+}
+
 } // namespace
 
 void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
@@ -486,6 +498,12 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		         LogicalType::BIGINT,  LogicalType::BIGINT, LogicalType::DOUBLE};
 		names = {"type", "id", "contracted_vertices", "source", "target", "cost"};
 		return;
+	case ResultShape::CONTRACTION_HIERARCHIES:
+		types = {LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::LIST(LogicalType::BIGINT),
+		         LogicalType::BIGINT,  LogicalType::BIGINT, LogicalType::DOUBLE,
+		         LogicalType::BIGINT,  LogicalType::BIGINT};
+		names = {"type", "id", "contracted_vertices", "source", "target", "cost", "metric", "vertex_order"};
+		return;
 	case ResultShape::FLOW:
 		types = {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
 		         LogicalType::BIGINT,  LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
@@ -547,6 +565,9 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::CONTRACTED:
 		EmitContracted(result, state, n, output);
+		break;
+	case ResultShape::CONTRACTION_HIERARCHIES:
+		EmitContractionHierarchies(result, state, n, output);
 		break;
 	}
 	state.offset += n;

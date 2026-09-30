@@ -69,7 +69,8 @@ enum class DriverKind : uint8_t {
 	EDGE_DISJOINT_PATHS,
 	MAX_CARDINALITY_MATCH,
 	CHINESE_POSTMAN,
-	CONTRACTION
+	CONTRACTION,
+	CONTRACTION_HIERARCHIES
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -98,6 +99,9 @@ enum class ResultShape : uint8_t {
 	// contracted_rt, as src/contraction/contractGraph.c emits it: type, id, contracted_vertices as a
 	// list, source, target, cost; every row owns its array
 	CONTRACTED,
+	// contractionHierarchies_rt, as src/contraction/contractionHierarchies.c emits it: CONTRACTED's
+	// columns, then metric and vertex_order; every row owns its array
+	CONTRACTION_HIERARCHIES,
 };
 
 // A check upstream's C entry runs on the parameters before it calls the driver, even when the
@@ -204,6 +208,8 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::MAX_CARDINALITY_MATCH, "max_cardinality_match", ResultShape::IDS, RequestCheck::NONE},
     {DriverKind::CHINESE_POSTMAN, "chinese_postman", ResultShape::PATH, RequestCheck::NONE},
     {DriverKind::CONTRACTION, "contraction", ResultShape::CONTRACTED, RequestCheck::CONTRACTION_CYCLES},
+    {DriverKind::CONTRACTION_HIERARCHIES, "contraction_hierarchies", ResultShape::CONTRACTION_HIERARCHIES,
+     RequestCheck::NONE},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -218,7 +224,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::CONTRACTION) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::CONTRACTION_HIERARCHIES) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

@@ -63,6 +63,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/components/makeConnected_driver.cpp
     ${PGROUTING_DIR}/src/components/strongComponents_driver.cpp
     ${PGROUTING_DIR}/src/contraction/contractGraph_driver.cpp
+    ${PGROUTING_DIR}/src/contraction/contractionHierarchies_driver.cpp
     ${PGROUTING_DIR}/src/cpp_common/combinations.cpp
     ${PGROUTING_DIR}/src/cpp_common/pgdata_fetchers.cpp
     ${PGROUTING_DIR}/src/cpp_common/pgdata_getters.cpp

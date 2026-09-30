@@ -7,6 +7,7 @@
 #include "driver_groups.hpp"
 
 #include "drivers/contraction/contractGraph_driver.h"
+#include "drivers/contraction/contractionHierarchies_driver.h"
 
 namespace duckdb_pgrouting {
 
@@ -18,6 +19,11 @@ bool CallContractionDriver(const DriverRequest &request, const DriverArrays &arr
 		// num_cycles; RequestCheck::CONTRACTION_CYCLES already answered cycles < 1.
 		pgr_do_contractGraph(edges, arrays.forbidden, arrays.methods, request.cycles, request.directed,
 		                     &call.contracted_rows, &call.count, &call.log, &call.notice, &call.err);
+		return true;
+	case DriverKind::CONTRACTION_HIERARCHIES:
+		// src/contraction/contractionHierarchies.c: no methods and no cycles.
+		pgr_contractionHierarchies(edges, arrays.forbidden, request.directed, &call.hierarchy_rows, &call.count,
+		                           &call.log, &call.notice, &call.err);
 		return true;
 	default:
 		return false;

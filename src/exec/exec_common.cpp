@@ -10,6 +10,7 @@
 #include "duckdb/logging/logger.hpp"
 
 #include "c_types/contracted_rt.h"
+#include "c_types/contractionHierarchies_rt.h"
 #include "c_types/path_rt.h"
 #include "c_types/transitiveClosure_rt.h"
 #include "drivers/shortestPath_driver.hpp"
@@ -42,6 +43,20 @@ DriverResult &DriverResult::operator=(DriverResult &&other) noexcept {
 	return *this;
 }
 
+namespace {
+
+// Both contraction row structs begin with the same fields; each row's contracted_vertices is its
+// own malloc'd block (pgr_alloc in the contraction drivers), zero elements included, and type points
+// at a string literal that is not freed.
+template <class ROW>
+void FreeContractedArrays(ROW *rows, std::size_t count) {
+	for (std::size_t k = 0; rows != nullptr && k < count; k++) {
+		std::free(rows[k].contracted_vertices);
+	}
+}
+
+} // namespace
+
 // A shape whose rows own arrays of their own frees those here, before the rows themselves, so the
 // error path that drops partial results releases them too.
 void DriverResult::Release() {
@@ -59,10 +74,13 @@ void DriverResult::Release() {
 		// Each row's contracted_vertices is its own malloc'd block (pgr_alloc in
 		// src/contraction/contractGraph_driver.cpp), zero elements included; type points at a string
 		// literal and is not freed.
-		auto *contracted = static_cast<contracted_rt *>(rows);
-		for (std::size_t k = 0; contracted != nullptr && k < count; k++) {
-			std::free(contracted[k].contracted_vertices);
-		}
+		FreeContractedArrays(static_cast<contracted_rt *>(rows), count);
+		break;
+	}
+	case ResultShape::CONTRACTION_HIERARCHIES: {
+		// As CONTRACTED: graph_to_tuple (cpp_common/to_postgres.hpp) allocates every row's list, the
+		// v rows' empty ones included.
+		FreeContractedArrays(static_cast<contractionHierarchies_rt *>(rows), count);
 		break;
 	}
 	case ResultShape::PATH:

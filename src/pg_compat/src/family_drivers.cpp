@@ -61,6 +61,8 @@ void *RowsOf(const DriverCall &call, ResultShape shape) {
 		return call.flow_rows;
 	case ResultShape::CONTRACTED:
 		return call.contracted_rows;
+	case ResultShape::CONTRACTION_HIERARCHIES:
+		return call.hierarchy_rows;
 	}
 	return nullptr;
 }
@@ -94,6 +96,7 @@ bool DropWrongShapeRows(DriverCall &call, ResultShape shape) {
 	drop(call.circuit_rows, shape == ResultShape::CIRCUITS);
 	drop(call.flow_rows, shape == ResultShape::FLOW);
 	drop(call.contracted_rows, shape == ResultShape::CONTRACTED);
+	drop(call.hierarchy_rows, shape == ResultShape::CONTRACTION_HIERARCHIES);
 	return wrong;
 }
 
