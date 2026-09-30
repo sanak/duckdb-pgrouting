@@ -1,0 +1,148 @@
+# name: test/sql/pgrouting/contraction/contractionLinear.test
+# description: Generated from pgRouting's contractionLinear documentation queries
+# group: [pgrouting]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# GENERATED FILE - do not edit by hand. Every edit is lost on the next regeneration.
+# Regenerate with:  GEN=ninja make release && python3 scripts/gen_docqueries_tests.py
+#
+# Source: third_party/pgrouting/docqueries/contraction/contractionLinear.pg and the committed transcript beside it. The queries and their expected rows are
+# upstream's verbatim; the only edit is psql's aligned output, which is rewritten here as
+# sqllogictest rows. A block this generator could not carry over is recorded below as a skipped
+# line with its reason, so what this file does not cover is visible here rather than implied.
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+statement ok
+CREATE TABLE vertices AS
+  SELECT id, CAST(in_edges AS BIGINT[]) AS in_edges,
+         CAST(out_edges AS BIGINT[]) AS out_edges, x, y
+  FROM read_csv_auto('test/data/sampledata/vertices.csv');
+
+statement ok
+CREATE TABLE pointsofinterest AS
+  SELECT * REPLACE (CAST(geom AS GEOMETRY) AS geom)
+  FROM read_csv_auto('test/data/sampledata/pointsofinterest.csv');
+
+statement ok
+CREATE TABLE combinations AS
+  SELECT * FROM read_csv_auto('test/data/sampledata/combinations.csv');
+
+statement ok
+CREATE TABLE restrictions AS
+  SELECT id, CAST(path AS BIGINT[]) AS path, CAST(cost AS DOUBLE) AS cost
+  FROM read_csv_auto('test/data/sampledata/restrictions.csv');
+
+# q1: shortcut ids, and in an undirected graph their direction, follow the order the edges are
+# read in, so only what upstream guarantees is asserted: each vertex's absorbed vertices and each
+# shortcut's endpoints, cost and bypassed vertices
+query TITIIR
+SELECT type, CASE WHEN type = 'v' THEN id ELSE 0 END, CAST(list_sort(contracted_vertices) AS VARCHAR), least(source, target), greatest(source, target), cost
+FROM (SELECT * FROM pgr_contractionLinear(
+  'SELECT id, source, target, cost, reverse_cost FROM edges',
+  directed => false))
+ORDER BY ALL;
+----
+e	0	[15]	10	16	2
+e	0	[17]	12	16	2
+e	0	[3]	1	7	2
+
+# q2: shortcut ids, and in an undirected graph their direction, follow the order the edges are
+# read in, so only what upstream guarantees is asserted: each vertex's absorbed vertices and each
+# shortcut's endpoints, cost and bypassed vertices
+query TITIIR
+SELECT type, CASE WHEN type = 'v' THEN id ELSE 0 END, CAST(list_sort(contracted_vertices) AS VARCHAR), least(source, target), greatest(source, target), cost
+FROM (SELECT * FROM pgr_contractionLinear(
+$$SELECT * FROM (VALUES
+  (1, 1, 2, 1, -1),
+  (2, 2, 3, 3, 4))
+  AS edges(id,source,target,cost,reverse_cost)$$,
+  directed => true))
+ORDER BY ALL;
+----
+
+# q3: shortcut ids, and in an undirected graph their direction, follow the order the edges are
+# read in, so only what upstream guarantees is asserted: each vertex's absorbed vertices and each
+# shortcut's endpoints, cost and bypassed vertices
+query TITIIR
+SELECT type, CASE WHEN type = 'v' THEN id ELSE 0 END, CAST(list_sort(contracted_vertices) AS VARCHAR), least(source, target), greatest(source, target), cost
+FROM (SELECT * FROM pgr_contractionLinear(
+$$SELECT * FROM (VALUES
+  (1, 1, 2, 1, -1),
+  (2, 2, 3, 3, 4))
+  AS edges(id,source,target,cost,reverse_cost)$$,
+  directed => false))
+ORDER BY ALL;
+----
+e	0	[2]	1	3	4
+
+# q4: shortcut ids, and in an undirected graph their direction, follow the order the edges are
+# read in, so only what upstream guarantees is asserted: each vertex's absorbed vertices and each
+# shortcut's endpoints, cost and bypassed vertices
+query TITIIR
+SELECT type, CASE WHEN type = 'v' THEN id ELSE 0 END, CAST(list_sort(contracted_vertices) AS VARCHAR), least(source, target), greatest(source, target), cost
+FROM (SELECT * FROM pgr_contractionLinear(
+$$SELECT * FROM (VALUES
+  (1, 1, 2, 1, 2),
+  (2, 2, 3, 3, 4))
+  AS edges(id,source,target,cost,reverse_cost)$$,
+  directed => true))
+ORDER BY ALL;
+----
+e	0	[2]	1	3	4
+e	0	[2]	1	3	6
+
+# q5: shortcut ids, and in an undirected graph their direction, follow the order the edges are
+# read in, so only what upstream guarantees is asserted: each vertex's absorbed vertices and each
+# shortcut's endpoints, cost and bypassed vertices
+query TITIIR
+SELECT type, CASE WHEN type = 'v' THEN id ELSE 0 END, CAST(list_sort(contracted_vertices) AS VARCHAR), least(source, target), greatest(source, target), cost
+FROM (SELECT * FROM pgr_contractionLinear(
+$$SELECT * FROM (VALUES
+  (1, 1, 2, 1, 2),
+  (2, 2, 3, 3, 4))
+  AS edges(id,source,target,cost,reverse_cost)$$,
+  directed => false))
+ORDER BY ALL;
+----
+e	0	[2]	1	3	4
+
+# q6: shortcut ids, and in an undirected graph their direction, follow the order the edges are
+# read in, so only what upstream guarantees is asserted: each vertex's absorbed vertices and each
+# shortcut's endpoints, cost and bypassed vertices
+query TITIIR
+SELECT type, CASE WHEN type = 'v' THEN id ELSE 0 END, CAST(list_sort(contracted_vertices) AS VARCHAR), least(source, target), greatest(source, target), cost
+FROM (SELECT * FROM pgr_contractionLinear(
+$$SELECT * FROM (VALUES
+  (1, 1, 2, 1),
+  (2, 2, 3, 1),
+  (2, 3, 4, 1))
+  AS edges(id,source,target,cost)$$))
+ORDER BY ALL;
+----
+e	0	[2, 3]	1	4	3
+
+# cg1: skipped - no result set
+
+# cg2: skipped - no result set
+
+# cg3: skipped - no result set
+
+# cg4: skipped - reads vertices.is_contracted, which earlier blocks without a result set add and set; the generator never runs those
+
+# cg5: skipped - no result set
+
+# cg6: skipped - no result set
+
+# cg7: skipped - reads the contracted_graph view, which earlier blocks without a result set create; the generator never runs those
+
+# cg8: skipped - reads the contracted_graph view, which earlier blocks without a result set create; the generator never runs those
+
+# cg9: skipped - reads the contracted_graph view and edges.contracted_vertices, which earlier blocks without a result set create; the generator never runs those
+

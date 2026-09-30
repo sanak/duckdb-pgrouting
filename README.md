@@ -74,7 +74,7 @@ WHERE function_name LIKE 'pgr\_%' ESCAPE '\' ORDER BY ALL;
 
 ## Functions
 
-Eighty-one pgRouting functions — two hundred and twenty-eight of pgRouting 4.0's signatures — plus
+Eighty-five pgRouting functions — two hundred and thirty-two of pgRouting 4.0's signatures — plus
 `pgr_version()`.
 The [pgRouting documentation](https://docs.pgrouting.org/4.0/en/) describes each algorithm, its
 parameters and its result columns, all of which this extension keeps.
@@ -100,6 +100,7 @@ parameters and its result columns, all of which this extension keeps.
 | Metrics | `pgr_betweennessCentrality`, `pgr_bandwidth`, `pgr_degree` |
 | Graph structure | `pgr_isPlanar`, `pgr_lineGraph`, `pgr_lineGraphFull`, `pgr_transitiveClosure`, `pgr_lengauerTarjanDominatorTree`, `pgr_hawickCircuits`, `pgr_stoerWagner` |
 | Flow | `pgr_maxFlow`, `pgr_pushRelabel`, `pgr_boykovKolmogorov`, `pgr_edmondsKarp`, `pgr_maxFlowMinCost`, `pgr_maxFlowMinCost_Cost`, `pgr_edgeDisjointPaths`, `pgr_maxCardinalityMatch`, `pgr_chinesePostman`, `pgr_chinesePostmanCost` |
+| Contraction | `pgr_contraction`, `pgr_contractionDeadEnd`, `pgr_contractionLinear`, `pgr_contractionHierarchies` |
 | Utilities | `pgr_extractVertices`, `pgr_findCloseEdges` |
 
 Functions deliberately not ported are listed, each with its reason, in
@@ -147,11 +148,18 @@ Functions deliberately not ported are listed, each with its reason, in
   flow (never its value or cost), which paths `pgr_edgeDisjointPaths` returns (never how many),
   which edges `pgr_maxCardinalityMatch` picks (never how many; the choice also follows the C++
   standard library, so it can differ between platforms), and where `pgr_chinesePostman`'s tour
-  starts: at the first edge row's source. Every answer is valid for its problem; see
+  starts: at the first edge row's source. So do the contraction functions' shortcut ids and, in an
+  undirected graph, their direction, which vertex a contracted tree collapses onto, and all of
+  `pgr_contractionHierarchies`' ranking (`metric`, `vertex_order`) and shortcuts. Every answer is
+  valid for its problem; see
   `docs/BACKLOG.md` for the upstream behaviours these functions keep.
 - **`pgr_degree` returns its rows sorted by vertex**; upstream's order is unspecified.
 - **`pgr_edgeDisjointPaths` with many sources and one target swaps `start_vid` and `end_vid`**,
   as pgRouting's own SQL wrapper does: `start_vid` shows the target, `end_vid` the source.
+- **`pgr_contractionHierarchies` is slow on large graphs and its output is not a query-ready
+  hierarchy.** Thousands of road segments take seconds to minutes and cannot be cancelled;
+  `vertex_order` is not the contraction order, and upstream's shortcuts do not always complete the
+  hierarchy. See `docs/BACKLOG.md`.
 - **Memory.** pgRouting's own allocations are not counted against DuckDB's `memory_limit`.
 - **A turn-restricted route re-routed over more than about ten thousand edges, or a Chinese
   Postman tour of more than about five thousand steps,** can overflow a worker thread's stack and

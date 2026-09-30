@@ -956,7 +956,7 @@ class TestContractionCompanion(unittest.TestCase):
         with self.assertRaises(ValueError):
             gen.contraction_companion("SELECT 1", ["type", "contracted_vertices", "source"])
         with self.assertRaises(ValueError):
-            gen.contraction_companion("SELECT 1", ["id", "source", "target", "cost"])
+            gen.contraction_companion("SELECT 1", ["type", "contracted_vertices", "source", "target"])
 
     def test_companion_rows_sort_like_order_by_all(self):
         # Upstream's contraction.pg q1 after respell_list_cells: two shortcuts point the other way

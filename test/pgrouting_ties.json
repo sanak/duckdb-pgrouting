@@ -92,6 +92,78 @@
       "upstream_rows": 22
     }
   },
+  "contraction/contraction.pg": {
+    "cg2": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 7
+    },
+    "q1": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 7
+    },
+    "q2": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 5
+    },
+    "q3": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 2
+    }
+  },
+  "contraction/contractionDeadEnd.pg": {
+    "q1": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 5
+    },
+    "q2": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 2
+    },
+    "q3": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 4
+    },
+    "q4": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 1
+    }
+  },
+  "contraction/contractionHierarchies.pg": {
+    "q1": {
+      "reason": "contraction hierarchy",
+      "upstream_rows": 21
+    },
+    "q2": {
+      "reason": "contraction hierarchy",
+      "upstream_rows": 26
+    }
+  },
+  "contraction/contractionLinear.pg": {
+    "q1": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 3
+    },
+    "q2": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 0
+    },
+    "q3": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 1
+    },
+    "q4": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 2
+    },
+    "q5": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 1
+    },
+    "q6": {
+      "reason": "contraction shortcuts",
+      "upstream_rows": 1
+    }
+  },
   "dagShortestPath/dagShortestPath.pg": {
     "q5": {
       "differing_rows": 3,

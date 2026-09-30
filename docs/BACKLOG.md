@@ -138,6 +138,29 @@ decision rather than an oversight.
   maximum matching `pgr_maxCardinalityMatch` returns also depends on the C++ standard library:
   Boost's greedy start sorts equal-degree edges with an unstable sort, so Linux and macOS return
   different matchings of the same size. The tests assert those wherever the answer is not forced.
+- **The contraction functions keep upstream's answers, and they depend on the edge order.**
+  Shortcut ids are handed out in creation order and, in an undirected graph, a shortcut points
+  the way the edges were read; a tree component collapses onto whichever vertex the order leaves,
+  and in a directed graph a vertex with incoming edges only counts as a dead end and is listed
+  under every vertex that reaches it. What holds in any order: between the vertices left, the
+  contracted graph keeps every shortest distance. `methods => []` raises `No elements found`
+  (PostgreSQL says `One dimension expected`, since its empty arrays have no dimension).
+- **`pgr_contractionHierarchies` keeps upstream's hierarchy, which is not a complete one.** Its
+  ranking, its metrics and its shortcuts all change with the edge order; `vertex_order` numbers
+  the vertices by a second queue keyed by metric, not in contraction order, and upstream's
+  shortcut rules do not always add every shortcut an upward/downward search needs. What holds:
+  every vertex not forbidden is ranked once, and the original graph plus the shortcuts keeps
+  every shortest distance. Its undirected graph keeps one edge per vertex pair (parallel edges,
+  and a `cost` that differs from `reverse_cost`, collapse to the last one read), and its witness
+  search bound is an integer, so with every cost below 1 no shortcut is made. Candidates to
+  report upstream.
+- **`pgr_contractionHierarchies` reads its priority queue after emptying it**
+  (`include/contraction/contractionHierarchies.hpp`, the log line and the comparison after the
+  last pop). A release build reads the pair it just popped, deterministically; a build with libc++
+  hardening or `_GLIBCXX_ASSERTIONS` aborts on every call, and ASan reports a container-overflow,
+  so relassert runs `test/sql/contraction_hierarchies.test` and the generated contraction pages
+  with `ASAN_OPTIONS=detect_container_overflow=0`. No adapter guard can avoid a read inside the
+  algorithm. A candidate to report upstream.
 - **A Chinese Postman tour of thousands of steps can exhaust a thread's stack.** Upstream's
   `EulerCircuitDFS` (`include/chinese/chinesePostman.hpp`) recurses once per step of the tour: on
   a 512 KB stack (a macOS worker thread) a tour of 5000 to 8000 steps overflows it and ends the
@@ -161,7 +184,9 @@ decision rather than an oversight.
   graph, and `pgr_transitiveClosure` holds up to vertices-squared ids. `pgr_pushRelabel`,
   `pgr_boykovKolmogorov`, `pgr_edmondsKarp` and `pgr_maxFlow` poll once before their Boost call,
   `pgr_edgeDisjointPaths` once per pair and `pgr_maxCardinalityMatch` once; the minimum-cost flow
-  functions and the Chinese Postman never do.
+  functions and the Chinese Postman never do. The contraction functions never poll;
+  `pgr_contractionHierarchies` over 8000 road segments takes about 16 seconds undirected, and over
+  16000 more than two minutes and 2.5 GB.
 - **A turn-restricted path that must be re-routed over thousands of edges can exhaust a thread's
   stack.** Upstream's `TrspHandler::construct_path` (`src/trsp/trspHandler.cpp`) recurses once per
   edge of the path it rebuilds. PostgreSQL runs it on a backend's main thread (8 MB of stack by
@@ -329,6 +354,13 @@ Each of these would be a change no test could observe, so none of them is made:
   depend on the edge order (the matching's also on the C++ standard library) and upstream's
   transcripts were made from another one. `test/sql/edge_disjoint_paths.test`,
   `max_cardinality_match.test` and `chinese_postman.test` assert their order-free facts.
+- **The contraction documentation pages are asserted through invariants only** (see
+  `test/pgrouting_ties.json`), and their `cg*` blocks that read what earlier blocks create are
+  skipped (`test/pgrouting_skip.json`). `test/sql/contraction.test` checks what those blocks show:
+  that the contracted graph keeps the distances between the vertices left.
+- **No test runs `pgr_contractionHierarchies` on a road network.** Thousands of segments take
+  seconds to minutes; the 2049-vertex path in `test/sql/contraction_hierarchies.test` crosses the
+  output chunk instead.
 
 ## Open decision
 

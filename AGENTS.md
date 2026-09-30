@@ -28,12 +28,13 @@ Current state: the extension registers `pgr_dijkstra`, `pgr_dijkstraCost`, `pgr_
 `pgr_transitiveClosure`, `pgr_lengauerTarjanDominatorTree`, `pgr_hawickCircuits`, `pgr_stoerWagner`,
 `pgr_maxFlow`, `pgr_pushRelabel`, `pgr_boykovKolmogorov`, `pgr_edmondsKarp`, `pgr_maxFlowMinCost`,
 `pgr_maxFlowMinCost_Cost`, `pgr_edgeDisjointPaths`, `pgr_maxCardinalityMatch`, `pgr_chinesePostman`,
-`pgr_chinesePostmanCost`, `pgr_extractVertices`, `pgr_findCloseEdges` and `pgr_degree` — pgRouting's
-two hundred and twenty-eight corresponding signatures, each registered once per number of its
+`pgr_chinesePostmanCost`, `pgr_contraction`, `pgr_contractionDeadEnd`, `pgr_contractionLinear`,
+`pgr_contractionHierarchies`, `pgr_extractVertices`, `pgr_findCloseEdges` and `pgr_degree` —
+pgRouting's two hundred and thirty-two corresponding signatures, each registered once per number of its
 defaulted parameters passed positionally — and `pgr_version()`. The `pgr_dijkstra` and
 `pgr_withPoints` families call pgRouting's unified `do_shortestPath` driver; with points given,
 DuckDB also materializes the two edge queries that driver derives from the edge and points SQL. The
-other fifty-seven families call their own per-family `pgr_do_*` drivers, or upstream's unified
+other sixty-one families call their own per-family `pgr_do_*` drivers, or upstream's unified
 `do_ordering`, `do_allpairs` and `do_metrics`, through one adapter on the pg_compat side; the two A*
 families also read each edge's end-point coordinates (`x1`, `y1`, `x2`, `y2`), and
 `pgr_withPointsDD` reads the same two derived edge queries as `pgr_withPoints`. So do
@@ -65,7 +66,12 @@ value: a one-row table function, and a scalar macro of the same name over it (a 
 and minimum-cost flow fill a `FLOW` shape (`Flow_t`), edge-disjoint paths reuse `KSP`, matching
 `IDS` and the Chinese Postman `PATH`; `pgr_maxFlow`, `pgr_maxFlowMinCost_Cost` and
 `pgr_chinesePostmanCost` return one value like `pgr_bandwidth`. The adapter answers a Chinese
-Postman start vertex that upstream crashes on with no rows. `pgr_extractVertices`,
+Postman start vertex that upstream crashes on with no rows. The contraction functions are called from
+`src/pg_compat/src/drivers_contraction.cpp` and fill two shapes whose rows own a `BIGINT[]` each
+(`CONTRACTED`, and `CONTRACTION_HIERARCHIES` with `metric` and `vertex_order`); their defaulted
+`methods` and `forbidden` arrays travel in the input row's id-list slots (a list-typed
+`OptionalParam`), and `pgr_contractionDeadEnd` / `pgr_contractionLinear` fix `methods`.
+`pgr_extractVertices`,
 `pgr_findCloseEdges` and `pgr_degree`, which upstream writes in PL/pgSQL, are reimplemented as
 bind_replace functions. Each binds the caller's edge query, picks one of upstream's modes, and
 rewrites the call into a fixed DuckDB query (`src/functions/sql_template.cpp`). The geometry work of
@@ -146,6 +152,11 @@ GEN=ninja make debug           # or: make release / make relassert
 make test_debug                # all sqllogictests
 build/debug/test/unittest test/sql/pgrouting.test   # a single test file
 ```
+
+DuckDB's debug and relassert builds have ASan on, and upstream's `pgr_contractionHierarchies` reads an
+empty priority queue (`contractionHierarchies.hpp`), so running its tests
+(`test/sql/contraction_hierarchies.test` and the generated Hierarchies page) under those builds needs
+`ASAN_OPTIONS=detect_container_overflow=0`.
 
 Wasm (requires `source <emsdk>/emsdk_env.sh`, and `VCPKG_TOOLCHAIN_PATH` exported as above):
 
@@ -303,7 +314,9 @@ deploys it to GitHub Pages from `main` — on pushes and by hand after a Release
   matches a named parameter positionally. An upstream signature with k defaulted parameters is
   therefore registered k + 1 times, passing the first 0..k of them positionally, and every
   variant accepts all k by name. The defaulted parameters are data (`OptionalParam` in
-  `src/functions/function_spec.hpp`), in upstream's declaration order.
+  `src/functions/function_spec.hpp`), in upstream's declaration order. A defaulted array
+  (`INTEGER_LIST`, `BIGINT_LIST`) names an id-list slot of the input row instead of a request
+  parameter.
 - A pgRouting family is added as data: its upstream driver file in `cmake/pgrouting_sources.cmake`,
   a `DRIVERS` row (`src/include/pgrouting/driver_kind.hpp`), a case in one
   `src/pg_compat/src/drivers_*.cpp`, any new request field with its row in

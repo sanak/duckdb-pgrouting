@@ -97,7 +97,9 @@ ORDERING_NOTE = (
 # The contraction functions number their shortcuts in creation order and, in an undirected graph,
 # point each one the way the edges were read, so every block calling one is asserted through what
 # upstream guarantees whatever the edge order: each vertex's absorbed vertices and each shortcut's
-# endpoints, cost and bypassed vertices, without its id or direction.
+# endpoints, cost and bypassed vertices, without its id or direction. The companion compares
+# shortcuts unordered for directed calls too (the hand-written test/sql/contraction.test pins
+# directed directions).
 CONTRACTION_FUNCTIONS = frozenset({"pgr_contraction", "pgr_contractiondeadend", "pgr_contractionlinear"})
 CONTRACTION_EDGE_COLUMNS = ("source", "target", "cost")
 CONTRACTION_NOTE = (

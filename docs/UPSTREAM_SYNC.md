@@ -50,6 +50,14 @@ the following checklist, in order. Every step either passes or tells you exactly
    wrapper's `start_vid`/`end_vid` swap (`EdgeDisjointSwappedFlags` in
    `src/functions/max_flow_specs.cpp`); re-read `sql/max_flow/edgeDisjointPaths.sql` at every bump
    and drop the swap when upstream does.
+
+   The contraction functions (pgr_contraction, pgr_contractionDeadEnd, pgr_contractionLinear,
+   pgr_contractionHierarchies) call their drivers from `src/pg_compat/src/drivers_contraction.cpp`;
+   treat them the same way. Re-read `sql/contraction/deadEndContraction.sql` and
+   `linearContraction.sql` at every bump (`ContractionFlags` in `src/functions/contraction_specs.cpp`
+   copies their fixed methods and cycles), and `include/contraction/contractionHierarchies.hpp`:
+   while it reads `minPQ.top()` after the queue empties, relassert runs its tests with
+   `ASAN_OPTIONS=detect_container_overflow=0`.
 2. Update `cmake/pgrouting_sources.cmake` for added or removed upstream files, one entry at a
    time. Never glob: the list is deliberately explicit so that a new upstream file is a decision
    rather than an accident. Do not list a `*_process.cpp` (those talk to PostgreSQL and this

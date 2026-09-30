@@ -43,6 +43,54 @@
       "reason": "which vertices pgr_makeConnected joins depends on the order the edges are read in: upstream's transcript joins 5 and 2, this build, reading the sample edges in id order, 9 and 2; test/sql/components.test asserts this build's answer and that the added edges connect the graph"
     }
   },
+  "contraction/contraction.pg": {
+    "cg12": {
+      "reason": "calls path_cost, a PL/pgSQL function block cg11 creates over tables earlier blocks change; test/sql/contraction.test checks the same distances over the contracted graph"
+    },
+    "cg13": {
+      "reason": "calls path_cost, a PL/pgSQL function block cg11 creates over tables earlier blocks change; test/sql/contraction.test checks the same distances over the contracted graph"
+    },
+    "cg14": {
+      "reason": "calls path_cost, a PL/pgSQL function block cg11 creates over tables earlier blocks change; test/sql/contraction.test checks the same distances over the contracted graph"
+    },
+    "cg5": {
+      "reason": "reads vertices.is_contracted, which earlier blocks without a result set add and set; the generator never runs those"
+    },
+    "cg8": {
+      "reason": "reads vertices.is_contracted, which earlier blocks without a result set add and set; the generator never runs those"
+    },
+    "cg9": {
+      "reason": "reads vertices.is_contracted and edges.contracted_vertices, which earlier blocks without a result set add and set; the generator never runs those"
+    }
+  },
+  "contraction/contractionDeadEnd.pg": {
+    "cg5": {
+      "reason": "reads vertices.is_contracted, which earlier blocks without a result set add and set; the generator never runs those"
+    },
+    "cg7": {
+      "reason": "reads the contracted_graph view, which earlier blocks without a result set create; the generator never runs those"
+    },
+    "cg8": {
+      "reason": "reads the contracted_graph view and vertices.contracted_vertices, which earlier blocks without a result set create; the generator never runs those"
+    },
+    "cg9": {
+      "reason": "reads the contracted_graph view and vertices.contracted_vertices, which earlier blocks without a result set create; the generator never runs those"
+    }
+  },
+  "contraction/contractionLinear.pg": {
+    "cg4": {
+      "reason": "reads vertices.is_contracted, which earlier blocks without a result set add and set; the generator never runs those"
+    },
+    "cg7": {
+      "reason": "reads the contracted_graph view, which earlier blocks without a result set create; the generator never runs those"
+    },
+    "cg8": {
+      "reason": "reads the contracted_graph view, which earlier blocks without a result set create; the generator never runs those"
+    },
+    "cg9": {
+      "reason": "reads the contracted_graph view and edges.contracted_vertices, which earlier blocks without a result set create; the generator never runs those"
+    }
+  },
   "dijkstra/dijkstraCostMatrix.pg": {
     "q1": {
       "reason": "passes a scalar subquery as an argument; DuckDB rejects a subquery in the arguments of a table function that is not in-out (SET VARIABLE plus getvariable() works instead)"
