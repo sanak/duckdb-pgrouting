@@ -913,5 +913,120 @@ class TestEdgeDisjointPathsHaveNoRouteTie(unittest.TestCase):
         self.assertIn("pgr_edgedisjointpaths", gen.KSP_FUNCTIONS)
 
 
+class TestContractionCompanion(unittest.TestCase):
+    def _table(self, columns, rows):
+        import pgparse
+
+        return pgparse.AlignedTable(columns, rows, len(rows))
+
+    FULL = ["type", "id", "contracted_vertices", "source", "target", "cost"]
+
+    def test_which_calls_take_which_invariant(self):
+        for name in ("pgr_contraction", "pgr_contractionDeadEnd", "pgr_contractionLinear"):
+            with self.subTest(name=name):
+                sql = "SELECT * FROM {}('SELECT 1')".format(name)
+                self.assertTrue(gen.is_contraction_call(sql))
+                self.assertFalse(gen.is_hierarchy_call(sql))
+        sql = "SELECT * FROM pgr_contractionHierarchies('SELECT 1')"
+        self.assertTrue(gen.is_hierarchy_call(sql))
+        self.assertFalse(gen.is_contraction_call(sql))
+        self.assertFalse(gen.is_contraction_call("SELECT * FROM pgr_dijkstra('SELECT 1', 1, 2)"))
+
+    def test_companion_sql_drops_shortcut_ids_and_direction(self):
+        sql, directive = gen.contraction_companion("SELECT * FROM pgr_contraction('x', false);\n", self.FULL)
+        self.assertEqual(
+            "SELECT type, CASE WHEN type = 'v' THEN id ELSE 0 END, "
+            "CAST(list_sort(contracted_vertices) AS VARCHAR), least(source, target), "
+            "greatest(source, target), cost\n"
+            "FROM (SELECT * FROM pgr_contraction('x', false))\nORDER BY ALL;",
+            sql)
+        self.assertEqual("TITIIR", directive)
+
+    def test_companion_sql_follows_a_narrower_select_list(self):
+        sql, directive = gen.contraction_companion(
+            "SELECT type, id, contracted_vertices FROM pgr_contraction('x')", ["type", "id", "contracted_vertices"])
+        self.assertEqual(
+            "SELECT type, CASE WHEN type = 'v' THEN id ELSE 0 END, "
+            "CAST(list_sort(contracted_vertices) AS VARCHAR)\n"
+            "FROM (SELECT type, id, contracted_vertices FROM pgr_contraction('x'))\nORDER BY ALL;",
+            sql)
+        self.assertEqual("TIT", directive)
+
+    def test_companion_sql_rejects_part_of_an_edge(self):
+        with self.assertRaises(ValueError):
+            gen.contraction_companion("SELECT 1", ["type", "contracted_vertices", "source"])
+        with self.assertRaises(ValueError):
+            gen.contraction_companion("SELECT 1", ["id", "source", "target", "cost"])
+
+    def test_companion_rows_sort_like_order_by_all(self):
+        # Upstream's contraction.pg q1 after respell_list_cells: two shortcuts point the other way
+        # in this build's order, which the companion no longer sees.
+        table = self._table(self.FULL, [
+            ["v", " 4", "[2]", "-1", "-1", "-1"],
+            ["v", " 7", "[3, 1]", "-1", "-1", "-1"],
+            ["e", "-1", "[5, 6]", "7", "10", "2"],
+            ["e", "-2", "[17]", "16", "12", "2"],
+        ])
+        self.assertEqual(
+            [["e", "0", "[17]", "12", "16", "2"],
+             ["e", "0", "[5, 6]", "7", "10", "2"],
+             ["v", "4", "[2]", "-1", "-1", "-1"],
+             ["v", "7", "[1, 3]", "-1", "-1", "-1"]],
+            gen.contraction_companion_rows(table, self.FULL))
+
+    def test_actual_rows_render_like_the_expected_ones(self):
+        columns = ["type", "id", "cv", "least", "greatest", "cost"]
+        result = duckdbcli.QueryResult(columns, ["VARCHAR", "BIGINT", "VARCHAR", "BIGINT", "BIGINT", "DOUBLE"],
+                                       [["e", 0, "[17]", 12, 16, 2.0], ["v", 4, "[2]", -1, -1, -1.0]])
+        self.assertEqual([["e", "0", "[17]", "12", "16", "2"], ["v", "4", "[2]", "-1", "-1", "-1"]],
+                         gen.render_actual_rows(result, "TITIIR"))
+
+
+class TestHierarchyCompanion(unittest.TestCase):
+    COLUMNS = ["type", "id", "contracted_vertices", "source", "target", "cost", "metric", "vertex_order"]
+
+    def _table(self, rows):
+        import pgparse
+
+        return pgparse.AlignedTable(self.COLUMNS, rows, len(rows))
+
+    def test_companion_sql_never_names_a_ranking_value(self):
+        self.assertEqual(
+            "SELECT CAST(list_sort(list(id) FILTER (WHERE type = 'v')) AS VARCHAR),\n"
+            "       count(*) FILTER (WHERE type = 'v' AND len(contracted_vertices) > 0),\n"
+            "       min(vertex_order) FILTER (WHERE type = 'v'), max(vertex_order) FILTER (WHERE type = 'v'),\n"
+            "       count(DISTINCT vertex_order) FILTER (WHERE type = 'v'),\n"
+            "       count(*) FILTER (WHERE type = 'e' AND (len(contracted_vertices) = 0 OR metric <> -1 "
+            "OR vertex_order <> -1)),\n"
+            "       count(*) FILTER (WHERE type = 'e') = -coalesce(min(id) FILTER (WHERE type = 'e'), 0)\n"
+            "FROM (SELECT * FROM pgr_contractionHierarchies('x'));",
+            gen.hierarchy_companion_sql("SELECT * FROM pgr_contractionHierarchies('x');\n"))
+
+    def test_companion_rows_come_from_upstreams_table(self):
+        table = self._table([
+            ["v", " 2", "[]", "-1", "-1", "-1", "-1", " 3"],
+            ["v", " 1", "[]", "-1", "-1", "-1", " 0", " 1"],
+            ["v", " 3", "[]", "-1", "-1", "-1", "-2", " 2"],
+            ["e", "-1", "[2]", "1", "3", "2", "-1", "-1"],
+        ])
+        self.assertEqual([["[1, 2, 3]", "0", "1", "3", "3", "0", "true"]], gen.hierarchy_companion_rows(table))
+
+    def test_an_empty_answer(self):
+        self.assertEqual([["NULL", "0", "NULL", "NULL", "0", "0", "true"]], gen.hierarchy_companion_rows(self._table([])))
+
+    def test_a_narrower_select_list_is_rejected(self):
+        import pgparse
+
+        with self.assertRaises(ValueError):
+            gen.hierarchy_companion_rows(pgparse.AlignedTable(["type", "id"], [], 0))
+
+    def test_actual_rows_render_booleans_and_nulls(self):
+        result = duckdbcli.QueryResult(["a", "b", "c", "d", "e", "f", "g"],
+                                       ["VARCHAR", "BIGINT", "BIGINT", "BIGINT", "BIGINT", "BIGINT", "BOOLEAN"],
+                                       [[None, 0, None, None, 0, 0, True]])
+        self.assertEqual([["NULL", "0", "NULL", "NULL", "0", "0", "true"]],
+                         gen.render_actual_rows(result, gen.HIERARCHY_DIRECTIVE))
+
+
 if __name__ == "__main__":
     unittest.main()

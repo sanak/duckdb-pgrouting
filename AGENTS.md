@@ -239,7 +239,12 @@ their `unittest` suite. The test tools read upstream's committed fixtures and dr
   `pgr_pushRelabel`/`pgr_boykovKolmogorov`/`pgr_edmondsKarp`/`pgr_maxFlowMinCost` block whose rows
   differ is asserted through its flow's value (the net flow leaving the sources) and, for a
   minimum-cost flow, its total cost, when both equal upstream's: which edges carry a maximum flow
-  depends on the edge order. No TSP block takes a tie verdict either (its rows
+  depends on the edge order. A `pgr_contraction`/
+  `pgr_contractionDeadEnd`/`pgr_contractionLinear` block is always asserted without shortcut ids and
+  directions (each vertex's absorbed vertices and each shortcut's ends, cost and bypassed vertices),
+  and a `pgr_contractionHierarchies` block through its structure only (the ranked vertices, a
+  `vertex_order` permutation, well-formed shortcut rows): the contraction functions number vertices in
+  the order the edges are read. No TSP block takes a tie verdict either (its rows
   carry no endpoints to compare); one whose tour depends on the row order is skip-listed by a human.
 - `scripts/check_signatures.py` — compares upstream's `sql/sigs/pgrouting--<ver>.sig` against
   `duckdb_functions()` through the `pgrouting_name` tag, never by raw row count: one upstream
@@ -265,7 +270,7 @@ Three JSON control files live under `test/`:
 | file | owner | content |
 |---|---|---|
 | `test/pgrouting_skip.json` | human | documentation blocks skipped entirely, each with a reason |
-| `test/pgrouting_ties.json` | the generator | blocks downgraded to tie-insensitive assertions, each with the observed difference — a spanning-forest or vertex-ordering entry has none, since it never depended on this build's answer; never hand-edited, regenerate instead |
+| `test/pgrouting_ties.json` | the generator | blocks downgraded to tie-insensitive assertions, each with the observed difference — a spanning-forest, vertex-ordering or contraction entry has none, since it never depended on this build's answer; never hand-edited, regenerate instead |
 | `test/pgrouting_not_ported.json` | human | upstream functions deliberately not ported, each with a reason |
 
 CI has five workflows. `MainDistributionPipeline.yml` builds every DuckDB platform through

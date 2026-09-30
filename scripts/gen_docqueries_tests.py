@@ -94,6 +94,28 @@ ORDERING_NOTE = (
     "count, how many distinct vertices it lists, and its first and last seq"
 )
 
+# The contraction functions number their shortcuts in creation order and, in an undirected graph,
+# point each one the way the edges were read, so every block calling one is asserted through what
+# upstream guarantees whatever the edge order: each vertex's absorbed vertices and each shortcut's
+# endpoints, cost and bypassed vertices, without its id or direction.
+CONTRACTION_FUNCTIONS = frozenset({"pgr_contraction", "pgr_contractiondeadend", "pgr_contractionlinear"})
+CONTRACTION_EDGE_COLUMNS = ("source", "target", "cost")
+CONTRACTION_NOTE = (
+    "shortcut ids, and in an undirected graph their direction, follow the order the edges are read "
+    "in, so only what upstream guarantees is asserted: each vertex's absorbed vertices and each "
+    "shortcut's endpoints, cost and bypassed vertices"
+)
+# pgr_contractionHierarchies' ranking and shortcuts all follow the edge order; what holds is its
+# structure.
+HIERARCHY_FUNCTIONS = frozenset({"pgr_contractionhierarchies"})
+HIERARCHY_COLUMNS = ("type", "id", "contracted_vertices", "metric", "vertex_order")
+HIERARCHY_DIRECTIVE = "TIIIIIT"
+HIERARCHY_NOTE = (
+    "the ranking and the shortcuts follow the order the edges are read in, so only the answer's "
+    "structure is asserted: which vertices are ranked, that vertex_order is a permutation, and that "
+    "the shortcut rows are well formed"
+)
+
 # A call is an upstream function only when pgr_ starts an identifier, so my_pgr_dijkstra_helper
 # is left alone.
 CALL_RE = re.compile(r"(?<![A-Za-z0-9_])(pgr_\w+)\s*\(", re.IGNORECASE)
@@ -790,6 +812,146 @@ def ordering_actual_rows(result: duckdbcli.QueryResult) -> List[List[str]]:
     return [["NULL" if value is None else str(int(value)) for value in row] for row in result.rows]
 
 
+def _calls_any(sql: str, names: Union[Set[str], frozenset]) -> bool:
+    """Whether sql calls one of names (lower case), matched like CALL_RE."""
+    called = {match.group(1).lower() for match in CALL_RE.finditer(sql)}
+    return bool(called & names)
+
+
+def is_contraction_call(sql: str) -> bool:
+    """Whether sql calls pgr_contraction, pgr_contractionDeadEnd or pgr_contractionLinear."""
+    return _calls_any(sql, CONTRACTION_FUNCTIONS)
+
+
+def is_hierarchy_call(sql: str) -> bool:
+    """Whether sql calls pgr_contractionHierarchies."""
+    return _calls_any(sql, HIERARCHY_FUNCTIONS)
+
+
+def _has_edge_columns(columns: Sequence[str]) -> bool:
+    present = [c in columns for c in CONTRACTION_EDGE_COLUMNS]
+    if any(present) and not all(present):
+        raise ValueError("a contraction block selects part of source, target, cost: {}".format(list(columns)))
+    return all(present)
+
+
+def contraction_companion(sql: str, columns: Sequence[str]) -> Tuple[str, str]:
+    """The order-free companion of a contraction block, and its directive.
+
+    A shortcut row's id becomes 0 (a vertex row keeps its vertex), its list is sorted and its ends
+    are written lower first; nothing is NULL, so ORDER BY ALL sorts exactly as
+    contraction_companion_rows does.
+    """
+    lowered = [c.lower() for c in columns]
+    if "type" not in lowered or "contracted_vertices" not in lowered:
+        raise ValueError("a contraction block without type and contracted_vertices: {}".format(list(columns)))
+    select = ["type"]
+    directive = "T"
+    if "id" in lowered:
+        select.append("CASE WHEN type = 'v' THEN id ELSE 0 END")
+        directive += "I"
+    select.append("CAST(list_sort(contracted_vertices) AS VARCHAR)")
+    directive += "T"
+    if _has_edge_columns(lowered):
+        select += ["least(source, target)", "greatest(source, target)", "cost"]
+        directive += "IIR"
+    return "SELECT {}\nFROM ({})\nORDER BY ALL;".format(", ".join(select), sql.strip().rstrip(";")), directive
+
+
+def _int_list(cell: str) -> List[int]:
+    """A respelled integer-list cell ("[3, 1]", "[]") as its values."""
+    inner = cell.strip()[1:-1].strip()
+    return [int(value) for value in inner.split(",")] if inner else []
+
+
+def _list_text(values: Sequence[int]) -> str:
+    return "[" + ", ".join(str(value) for value in values) + "]"
+
+
+def contraction_companion_rows(table: pgparse.AlignedTable, columns: Sequence[str]) -> List[List[str]]:
+    """The contraction companion's expected rows, computed from upstream's (respelled) table."""
+    lowered = [c.lower() for c in columns]
+    index = {name: lowered.index(name) for name in lowered}
+    edge = _has_edge_columns(lowered)
+    keyed = []
+    for row in table.rows:
+        kind = row[index["type"]].strip()
+        key: List[Any] = [kind]
+        cells = [kind]
+        if "id" in index:
+            vid = int(row[index["id"]]) if kind == "v" else 0
+            key.append(vid)
+            cells.append(str(vid))
+        listed = _list_text(sorted(_int_list(row[index["contracted_vertices"]])))
+        key.append(listed)
+        cells.append(listed)
+        if edge:
+            ends = sorted((int(row[index["source"]]), int(row[index["target"]])))
+            cost = row[index["cost"]].strip()
+            key += [ends[0], ends[1], float(cost)]
+            cells += [str(ends[0]), str(ends[1]), cost]
+        keyed.append((key, cells))
+    return [cells for _, cells in sorted(keyed, key=lambda pair: pair[0])]
+
+
+def hierarchy_companion_sql(sql: str) -> str:
+    """Wrap a pgr_contractionHierarchies query in the assertion that survives any edge order."""
+    return (
+        "SELECT CAST(list_sort(list(id) FILTER (WHERE type = 'v')) AS VARCHAR),\n"
+        "       count(*) FILTER (WHERE type = 'v' AND len(contracted_vertices) > 0),\n"
+        "       min(vertex_order) FILTER (WHERE type = 'v'), max(vertex_order) FILTER (WHERE type = 'v'),\n"
+        "       count(DISTINCT vertex_order) FILTER (WHERE type = 'v'),\n"
+        "       count(*) FILTER (WHERE type = 'e' AND (len(contracted_vertices) = 0 OR metric <> -1 "
+        "OR vertex_order <> -1)),\n"
+        "       count(*) FILTER (WHERE type = 'e') = -coalesce(min(id) FILTER (WHERE type = 'e'), 0)\n"
+        "FROM ({});".format(sql.strip().rstrip(";"))
+    )
+
+
+def hierarchy_companion_rows(table: pgparse.AlignedTable) -> List[List[str]]:
+    """The hierarchy companion's expected row, computed from upstream's (respelled) table."""
+    lowered = [c.lower() for c in table.columns]
+    missing = [name for name in HIERARCHY_COLUMNS if name not in lowered]
+    if missing:
+        raise ValueError("a pgr_contractionHierarchies block without {}".format(missing))
+    at = {name: lowered.index(name) for name in HIERARCHY_COLUMNS}
+    vertices = [row for row in table.rows if row[at["type"]].strip() == "v"]
+    shortcuts = [row for row in table.rows if row[at["type"]].strip() == "e"]
+    ids = sorted(int(row[at["id"]]) for row in vertices)
+    orders = [int(row[at["vertex_order"]]) for row in vertices]
+    malformed = sum(1 for row in shortcuts
+                    if not _int_list(row[at["contracted_vertices"]]) or int(row[at["metric"]]) != -1
+                    or int(row[at["vertex_order"]]) != -1)
+    lowest = min((int(row[at["id"]]) for row in shortcuts), default=0)
+    return [[
+        _list_text(ids) if vertices else "NULL",
+        str(sum(1 for row in vertices if _int_list(row[at["contracted_vertices"]]))),
+        str(min(orders)) if orders else "NULL",
+        str(max(orders)) if orders else "NULL",
+        str(len(set(orders))),
+        str(malformed),
+        "true" if len(shortcuts) == -lowest else "false",
+    ]]
+
+
+def render_actual_rows(result: duckdbcli.QueryResult, directive: str) -> List[List[str]]:
+    """This build's companion rows in the spelling the expected rows use."""
+    out = []
+    for row in result.rows:
+        cells = []
+        for value, slt_type in zip(row, directive):
+            if value is None:
+                cells.append("NULL")
+            elif isinstance(value, bool):
+                cells.append("true" if value else "false")
+            elif slt_type == "R" and float(value).is_integer():
+                cells.append(str(int(value)))
+            else:
+                cells.append(str(value))
+        out.append(cells)
+    return out
+
+
 HEADER = """# name: {out}
 # description: Generated from pgRouting's {stem} documentation queries
 # group: [pgrouting]
@@ -982,6 +1144,34 @@ def process(category: str, stem: str, db: duckdbcli.DuckDB, implemented: Set[str
             items.append(
                 Emitted(block.name, ORDERING_DIRECTIVE, ordering_sql, expected_ordering_rows,
                         note=ORDERING_NOTE)
+            )
+            continue
+        hierarchy = is_hierarchy_call(sql)
+        if hierarchy or is_contraction_call(sql):
+            try:
+                if hierarchy:
+                    invariant_sql, invariant_directive = hierarchy_companion_sql(sql), HIERARCHY_DIRECTIVE
+                    expected_invariant_rows = hierarchy_companion_rows(table)
+                else:
+                    invariant_sql, invariant_directive = contraction_companion(sql, table.columns)
+                    expected_invariant_rows = contraction_companion_rows(table, table.columns)
+            except ValueError as error:
+                raise Mismatch("{}/{}.pg {}: {}".format(category, stem, block.name, error))
+            actual_invariant_rows = render_actual_rows(db.query(invariant_sql), invariant_directive)
+            if actual_invariant_rows != expected_invariant_rows:
+                raise Mismatch(
+                    "{}/{}.pg {}: this build's contraction fails the contraction invariant\n"
+                    "expected upstream's: {}\nthis build's:         {}".format(
+                        category, stem, block.name, expected_invariant_rows, actual_invariant_rows
+                    )
+                )
+            ties.setdefault("{}/{}.pg".format(category, stem), {})[block.name] = {
+                "reason": "contraction hierarchy" if hierarchy else "contraction shortcuts",
+                "upstream_rows": table.row_count,
+            }
+            items.append(
+                Emitted(block.name, invariant_directive, invariant_sql, expected_invariant_rows,
+                        note=HIERARCHY_NOTE if hierarchy else CONTRACTION_NOTE)
             )
             continue
         if any(t == "T" and cell.strip() == "" for row in table.rows for cell, t in zip(row, directive)):
