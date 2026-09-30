@@ -122,6 +122,8 @@ bool CheckRequest(const duckdb_pgrouting::DriverRequest &request) {
 			ThrowCheck("Unknown algorithm", "");
 		}
 		return true;
+	case duckdb_pgrouting::RequestCheck::CONTRACTION_CYCLES:
+		return request.cycles >= 1;
 	}
 	throw InternalException("pgrouting: unhandled RequestCheck");
 }

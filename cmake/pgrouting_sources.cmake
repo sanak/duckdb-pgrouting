@@ -27,6 +27,7 @@ set(PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/common/path.cpp
     ${PGROUTING_DIR}/src/common/xy_vertex.cpp
     ${PGROUTING_DIR}/src/components/componentsResult.cpp
+    ${PGROUTING_DIR}/src/contraction/contract.cpp
     ${PGROUTING_DIR}/src/cpp_common/bpoint.cpp
     ${PGROUTING_DIR}/src/cpp_common/compPaths.cpp
     ${PGROUTING_DIR}/src/cpp_common/Dmatrix.cpp
@@ -61,6 +62,7 @@ list(APPEND PGROUTING_SOURCES
     ${PGROUTING_DIR}/src/components/connectedComponents_driver.cpp
     ${PGROUTING_DIR}/src/components/makeConnected_driver.cpp
     ${PGROUTING_DIR}/src/components/strongComponents_driver.cpp
+    ${PGROUTING_DIR}/src/contraction/contractGraph_driver.cpp
     ${PGROUTING_DIR}/src/cpp_common/combinations.cpp
     ${PGROUTING_DIR}/src/cpp_common/pgdata_fetchers.cpp
     ${PGROUTING_DIR}/src/cpp_common/pgdata_getters.cpp

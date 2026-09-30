@@ -72,6 +72,14 @@ struct DriverRequest {
 	// _pgr_maxflow's DEFAULT. The max-flow driver takes only_cost in place of upstream's only_flow:
 	// both ask for one row carrying the total.
 	int32_t algorithm = 1;
+	// The contraction functions: the kinds of contraction to run, in order (1 dead end, 2 linear),
+	// how many times to run that sequence, and the vertices never contracted. methods and forbidden
+	// travel in the input row like starts; cycles is upstream's INTEGER.
+	std::vector<int64_t> methods;
+	bool has_methods = false;
+	std::vector<int64_t> forbidden;
+	bool has_forbidden = false;
+	int32_t cycles = 1;
 	// Which driver runs the request. Each driver reads only the fields its upstream C entry passes
 	// it; only SHORTEST_PATH reads points_sql, n_goals, global, driving_side, details and which,
 	// and the other drivers that take points (DriverInfo::takes_points) also read points_sql,

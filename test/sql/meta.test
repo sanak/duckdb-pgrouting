@@ -54,6 +54,7 @@ pgr_bridges	pgr_bridges
 pgr_chinesePostman	pgr_chinesePostman
 pgr_chinesePostmanCost	pgr_chinesePostmanCost
 pgr_connectedComponents	pgr_connectedComponents
+pgr_contraction	pgr_contraction
 pgr_cuthillMckeeOrdering	pgr_cuthillMckeeOrdering
 pgr_dagShortestPath	pgr_dagShortestPath
 pgr_degree	pgr_degree

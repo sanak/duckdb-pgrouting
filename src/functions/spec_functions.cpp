@@ -46,6 +46,7 @@
 
 #include "function_spec.hpp"
 #include "function_docs.hpp"
+#include "pgrouting/input_slots.hpp"
 #include "pgrouting/request_params.hpp"
 #include "pgrouting/result_emitters.hpp"
 #include "sql_template.hpp"
@@ -215,7 +216,7 @@ const vector<const vector<duckdb_pgrouting::FunctionSpec> *> &SpecTables() {
 	    &duckdb_pgrouting::LINE_GRAPH_SPECS,        &duckdb_pgrouting::TRANSITIVE_CLOSURE_SPECS,
 	    &duckdb_pgrouting::DOMINATOR_SPECS,         &duckdb_pgrouting::MINCUT_SPECS,
 	    &duckdb_pgrouting::CIRCUITS_SPECS,          &duckdb_pgrouting::MAX_FLOW_SPECS,
-	    &duckdb_pgrouting::CHINESE_SPECS};
+	    &duckdb_pgrouting::CHINESE_SPECS,           &duckdb_pgrouting::CONTRACTION_SPECS};
 	return TABLES;
 }
 
@@ -288,8 +289,16 @@ LogicalType TypeOf(duckdb_pgrouting::OptionalType type) {
 		return LogicalType::INTEGER;
 	case duckdb_pgrouting::OptionalType::DOUBLE:
 		return LogicalType::DOUBLE;
+	case duckdb_pgrouting::OptionalType::INTEGER_LIST:
+		return LogicalType::LIST(LogicalType::INTEGER);
+	case duckdb_pgrouting::OptionalType::BIGINT_LIST:
+		return LogicalType::LIST(LogicalType::BIGINT);
 	}
 	throw InternalException("Unhandled OptionalType");
+}
+
+bool IsListType(duckdb_pgrouting::OptionalType type) {
+	return type == duckdb_pgrouting::OptionalType::INTEGER_LIST || type == duckdb_pgrouting::OptionalType::BIGINT_LIST;
 }
 
 // The value of the index-th defaulted parameter: positional when this variant carries it
@@ -358,7 +367,11 @@ void CheckColumnRefs(const ParsedExpression &expr, const vector<string> &names, 
 // once at load, they fail every test instead of only a call to the one overload.
 void CheckSpec(const duckdb_pgrouting::FunctionSpec &spec) {
 	for (const auto &param : spec.optionals) {
-		if (!IsRequestParameter(param.request_field)) {
+		// A defaulted array fills an id-list slot of the input row; every other parameter a request
+		// parameter.
+		const bool known = IsListType(param.type) ? IsIdListSlot(param.request_field)
+		                                          : IsRequestParameter(param.request_field);
+		if (!known) {
 			throw InternalException("pgrouting: %s's parameter %s sets unknown request field %s", spec.upstream_name,
 			                        param.name, param.request_field);
 		}
@@ -461,10 +474,21 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	request.driver = spec.flags.driver;
 	request.mst_suffix = spec.flags.mst_suffix;
 	request.algorithm = spec.flags.algorithm;
+	// The defaulted arrays (and a fixed methods list) become id-list columns of the input row below.
+	vector<unique_ptr<ParsedExpression>> id_list_exprs;
 	if (!null_input) {
 		for (idx_t i = 0; i < spec.optionals.size(); i++) {
-			// CheckSpec established at load that request_field names a request parameter.
-			SetRequestParameter(request, spec.optionals[i].request_field, ResolveOptional(spec, input, i));
+			const auto &param = spec.optionals[i];
+			// CheckSpec established at load that request_field names a request parameter, or an
+			// id-list slot for a defaulted array.
+			if (IsListType(param.type)) {
+				id_list_exprs.push_back(Named(IdListCast(ResolveOptional(spec, input, i)), param.request_field));
+			} else {
+				SetRequestParameter(request, param.request_field, ResolveOptional(spec, input, i));
+			}
+		}
+		if (spec.flags.contraction_method != 0) {
+			id_list_exprs.push_back(Named(IdList(Value::BIGINT(spec.flags.contraction_method)), "methods"));
 		}
 	}
 	// A CHAR signature's driving side is its argument (read below). The other withPoints
@@ -480,15 +504,16 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	bool has_edges = false;
 
 	// One row carrying every input the driver needs, as a column each, so the exec function always
-	// sees at least these six columns (an overload with restrictions adds 'restrictions', one with a
+	// sees at least these six columns (an overload with a defaulted array or a fixed methods list adds
+	// that array's slot column, one with restrictions adds 'restrictions', one with a
 	// matrix or coordinates query adds 'matrix' or 'coordinates' and leaves 'edges' NULL, and one
 	// with points adds 'points', 'edges_of_points' and 'edges_no_points', and 'edges' is then NULL). A
 	// column this overload does not use gets either
 	// an untyped NULL constant ('edges'/'combinations') or an empty but LIST(BIGINT)-typed id list
-	// ('starts'/'ends'/'roots'/'via' default to EmptyIdList() below, never a bare NULL). That typing
-	// is load-bearing: _pgr_exec's own bind rejects 'starts'/'ends'/'roots'/'via' unless they are
-	// SQLNULL or LIST(BIGINT), so emitting an untyped NULL there instead would break every
-	// NULL-input call.
+	// ('starts'/'ends'/'roots'/'via' default to EmptyIdList() below, never a bare NULL; 'methods' and
+	// 'forbidden' are emitted only by overloads that take them). That typing is load-bearing:
+	// _pgr_exec's own bind rejects an id-list column unless it is SQLNULL or LIST(BIGINT), so emitting
+	// an untyped NULL there instead would break every NULL-input call.
 	auto row = make_uniq<SelectNode>();
 	// A SELECT without FROM still needs a table reference.
 	row->from_table = make_uniq<EmptyTableRef>();
@@ -603,6 +628,9 @@ unique_ptr<TableRef> SpecBindReplace(ClientContext &context, TableFunctionBindIn
 	row->select_list.push_back(std::move(ends_expr));
 	row->select_list.push_back(std::move(roots_expr));
 	row->select_list.push_back(std::move(via_expr));
+	for (auto &expr : id_list_exprs) {
+		row->select_list.push_back(std::move(expr));
+	}
 	if (restrictions_expr) {
 		row->select_list.push_back(std::move(restrictions_expr));
 	}

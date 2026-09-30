@@ -6,6 +6,7 @@
 #include "duckdb/common/types/vector.hpp"
 
 #include "c_types/circuits_rt.h"
+#include "c_types/contracted_rt.h"
 #include "c_types/edge_rt.h"
 #include "c_types/flow_t.h"
 #include "c_types/ii_t_rt.h"
@@ -366,6 +367,47 @@ void EmitFlow(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 	}
 }
 
+// src/contraction/contractGraph.c and contractionHierarchies.c: type is a one-letter C string ("v" or
+// "e"), and each row's contracted_vertices becomes a BIGINT[]. As in EmitTransitiveClosure, a row
+// and its list always leave in the same chunk. Shared by both contraction shapes, whose row structs
+// begin with the same fields.
+template <class ROW>
+void EmitContractedColumns(const ROW *rows, EmitState &state, idx_t n, DataChunk &output) {
+	auto &type = output.data[0];
+	auto type_data = FlatVector::GetData<string_t>(type);
+	auto id = FlatVector::GetData<int64_t>(output.data[1]);
+	auto &lists = output.data[2];
+	auto entries = FlatVector::GetData<list_entry_t>(lists);
+	auto source = FlatVector::GetData<int64_t>(output.data[3]);
+	auto target = FlatVector::GetData<int64_t>(output.data[4]);
+	auto cost = FlatVector::GetData<double>(output.data[5]);
+	idx_t size = ListVector::GetListSize(lists);
+	for (idx_t i = 0; i < n; i++) {
+		const auto &row = rows[state.offset + i];
+		type_data[i] = StringVector::AddString(type, row.type);
+		id[i] = row.id;
+		source[i] = row.source;
+		target[i] = row.target;
+		cost[i] = row.cost;
+		const auto count = NumericCast<idx_t>(row.contracted_vertices_size);
+		entries[i] = list_entry_t(size, count);
+		size += count;
+	}
+	ListVector::Reserve(lists, size);
+	auto child = FlatVector::GetData<int64_t>(ListVector::GetEntry(lists));
+	for (idx_t i = 0; i < n; i++) {
+		const auto &row = rows[state.offset + i];
+		for (idx_t j = 0; j < entries[i].length; j++) {
+			child[entries[i].offset + j] = row.contracted_vertices[j];
+		}
+	}
+	ListVector::SetListSize(lists, size);
+}
+
+void EmitContracted(const DriverResult &result, EmitState &state, idx_t n, DataChunk &output) {
+	EmitContractedColumns(result.Rows<contracted_rt>(), state, n, output);
+}
+
 } // namespace
 
 void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> &names) {
@@ -439,6 +481,11 @@ void ShapeColumns(ResultShape shape, vector<LogicalType> &types, vector<string> 
 		         LogicalType::BIGINT,  LogicalType::DOUBLE,  LogicalType::DOUBLE};
 		names = {"seq", "path_id", "path_seq", "start_vid", "end_vid", "node", "edge", "cost", "agg_cost"};
 		return;
+	case ResultShape::CONTRACTED:
+		types = {LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::LIST(LogicalType::BIGINT),
+		         LogicalType::BIGINT,  LogicalType::BIGINT, LogicalType::DOUBLE};
+		names = {"type", "id", "contracted_vertices", "source", "target", "cost"};
+		return;
 	case ResultShape::FLOW:
 		types = {LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
 		         LogicalType::BIGINT,  LogicalType::BIGINT, LogicalType::DOUBLE, LogicalType::DOUBLE};
@@ -497,6 +544,9 @@ void EmitRows(const DriverResult &result, EmitState &state, idx_t n, DataChunk &
 		break;
 	case ResultShape::FLOW:
 		EmitFlow(result, state, n, output);
+		break;
+	case ResultShape::CONTRACTED:
+		EmitContracted(result, state, n, output);
 		break;
 	}
 	state.offset += n;

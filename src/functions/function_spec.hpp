@@ -36,7 +36,10 @@ enum class ArgKind : uint8_t {
 	ROOT_VID          // BIGINT, a single root vertex passed as the request's root
 };
 
-enum class OptionalType : uint8_t { BOOLEAN, BIGINT, INTEGER, DOUBLE };
+// INTEGER_LIST and BIGINT_LIST are upstream's INTEGER[] and BIGINT[] defaults. Their value is not a
+// request parameter: it travels in the input row, in the id-list slot the parameter's
+// request_field names (input_slots.cpp), cast to BIGINT[].
+enum class OptionalType : uint8_t { BOOLEAN, BIGINT, INTEGER, DOUBLE, INTEGER_LIST, BIGINT_LIST };
 
 // A parameter upstream declares with a DEFAULT. PostgreSQL accepts any leading run of these
 // positionally as well as by name; DuckDB never matches a named parameter positionally, so a spec
@@ -71,6 +74,12 @@ constexpr OptionalParam VIA_U_TURN_ON_EDGE {"U_turn_on_edge", OptionalType::BOOL
 // start_id and end_id, as the TSP functions declare them: 0 means "not given".
 constexpr OptionalParam START_ID {"start_id", OptionalType::BIGINT, "0", "start_id"};
 constexpr OptionalParam END_ID {"end_id", OptionalType::BIGINT, "0", "end_id"};
+
+// The contraction functions' parameters (sql/contraction/*.sql). methods is upstream's INTEGER[]
+// of contraction kinds (1 dead end, 2 linear), which its wrapper casts to BIGINT[].
+constexpr OptionalParam CONTRACTION_METHODS {"methods", OptionalType::INTEGER_LIST, "[1, 2]", "methods"};
+constexpr OptionalParam CYCLES {"cycles", OptionalType::INTEGER, "1", "cycles"};
+constexpr OptionalParam FORBIDDEN {"forbidden", OptionalType::BIGINT_LIST, "[]", "forbidden"};
 
 // Where an overload's driving side comes from. NONE: the overload has none (which = 0 ignores it).
 // ARGUMENT: the CHAR signatures of the withPoints family take it as a required argument.
@@ -122,6 +131,9 @@ struct DriverFlags {
 	// The max-flow family's algorithm (1 push-relabel, 2 Boykov-Kolmogorov, 3 Edmonds-Karp), a
 	// constant in each upstream wrapper.
 	int32_t algorithm = 1;
+	// pgr_contractionDeadEnd (1) and pgr_contractionLinear (2) pass a one-element methods array;
+	// 0 leaves methods to the caller (pgr_contraction).
+	int32_t contraction_method = 0;
 	Projection projection = Projection::ALL;
 	// With Projection::COLUMNS, the outer SELECT list, written as SQL over the columns of the
 	// driver's result shape (ShapeColumns). Spec-table text only, never a caller's: CheckSpec parses
@@ -172,6 +184,7 @@ extern const duckdb::vector<FunctionSpec> BREADTH_FIRST_SEARCH_SPECS; // breadth
 extern const duckdb::vector<FunctionSpec> CHINESE_SPECS;              // chinese_specs.cpp
 extern const duckdb::vector<FunctionSpec> CIRCUITS_SPECS;             // circuits_specs.cpp
 extern const duckdb::vector<FunctionSpec> COMPONENTS_SPECS;           // components_specs.cpp
+extern const duckdb::vector<FunctionSpec> CONTRACTION_SPECS;          // contraction_specs.cpp
 extern const duckdb::vector<FunctionSpec> COLORING_SPECS;             // coloring_specs.cpp
 extern const duckdb::vector<FunctionSpec> ORDERING_SPECS;             // ordering_specs.cpp
 extern const duckdb::vector<FunctionSpec> ALLPAIRS_SPECS;             // allpairs_specs.cpp

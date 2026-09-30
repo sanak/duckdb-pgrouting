@@ -28,6 +28,9 @@ TYPE_MAP = {
     "boolean": "BOOLEAN",
     "integer": "INTEGER",
     "double precision": "DOUBLE",
+    # The contraction functions' defaulted arrays (methods INTEGER[], forbidden BIGINT[]).
+    "integer[]": "INTEGER[]",
+    "bigint[]": "BIGINT[]",
     # pgr_bdAstar* declare factor and epsilon NUMERIC and cast them to FLOAT for the C call.
     "numeric": "DOUBLE",
     "anyarray": "BIGINT[]",

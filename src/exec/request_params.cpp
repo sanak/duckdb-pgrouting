@@ -24,7 +24,7 @@ struct RequestParameter {
 	FieldPointer field;
 };
 
-// The id lists (starts, ends, roots, via) are not here: they travel in the input row (input_slots.cpp).
+// The id lists (starts, ends, roots, via, methods, forbidden) are not here: they travel in the input row (input_slots.cpp).
 const RequestParameter REQUEST_PARAMETERS[] = {
     {"edges_sql", &DriverRequest::edges_sql},
     {"points_sql", &DriverRequest::points_sql},
@@ -56,6 +56,7 @@ const RequestParameter REQUEST_PARAMETERS[] = {
     {"end_id", &DriverRequest::end_id},
     {"root", &DriverRequest::root},
     {"algorithm", &DriverRequest::algorithm},
+    {"cycles", &DriverRequest::cycles},
     {"driver", &DriverRequest::driver},
 };
 

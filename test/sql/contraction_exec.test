@@ -1,0 +1,66 @@
+# name: test/sql/contraction_exec.test
+# description: _pgr_exec's contraction driver: its columns, the methods and forbidden slots, cycles
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT id, source, target, cost, reverse_cost FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM edges) e) AS edges, [1, 2]::BIGINT[] AS methods),
+  edges_sql := 'sample', driver := 'contraction'));
+----
+type	VARCHAR
+id	BIGINT
+contracted_vertices	BIGINT[]
+source	BIGINT
+target	BIGINT
+cost	DOUBLE
+
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM edges) e) AS edges, [1, 2]::BIGINT[] AS methods,
+          []::BIGINT[] AS forbidden),
+  edges_sql := 'sample', driver := 'contraction', directed := false, cycles := 1);
+----
+7
+
+# No methods column: upstream's driver reads a missing array as empty, and contracts nothing.
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM edges) e) AS edges),
+  edges_sql := 'sample', driver := 'contraction', directed := false);
+----
+0
+
+query I
+SELECT count(*) FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM edges) e) AS edges, [1, 2]::BIGINT[] AS methods),
+  edges_sql := 'sample', driver := 'contraction', cycles := 0);
+----
+0
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM edges) e) AS edges, ['1']::VARCHAR[] AS methods),
+  edges_sql := 'sample', driver := 'contraction');
+----
+column 'methods' must be LIST(BIGINT)
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM edges) e) AS edges, [1.5] AS forbidden),
+  edges_sql := 'sample', driver := 'contraction');
+----
+column 'forbidden' must be LIST(BIGINT)
+
+statement error
+SELECT * FROM _pgr_exec(
+  (SELECT (SELECT list(e) FROM (SELECT * FROM edges) e) AS edges, [1, 2]::BIGINT[] AS methods),
+  edges_sql := 'sample', driver := 'contraction_hierarchy');
+----
+_pgr_exec: unknown driver 'contraction_hierarchy'

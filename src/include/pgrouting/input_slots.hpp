@@ -40,4 +40,8 @@ BoundSlots BindInputSlots(TableFunctionBindInput &input);
 void MaterializeInputSlots(ClientContext &context, const BoundSlots &slots, DataChunk &input,
                            duckdb_pgrouting::DriverRequest &request, duckdb_pgrouting::InputRegistry &registry);
 
+// Whether `column` is one of the id-list slots (starts, ends, roots, via, methods, forbidden): a
+// defaulted array parameter of a public function names the slot it fills (function_spec.hpp).
+bool IsIdListSlot(const string &column);
+
 } // namespace duckdb

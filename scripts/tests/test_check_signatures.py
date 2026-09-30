@@ -65,6 +65,13 @@ class MapGeometryTypesTest(unittest.TestCase):
         self.assertEqual(("GEOMETRY",), cs.map_upstream_types(("geometry",)))
 
 
+class MapArrayTypesTest(unittest.TestCase):
+    def test_integer_and_bigint_arrays(self):
+        self.assertEqual(
+            ("VARCHAR", "BOOLEAN", "INTEGER[]", "INTEGER", "BIGINT[]"),
+            cs.map_upstream_types(("text", "boolean", "integer[]", "integer", "bigint[]")))
+
+
 class CoversTest(unittest.TestCase):
     DIJKSTRA = ("VARCHAR", "BIGINT", "BIGINT", "BOOLEAN")
     NEAR_AA = ("VARCHAR", "BIGINT[]", "BIGINT[]", "BOOLEAN", "BIGINT", "BOOLEAN")

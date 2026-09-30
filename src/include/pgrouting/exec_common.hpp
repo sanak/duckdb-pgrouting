@@ -27,7 +27,8 @@ public:
 	// Routes_t for ROUTES, TSP_tour_rt for TSP_TOUR, int64_t for IDS, II_t_rt for PAIRS and
 	// ID_VALUE, IID_t_rt for TRIPLES, Edge_rt for EDGE,
 	// Line_graph_full_rt for LINE_GRAPH_FULL, TransitiveClosure_rt for TRANSITIVE_CLOSURE,
-	// StoerWagner_t for STOER_WAGNER, circuits_rt for CIRCUITS.
+	// StoerWagner_t for STOER_WAGNER, circuits_rt for CIRCUITS, Flow_t for FLOW,
+	// contracted_rt for CONTRACTED.
 	template <class T>
 	const T *Rows() const {
 		return static_cast<const T *>(rows);

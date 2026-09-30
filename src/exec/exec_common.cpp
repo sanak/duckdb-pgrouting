@@ -9,6 +9,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/logging/logger.hpp"
 
+#include "c_types/contracted_rt.h"
 #include "c_types/path_rt.h"
 #include "c_types/transitiveClosure_rt.h"
 #include "drivers/shortestPath_driver.hpp"
@@ -54,6 +55,16 @@ void DriverResult::Release() {
 		}
 		break;
 	}
+	case ResultShape::CONTRACTED: {
+		// Each row's contracted_vertices is its own malloc'd block (pgr_alloc in
+		// src/contraction/contractGraph_driver.cpp), zero elements included; type points at a string
+		// literal and is not freed.
+		auto *contracted = static_cast<contracted_rt *>(rows);
+		for (std::size_t k = 0; contracted != nullptr && k < count; k++) {
+			std::free(contracted[k].contracted_vertices);
+		}
+		break;
+	}
 	case ResultShape::PATH:
 	case ResultShape::PAIRS:
 	case ResultShape::MST:
@@ -86,11 +97,15 @@ DriverResult RunDriver(duckdb::ClientContext &context, InputRegistry &registry, 
 	ScopedIntArray ends(request.ends);
 	ScopedIntArray roots(request.roots);
 	ScopedIntArray via(request.via);
+	ScopedIntArray methods(request.methods);
+	ScopedIntArray forbidden(request.forbidden);
 	DriverArrays arrays;
 	arrays.starts = request.has_starts ? starts.get() : nullptr;
 	arrays.ends = request.has_ends ? ends.get() : nullptr;
 	arrays.roots = request.has_roots ? roots.get() : nullptr;
 	arrays.via = request.has_via ? via.get() : nullptr;
+	arrays.methods = request.has_methods ? methods.get() : nullptr;
+	arrays.forbidden = request.has_forbidden ? forbidden.get() : nullptr;
 
 	{
 		ScopedRoutingContext scope(context, registry);

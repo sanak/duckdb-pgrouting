@@ -39,6 +39,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/circuits_specs.cpp
     src/functions/coloring_specs.cpp
     src/functions/components_specs.cpp
+    src/functions/contraction_specs.cpp
     src/functions/dag_shortest_path_specs.cpp
     src/functions/degree.cpp
     src/functions/dijkstra_specs.cpp
@@ -64,6 +65,7 @@ set(DUCKDB_PGROUTING_SOURCES
     src/functions/tsp_specs.cpp
     src/functions/withpoints_specs.cpp
     src/pg_compat/src/drivers_analysis.cpp
+    src/pg_compat/src/drivers_contraction.cpp
     src/pg_compat/src/drivers_flow.cpp
     src/pg_compat/src/drivers_graph.cpp
     src/pg_compat/src/drivers_path.cpp

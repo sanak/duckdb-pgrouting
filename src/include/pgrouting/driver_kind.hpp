@@ -68,7 +68,8 @@ enum class DriverKind : uint8_t {
 	MIN_COST_MAX_FLOW,
 	EDGE_DISJOINT_PATHS,
 	MAX_CARDINALITY_MATCH,
-	CHINESE_POSTMAN
+	CHINESE_POSTMAN,
+	CONTRACTION
 };
 
 // The upstream result struct a driver fills, and how its C entry numbers the rows. It decides
@@ -94,6 +95,9 @@ enum class ResultShape : uint8_t {
 	STOER_WAGNER, // StoerWagner_t, as src/mincut/stoerWagner.c emits it: its own seq replaced by the row number
 	CIRCUITS, // circuits_rt: KSP's columns, but path_id and path_seq come from the driver, path_seq from 0
 	FLOW, // Flow_t, as src/max_flow/minCostMaxFlow.c emits it: seq, then every field
+	// contracted_rt, as src/contraction/contractGraph.c emits it: type, id, contracted_vertices as a
+	// list, source, target, cost; every row owns its array
+	CONTRACTED,
 };
 
 // A check upstream's C entry runs on the parameters before it calls the driver, even when the
@@ -128,7 +132,10 @@ enum class RequestCheck : uint8_t {
 	// algorithm 1, 2 or 3 (push-relabel, Boykov-Kolmogorov, Edmonds-Karp): src/max_flow/max_flow.c
 	// raises "Unknown algorithm" before anything else. The public wrappers pass a constant, so only
 	// a direct _pgr_exec call can reach it.
-	MAX_FLOW_ALGORITHM
+	MAX_FLOW_ALGORITHM,
+	// cycles < 1 returns no rows, silently, before the driver is called:
+	// src/contraction/contractGraph.c.
+	CONTRACTION_CYCLES
 };
 
 struct DriverInfo {
@@ -196,6 +203,7 @@ inline constexpr DriverInfo DRIVERS[] = {
     {DriverKind::EDGE_DISJOINT_PATHS, "edge_disjoint_paths", ResultShape::KSP, RequestCheck::NONE},
     {DriverKind::MAX_CARDINALITY_MATCH, "max_cardinality_match", ResultShape::IDS, RequestCheck::NONE},
     {DriverKind::CHINESE_POSTMAN, "chinese_postman", ResultShape::PATH, RequestCheck::NONE},
+    {DriverKind::CONTRACTION, "contraction", ResultShape::CONTRACTED, RequestCheck::CONTRACTION_CYCLES},
 };
 
 inline constexpr std::size_t DRIVER_COUNT = sizeof(DRIVERS) / sizeof(DRIVERS[0]);
@@ -210,7 +218,7 @@ constexpr bool DriversInEnumeratorOrder() {
 }
 static_assert(DriversInEnumeratorOrder(), "DRIVERS must list every DriverKind once, in enumerator order");
 // Update to the last enumerator whenever one is added.
-static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::CHINESE_POSTMAN) + 1,
+static_assert(DRIVER_COUNT == static_cast<std::size_t>(DriverKind::CONTRACTION) + 1,
               "DRIVERS must have a row for every DriverKind");
 
 inline const DriverInfo &InfoOf(DriverKind kind) {

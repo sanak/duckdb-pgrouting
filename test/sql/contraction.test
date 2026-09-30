@@ -1,0 +1,205 @@
+# name: test/sql/contraction.test
+# description: pgr_contraction, pgr_contractionDeadEnd, pgr_contractionLinear: rows, order-free facts, defaulted arrays, cycles, messages, long answers
+# group: [sql]
+
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+require pgrouting
+
+statement ok
+CREATE TABLE edges AS SELECT id, source, target, cost, reverse_cost FROM read_csv_auto('test/data/sampledata/edges.csv');
+
+# The same edges read in reverse id order. Vertices are numbered in the order the edges are read,
+# which decides the shortcut ids and, in an undirected graph, which way a shortcut points.
+statement ok
+CREATE TABLE edges_rev AS SELECT * FROM edges ORDER BY id DESC;
+
+statement ok
+CREATE MACRO e() AS 'SELECT id, source, target, cost, reverse_cost FROM edges';
+
+query TT
+SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM pgr_contraction(e()));
+----
+type	VARCHAR
+id	BIGINT
+contracted_vertices	BIGINT[]
+source	BIGINT
+target	BIGINT
+cost	DOUBLE
+
+# Upstream's q2, which the edge order never changes: dead ends only, directed.
+query TIT
+SELECT type, id, contracted_vertices FROM pgr_contraction(e(), methods => ARRAY[1]);
+----
+v	4	[2]
+v	6	[5]
+v	7	[1, 3]
+v	8	[9]
+v	14	[13]
+
+# The defaults (directed, dead ends then linear, one cycle): once 1 and 3 are gone, no vertex is linear.
+query TITIIR
+SELECT * FROM pgr_contraction(e());
+----
+v	4	[2]	-1	-1	-1
+v	6	[5]	-1	-1	-1
+v	7	[1, 3]	-1	-1	-1
+v	8	[9]	-1	-1	-1
+v	14	[13]	-1	-1	-1
+
+# Upstream's q3, directed linear contraction: the two shortcuts around 3, one each way. Their ids
+# follow the edge order; their directions do not.
+query TTIIR
+SELECT type, contracted_vertices, source, target, cost
+FROM pgr_contraction(e(), methods => ARRAY[2]) ORDER BY source;
+----
+e	[3]	1	7	2
+e	[3]	7	1	2
+
+# Upstream's q1, undirected: the same vertices and the same shortcuts in either edge order, once
+# the shortcuts lose their ids and their direction.
+query TITIIR
+SELECT type, CASE WHEN type = 'v' THEN id END, list_sort(contracted_vertices),
+       least(source, target), greatest(source, target), cost
+FROM pgr_contraction(e(), false) ORDER BY ALL;
+----
+e	NULL	[5, 6]	7	10	2
+e	NULL	[8, 9]	7	12	2
+e	NULL	[15]	10	16	2
+e	NULL	[17]	12	16	2
+v	4	[2]	-1	-1	-1
+v	7	[1, 3]	-1	-1	-1
+v	14	[13]	-1	-1	-1
+
+query TITIIR
+SELECT type, CASE WHEN type = 'v' THEN id END, list_sort(contracted_vertices),
+       least(source, target), greatest(source, target), cost
+FROM pgr_contraction('SELECT * FROM edges_rev', false) ORDER BY ALL;
+----
+e	NULL	[5, 6]	7	10	2
+e	NULL	[8, 9]	7	12	2
+e	NULL	[15]	10	16	2
+e	NULL	[17]	12	16	2
+v	4	[2]	-1	-1	-1
+v	7	[1, 3]	-1	-1	-1
+v	14	[13]	-1	-1	-1
+
+query T
+SELECT list_sort(list(id)) FROM pgr_contraction(e(), false) WHERE type = 'e';
+----
+[-4, -3, -2, -1]
+
+# What upstream's contraction is for: between the vertices left, the contracted graph (the edges
+# among them plus the shortcuts) keeps every shortest distance.
+query T
+SELECT list_sort(list(DISTINCT v)) FROM (SELECT source AS v FROM edges UNION SELECT target FROM edges)
+WHERE v NOT IN (SELECT unnest(contracted_vertices) FROM pgr_contraction(e(), false));
+----
+[4, 7, 10, 11, 12, 14, 16]
+
+statement ok
+CREATE TABLE contracted AS
+  WITH c AS (SELECT * FROM pgr_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)),
+       gone AS (SELECT unnest(contracted_vertices) AS v FROM c)
+  SELECT id, source, target, cost, reverse_cost FROM edges
+  WHERE source NOT IN (SELECT v FROM gone) AND target NOT IN (SELECT v FROM gone)
+  UNION ALL SELECT 100 - id, source, target, cost, cost FROM c WHERE type = 'e';
+
+query II
+WITH o AS (SELECT * FROM pgr_dijkstraCost(e(), [4, 7, 10, 11, 12, 14, 16], [4, 7, 10, 11, 12, 14, 16], false)),
+     c AS (SELECT * FROM pgr_dijkstraCost('SELECT * FROM contracted', [4, 7, 10, 11, 12, 14, 16],
+                                          [4, 7, 10, 11, 12, 14, 16], false))
+SELECT (SELECT count(*) FROM o),
+       (SELECT count(*) FROM o FULL JOIN c USING (start_vid, end_vid) WHERE o.agg_cost IS DISTINCT FROM c.agg_cost);
+----
+20	0
+
+# Every way to pass the defaulted parameters: positionally in upstream's order, by name in any
+# order, as INTEGER[] or BIGINT[].
+query IIIIII
+SELECT (SELECT count(*) FROM pgr_contraction(e(), false)),
+       (SELECT count(*) FROM pgr_contraction(e(), false, ARRAY[1, 2])),
+       (SELECT count(*) FROM pgr_contraction(e(), false, ARRAY[1, 2], 1)),
+       (SELECT count(*) FROM pgr_contraction(e(), false, ARRAY[1, 2], 1, []::BIGINT[])),
+       (SELECT count(*) FROM pgr_contraction(e(), cycles => 1, forbidden => []::BIGINT[],
+                                             methods => [1, 2]::BIGINT[], directed => false)),
+       (SELECT count(*) FROM pgr_contraction(e(), false, cycles => 1000));
+----
+7	7	7	7	7	7
+
+# The order of methods matters: linear first leaves 5 and 9 to the dead-end pass.
+query TITIIR
+SELECT type, CASE WHEN type = 'v' THEN id END, list_sort(contracted_vertices),
+       least(source, target), greatest(source, target), cost
+FROM pgr_contraction(e(), false, ARRAY[2, 1]) ORDER BY ALL;
+----
+e	NULL	[15]	10	16	2
+e	NULL	[17]	12	16	2
+v	4	[2]	-1	-1	-1
+v	6	[5]	-1	-1	-1
+v	7	[1, 3]	-1	-1	-1
+v	8	[9]	-1	-1	-1
+v	14	[13]	-1	-1	-1
+
+# A forbidden vertex stays: 2 now keeps 4, and 5 stops the shortcut over 5 and 6.
+query TITIIR
+SELECT type, CASE WHEN type = 'v' THEN id END, list_sort(contracted_vertices),
+       least(source, target), greatest(source, target), cost
+FROM pgr_contraction(e(), false, forbidden => [2, 5]) ORDER BY ALL;
+----
+e	NULL	[8, 9]	7	12	2
+e	NULL	[15]	10	16	2
+e	NULL	[17]	12	16	2
+v	2	[4]	-1	-1	-1
+v	7	[1, 3]	-1	-1	-1
+v	14	[13]	-1	-1	-1
+
+# A forbidden vertex the graph does not have is ignored.
+query I
+SELECT count(*) FROM pgr_contraction(e(), false, forbidden => [999]);
+----
+7
+
+# Fewer than one cycle: zero rows and no error, even over an empty edge query.
+query III
+SELECT (SELECT count(*) FROM pgr_contraction(e(), false, ARRAY[1, 2], 0)),
+       (SELECT count(*) FROM pgr_contraction(e(), cycles => -1)),
+       (SELECT count(*) FROM pgr_contraction('SELECT * FROM edges WHERE id < 0', cycles => 0));
+----
+0	0	0
+
+# No edges: no rows.
+query I
+SELECT count(*) FROM pgr_contraction('SELECT * FROM edges WHERE id < 0');
+----
+0
+
+statement error
+SELECT * FROM pgr_contraction(e(), methods => []::INTEGER[]);
+----
+No elements found
+
+statement error
+SELECT * FROM pgr_contraction(e(), methods => ARRAY[3]);
+----
+Invalid contraction type found
+
+statement error
+SELECT * FROM pgr_contraction(e(), methods => [1, NULL]);
+----
+contains a NULL id
+
+statement error
+SELECT * FROM pgr_contraction('SELECT source, target, cost FROM edges');
+----
+Column 'id' not Found
+
+# STRICT: a NULL argument, positional or named, gives no rows.
+query IIIII
+SELECT (SELECT count(*) FROM pgr_contraction(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_contraction(e(), NULL::BOOLEAN)),
+       (SELECT count(*) FROM pgr_contraction(e(), directed => NULL)),
+       (SELECT count(*) FROM pgr_contraction(e(), forbidden => NULL)),
+       (SELECT count(*) FROM pgr_contraction(e(), true, NULL::INTEGER[]));
+----
+0	0	0	0	0

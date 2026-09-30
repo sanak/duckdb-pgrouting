@@ -59,6 +59,8 @@ void *RowsOf(const DriverCall &call, ResultShape shape) {
 		return call.circuit_rows;
 	case ResultShape::FLOW:
 		return call.flow_rows;
+	case ResultShape::CONTRACTED:
+		return call.contracted_rows;
 	}
 	return nullptr;
 }
@@ -91,6 +93,7 @@ bool DropWrongShapeRows(DriverCall &call, ResultShape shape) {
 	drop(call.min_cut_rows, shape == ResultShape::STOER_WAGNER);
 	drop(call.circuit_rows, shape == ResultShape::CIRCUITS);
 	drop(call.flow_rows, shape == ResultShape::FLOW);
+	drop(call.contracted_rows, shape == ResultShape::CONTRACTED);
 	return wrong;
 }
 
@@ -109,7 +112,8 @@ DriverOutput RunFamilyDriver(const DriverRequest &request, const DriverArrays &a
 		    !CallTreeDriver(request, arrays, call) && !CallRoutesDriver(request, arrays, call) &&
 		    !CallTrspDriver(request, arrays, call) && !CallTspDriver(request, arrays, call) &&
 		    !CallUnifiedDriver(request, arrays, call) &&
-		    !CallAnalysisDriver(request, arrays, call) && !CallFlowDriver(request, arrays, call)) {
+		    !CallAnalysisDriver(request, arrays, call) && !CallFlowDriver(request, arrays, call) &&
+		    !CallContractionDriver(request, arrays, call)) {
 			out.err = std::string("Internal error: no family driver for '") + InfoOf(request.driver).name + "'";
 		}
 	} catch (const std::string &message) {

@@ -79,6 +79,9 @@ const InputSlot INPUT_SLOTS[] = {
     {"ends", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::ends, &DriverRequest::has_ends},
     {"roots", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::roots, &DriverRequest::has_roots},
     {"via", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::via, &DriverRequest::has_via},
+    {"methods", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::methods, &DriverRequest::has_methods},
+    {"forbidden", SlotKind::ID_LIST, false, nullptr, nullptr, &DriverRequest::forbidden,
+     &DriverRequest::has_forbidden},
 };
 
 duckdb_pgrouting::ColumnClass ClassOf(const LogicalType &type) {
@@ -218,6 +221,15 @@ void CaptureRowSchema(const LogicalType &type, RowSchema &schema) {
 }
 
 } // namespace
+
+bool IsIdListSlot(const string &column) {
+	for (const auto &slot : INPUT_SLOTS) {
+		if (slot.kind == SlotKind::ID_LIST && column == slot.column) {
+			return true;
+		}
+	}
+	return false;
+}
 
 // _pgr_exec is catalogued and callable by any user, not only through the public overloads' bind_replace. Unpack
 // and ReadIdList reach ListVector::GetEntry / StructVector::GetEntries /
