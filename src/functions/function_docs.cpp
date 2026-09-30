@@ -378,6 +378,18 @@ const FunctionDoc FUNCTION_DOCS[] = {
      "shortcut edge added. Shortcut ids and, in an undirected graph, their direction can depend on the "
      "order the edges are read in.",
      "SELECT * FROM pgr_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', false)"},
+    {"pgr_contractionDeadEnd",
+     "Removes dead-end vertices, once: each vertex left lists the vertices it absorbed. In a directed "
+     "graph a vertex with incoming edges only is a dead end too, listed under every vertex that reaches "
+     "it.",
+     "SELECT * FROM pgr_contractionDeadEnd('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "directed => false)"},
+    {"pgr_contractionLinear",
+     "Bypasses vertices of degree two with shortcut edges, once: one row per shortcut, listing the "
+     "vertices it replaces. Shortcut ids and, in an undirected graph, their direction can depend on the "
+     "order the edges are read in.",
+     "SELECT * FROM pgr_contractionLinear('SELECT id, source, target, cost, reverse_cost FROM edges', "
+     "directed => false)"},
     {"pgr_extractVertices",
      "Lists the vertices of a graph found from its edges, either from their source and target ids or "
      "from the end points of their geometry (the latter needs the spatial extension), with the edges "

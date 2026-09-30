@@ -203,3 +203,152 @@ SELECT (SELECT count(*) FROM pgr_contraction(NULL::VARCHAR)),
        (SELECT count(*) FROM pgr_contraction(e(), true, NULL::INTEGER[]));
 ----
 0	0	0	0	0
+
+query II
+SELECT (SELECT count(*) FROM pgr_contraction(e(), cycles => NULL)),
+       (SELECT count(*) FROM pgr_contraction(e(), methods => NULL));
+----
+0	0
+
+# pgr_contractionDeadEnd: pgr_contraction with methods [1] and one cycle. Upstream's q1.
+query TITIIR
+SELECT * FROM pgr_contractionDeadEnd(e(), directed => false);
+----
+v	4	[2]	-1	-1	-1
+v	6	[5]	-1	-1	-1
+v	7	[1, 3]	-1	-1	-1
+v	8	[9]	-1	-1	-1
+v	14	[13]	-1	-1	-1
+
+# Upstream's q2 and q3, directed: a vertex whose only edges come in is a dead end too, and one
+# reached from two vertices is listed under both.
+query TIT
+SELECT type, id, contracted_vertices FROM pgr_contractionDeadEnd(
+  'SELECT * FROM (VALUES (1, 1, 2, 1, 1), (2, 3, 4, 1, -1), (3, 2, 5, 1, 1), (4, 2, 6, 1, 1),
+   (5, 3, 5, 1, 1), (5, 3, 6, 1, 1)) AS edges(id, source, target, cost, reverse_cost)', directed => true);
+----
+v	2	[1]
+v	3	[4]
+
+query TIT
+SELECT type, id, contracted_vertices FROM pgr_contractionDeadEnd(
+  'SELECT * FROM (VALUES (1, 1, 6, 1, 1), (2, 2, 7, 1, -1), (3, 2, 8, 1, -1), (4, 3, 8, 1, -1),
+   (5, 9, 4, 1, -1), (6, 10, 4, 1, 1), (7, 10, 5, 1, 1), (8, 1, 25, 1, 1), (9, 1, 26, 1, 1),
+   (10, 2, 25, 1, 1), (11, 2, 26, 1, 1), (12, 3, 25, 1, 1), (13, 3, 26, 1, 1), (14, 4, 25, 1, 1),
+   (15, 4, 26, 1, 1), (16, 5, 25, 1, 1), (17, 5, 26, 1, 1)) AS edges(id, source, target, cost, reverse_cost)',
+  directed => true);
+----
+v	1	[6]
+v	2	[7, 8]
+v	3	[8]
+v	4	[9]
+
+# Upstream's q4: a one-way chain into the graph collapses onto its start.
+query TIT
+SELECT type, id, contracted_vertices FROM pgr_contractionDeadEnd(
+  'SELECT * FROM (VALUES (1, 1, 2, 1, -1), (2, 2, 3, 1, -1), (3, 1, 25, 1, 1), (4, 1, 26, 1, 1),
+   (5, 25, 25, 1, 1), (6, 25, 26, 1, 1)) AS edges(id, source, target, cost, reverse_cost)', directed => true);
+----
+v	1	[2, 3]
+
+query IIII
+SELECT (SELECT count(*) FROM pgr_contractionDeadEnd(e())),
+       (SELECT count(*) FROM pgr_contractionDeadEnd(e(), false)),
+       (SELECT count(*) FROM pgr_contractionDeadEnd(e(), false, []::BIGINT[])),
+       (SELECT count(*) FROM pgr_contractionDeadEnd(e(), forbidden => [2], directed => false));
+----
+5	5	5	5
+
+# A forbidden dead end keeps its neighbour instead.
+query TIT
+SELECT type, id, contracted_vertices FROM pgr_contractionDeadEnd(e(), false, [2]) WHERE id IN (2, 4);
+----
+v	2	[4]
+
+# pgr_contractionLinear: pgr_contraction with methods [2] and one cycle. Upstream's q1, undirected,
+# without shortcut ids or directions.
+query TTIIR
+SELECT type, list_sort(contracted_vertices), least(source, target), greatest(source, target), cost
+FROM pgr_contractionLinear(e(), directed => false) ORDER BY ALL;
+----
+e	[3]	1	7	2
+e	[15]	10	16	2
+e	[17]	12	16	2
+
+# Upstream's q2 to q6: one-way, two-way and asymmetric two-edge paths.
+query I
+SELECT count(*) FROM pgr_contractionLinear(
+  'SELECT * FROM (VALUES (1, 1, 2, 1, -1), (2, 2, 3, 3, 4)) AS edges(id, source, target, cost, reverse_cost)',
+  directed => true);
+----
+0
+
+query TTIIR
+SELECT type, contracted_vertices, source, target, cost FROM pgr_contractionLinear(
+  'SELECT * FROM (VALUES (1, 1, 2, 1, -1), (2, 2, 3, 3, 4)) AS edges(id, source, target, cost, reverse_cost)',
+  directed => false);
+----
+e	[2]	1	3	4
+
+query TTIIR
+SELECT type, contracted_vertices, source, target, cost FROM pgr_contractionLinear(
+  'SELECT * FROM (VALUES (1, 1, 2, 1, 2), (2, 2, 3, 3, 4)) AS edges(id, source, target, cost, reverse_cost)',
+  directed => true) ORDER BY source;
+----
+e	[2]	1	3	4
+e	[2]	3	1	6
+
+query TTIIR
+SELECT type, contracted_vertices, source, target, cost FROM pgr_contractionLinear(
+  'SELECT * FROM (VALUES (1, 1, 2, 1, 2), (2, 2, 3, 3, 4)) AS edges(id, source, target, cost, reverse_cost)',
+  directed => false);
+----
+e	[2]	1	3	4
+
+query TTIIR
+SELECT type, contracted_vertices, source, target, cost FROM pgr_contractionLinear(
+  'SELECT * FROM (VALUES (1, 1, 2, 1), (2, 2, 3, 1), (2, 3, 4, 1)) AS edges(id, source, target, cost)');
+----
+e	[2, 3]	1	4	3
+
+query III
+SELECT (SELECT count(*) FROM pgr_contractionLinear(e())),
+       (SELECT count(*) FROM pgr_contractionLinear(e(), false)),
+       (SELECT count(*) FROM pgr_contractionLinear(e(), false, forbidden => [3]));
+----
+2	3	2
+
+# Neither takes methods or cycles: upstream fixes both.
+statement error
+SELECT * FROM pgr_contractionDeadEnd(e(), methods => [2]);
+----
+methods
+
+statement error
+SELECT * FROM pgr_contractionLinear(e(), cycles => 2);
+----
+cycles
+
+query IIII
+SELECT (SELECT count(*) FROM pgr_contractionDeadEnd(NULL::VARCHAR)),
+       (SELECT count(*) FROM pgr_contractionDeadEnd(e(), forbidden => NULL)),
+       (SELECT count(*) FROM pgr_contractionLinear(e(), NULL::BOOLEAN)),
+       (SELECT count(*) FROM pgr_contractionLinear(e(), false, NULL::BIGINT[]));
+----
+0	0	0	0
+
+# More than one output chunk: a 2049-cycle with a pendant vertex on each of its vertices. Each
+# cycle vertex absorbs its own pendant, and every row keeps its own one-element list across the
+# chunk boundary.
+statement ok
+CREATE TABLE crown AS
+  SELECT i AS id, i AS source, i % 2049 + 1 AS target, 1 AS cost FROM range(1, 2050) t(i)
+  UNION ALL SELECT 2049 + i, i, 2049 + i, 1 FROM range(1, 2050) t(i);
+
+query IIIIII
+SELECT count(*), count(DISTINCT id), min(id), max(id),
+       count(*) FILTER (WHERE contracted_vertices <> [id + 2049]),
+       count(*) FILTER (WHERE type <> 'v')
+FROM pgr_contractionDeadEnd('SELECT * FROM crown', directed => false);
+----
+2049	2049	1	2049	0	0
