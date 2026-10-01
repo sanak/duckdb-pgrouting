@@ -284,7 +284,8 @@
       "group": "Turn restrictions",
       "label": "pgr_trsp",
       "sql": [
-        "-- From 1 to 8 without the turns the restrictions table forbids (each path costs extra to take).",
+        "-- From 1 to 8 with turn restrictions: taking a restricted sequence of edges adds its cost as a penalty.",
+        "-- 8 is reachable only through the restricted turn 7 then 10, so this route pays 100 extra.",
         "SELECT * FROM pgr_trsp('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT path, cost FROM restrictions', 1, 8);"
       ]
     },
@@ -293,7 +294,7 @@
       "group": "Turn restrictions",
       "label": "pgr_trsp_withPoints",
       "sql": [
-        "-- The same turn restrictions, from point 1 to vertex 10.",
+        "-- The same penalised turn restrictions, from point 1 to vertex 10.",
         "SELECT * FROM pgr_trsp_withPoints('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT path, cost FROM restrictions', 'SELECT pid, edge_id, fraction, side FROM pointsofinterest', -1, 10);"
       ]
     },
@@ -302,7 +303,7 @@
       "group": "Turn restrictions",
       "label": "pgr_trspVia",
       "sql": [
-        "-- A route through 5, 7, 1, 8 and 15 that obeys the turn restrictions.",
+        "-- A route through 5, 7, 1, 8 and 15 with turn restrictions; the leg from 1 to 8 pays the 7-then-10 penalty.",
         "SELECT * FROM pgr_trspVia('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT path, cost FROM restrictions', [5, 7, 1, 8, 15]);"
       ]
     },
@@ -311,7 +312,7 @@
       "group": "Turn restrictions",
       "label": "pgr_trspVia_withPoints",
       "sql": [
-        "-- Through point 6, vertex 15 and point 5, obeying the turn restrictions.",
+        "-- Through point 6, vertex 15 and point 5, with the penalised turn restrictions.",
         "SELECT * FROM pgr_trspVia_withPoints('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT path, cost FROM restrictions', 'SELECT pid, edge_id, fraction, side FROM pointsofinterest', [-6, 15, -5]);"
       ]
     },
