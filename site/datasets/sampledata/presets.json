@@ -590,6 +590,195 @@
       ]
     },
     {
+      "id": "max-flow",
+      "group": "Flow",
+      "label": "pgr_maxFlow",
+      "sql": [
+        "-- The largest flow from vertices 11 and 3 to vertices 5 and 12, within each edge's capacity: a single value.",
+        "SELECT pgr_maxFlow('SELECT id, source, target, capacity, reverse_capacity FROM edges', [11, 3], [5, 12]) AS max_flow;"
+      ]
+    },
+    {
+      "id": "push-relabel",
+      "group": "Flow",
+      "label": "pgr_pushRelabel",
+      "sql": [
+        "-- Which edges carry that flow, and how much, by the push-relabel algorithm.",
+        "SELECT * FROM pgr_pushRelabel('SELECT id, source, target, capacity, reverse_capacity FROM edges', [11, 3], [5, 12]);"
+      ]
+    },
+    {
+      "id": "boykov-kolmogorov",
+      "group": "Flow",
+      "label": "pgr_boykovKolmogorov",
+      "sql": [
+        "-- The same maximum flow by Boykov-Kolmogorov; the edges used may differ.",
+        "SELECT * FROM pgr_boykovKolmogorov('SELECT id, source, target, capacity, reverse_capacity FROM edges', [11, 3], [5, 12]);"
+      ]
+    },
+    {
+      "id": "edmonds-karp",
+      "group": "Flow",
+      "label": "pgr_edmondsKarp",
+      "sql": [
+        "-- The same maximum flow by Edmonds-Karp.",
+        "SELECT * FROM pgr_edmondsKarp('SELECT id, source, target, capacity, reverse_capacity FROM edges', [11, 3], [5, 12]);"
+      ]
+    },
+    {
+      "id": "max-flow-min-cost",
+      "group": "Flow",
+      "label": "pgr_maxFlowMinCost",
+      "sql": [
+        "-- A maximum flow that is also the cheapest, with edge costs per unit of flow.",
+        "SELECT * FROM pgr_maxFlowMinCost('SELECT id, source, target, capacity, reverse_capacity, cost, reverse_cost FROM edges', [11, 3], [5, 12]);"
+      ]
+    },
+    {
+      "id": "max-flow-min-cost-cost",
+      "group": "Flow",
+      "label": "pgr_maxFlowMinCost_Cost",
+      "sql": [
+        "-- Just the total cost of that flow: a single value.",
+        "SELECT pgr_maxFlowMinCost_Cost('SELECT id, source, target, capacity, reverse_capacity, cost, reverse_cost FROM edges', [11, 3], [5, 12]) AS total_cost;"
+      ]
+    },
+    {
+      "id": "edge-disjoint-paths",
+      "group": "Flow",
+      "label": "pgr_edgeDisjointPaths",
+      "sql": [
+        "-- Routes from 11 to 12 that share no edge, one colour per path_id.",
+        "SELECT * FROM pgr_edgeDisjointPaths('SELECT id, source, target, cost, reverse_cost FROM edges', 11, 12);"
+      ]
+    },
+    {
+      "id": "max-cardinality-match",
+      "group": "Flow",
+      "label": "pgr_maxCardinalityMatch",
+      "sql": [
+        "-- As many edges as possible with no two sharing a vertex.",
+        "SELECT * FROM pgr_maxCardinalityMatch('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "chinese-postman",
+      "group": "Chinese Postman",
+      "label": "pgr_chinesePostman",
+      "sql": [
+        "-- The shortest closed walk over every edge of the main component (edges 1 to 16).",
+        "SELECT * FROM pgr_chinesePostman('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17');"
+      ]
+    },
+    {
+      "id": "chinese-postman-cost",
+      "group": "Chinese Postman",
+      "label": "pgr_chinesePostmanCost",
+      "sql": [
+        "-- Just that walk's total cost: a single value.",
+        "SELECT pgr_chinesePostmanCost('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17') AS total_cost;"
+      ]
+    },
+    {
+      "id": "line-graph",
+      "group": "Graph structure",
+      "label": "pgr_lineGraph",
+      "sql": [
+        "-- The line graph of four edges: its vertices are those edges' ids (table only).",
+        "SELECT * FROM pgr_lineGraph('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (2, 4, 5, 8)', directed => false);"
+      ]
+    },
+    {
+      "id": "line-graph-full",
+      "group": "Graph structure",
+      "label": "pgr_lineGraphFull",
+      "sql": [
+        "-- The full line graph keeps a vertex per edge end, so turns can carry costs; the map marks the four edges.",
+        "SELECT * FROM pgr_lineGraphFull('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (4, 7, 8, 10)');"
+      ]
+    },
+    {
+      "id": "transitive-closure",
+      "group": "Graph structure",
+      "label": "pgr_transitiveClosure",
+      "sql": [
+        "-- For each vertex, every vertex it can reach (table only).",
+        "SELECT * FROM pgr_transitiveClosure('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id IN (2, 3, 5, 11, 12, 13, 15)');"
+      ]
+    },
+    {
+      "id": "dominator-tree",
+      "group": "Graph structure",
+      "label": "pgr_lengauerTarjanDominatorTree",
+      "sql": [
+        "-- Each vertex's immediate dominator from root 5: the last vertex every path to it must pass (table only).",
+        "SELECT * FROM pgr_lengauerTarjanDominatorTree('SELECT id, source, target, cost, reverse_cost FROM edges', 5);"
+      ]
+    },
+    {
+      "id": "hawick-circuits",
+      "group": "Graph structure",
+      "label": "pgr_hawickCircuits",
+      "sql": [
+        "-- Every elementary circuit of four edges, one colour per circuit.",
+        "SELECT * FROM pgr_hawickCircuits('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 5');"
+      ]
+    },
+    {
+      "id": "stoer-wagner",
+      "group": "Graph structure",
+      "label": "pgr_stoerWagner",
+      "sql": [
+        "-- The cheapest set of edges whose removal splits the main component in two.",
+        "SELECT * FROM pgr_stoerWagner('SELECT id, source, target, cost, reverse_cost FROM edges WHERE id < 17');"
+      ]
+    },
+    {
+      "id": "is-planar",
+      "group": "Graph structure",
+      "label": "pgr_isPlanar",
+      "sql": [
+        "-- Whether the graph can be drawn with no crossing edges: a single value.",
+        "SELECT pgr_isPlanar('SELECT id, source, target, cost, reverse_cost FROM edges') AS is_planar;"
+      ]
+    },
+    {
+      "id": "contraction",
+      "group": "Contraction",
+      "label": "pgr_contraction",
+      "sql": [
+        "-- Dead-end and linear contraction of the undirected graph: removed vertices and shortcut edges (table only).",
+        "SELECT * FROM pgr_contraction('SELECT id, source, target, cost, reverse_cost FROM edges', directed => false);"
+      ]
+    },
+    {
+      "id": "contraction-dead-end",
+      "group": "Contraction",
+      "label": "pgr_contractionDeadEnd",
+      "sql": [
+        "-- Dead-end contraction only.",
+        "SELECT * FROM pgr_contractionDeadEnd('SELECT id, source, target, cost, reverse_cost FROM edges', directed => false);"
+      ]
+    },
+    {
+      "id": "contraction-linear",
+      "group": "Contraction",
+      "label": "pgr_contractionLinear",
+      "sql": [
+        "-- Linear contraction only.",
+        "SELECT * FROM pgr_contractionLinear('SELECT id, source, target, cost, reverse_cost FROM edges', directed => false);"
+      ]
+    },
+    {
+      "id": "contraction-hierarchies",
+      "group": "Contraction",
+      "label": "pgr_contractionHierarchies",
+      "sql": [
+        "-- Contraction hierarchies: every vertex ranked, with the shortcuts that ranking needs (table only).",
+        "SELECT * FROM pgr_contractionHierarchies('SELECT id, source, target, cost FROM edges', directed => false);"
+      ]
+    },
+    {
       "id": "extract-vertices",
       "group": "Utilities",
       "label": "pgr_extractVertices",
