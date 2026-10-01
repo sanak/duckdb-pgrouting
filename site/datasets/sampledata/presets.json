@@ -65,6 +65,16 @@
       ]
     },
     {
+      "id": "dijkstra-via",
+      "group": "Dijkstra",
+      "label": "pgr_dijkstraVia",
+      "sql": [
+        "-- One route through 5, 7, 1, 8 and 15 in that order; path_id numbers the legs,",
+        "-- route_agg_cost runs along the whole route.",
+        "SELECT * FROM pgr_dijkstraVia('SELECT id, source, target, cost, reverse_cost FROM edges', [5, 7, 1, 8, 15]);"
+      ]
+    },
+    {
       "id": "with-points",
       "group": "With points",
       "label": "pgr_withPoints",
@@ -92,6 +102,33 @@
       ]
     },
     {
+      "id": "with-points-via",
+      "group": "With points",
+      "label": "pgr_withPointsVia",
+      "sql": [
+        "-- A route through point 1, vertex 7, point 3, vertex 16 and vertex 15, in that order.",
+        "SELECT * FROM pgr_withPointsVia('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT pid, edge_id, fraction, side FROM pointsofinterest', [-1, 7, -3, 16, 15]);"
+      ]
+    },
+    {
+      "id": "with-points-dd",
+      "group": "With points",
+      "label": "pgr_withPointsDD",
+      "sql": [
+        "-- Everything within a cost of 2 from points 1 and 5, one colour per start; 'r' drives on the right.",
+        "SELECT * FROM pgr_withPointsDD('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT pid, edge_id, fraction, side FROM pointsofinterest', [-1, -5], 2.0, 'r');"
+      ]
+    },
+    {
+      "id": "with-points-ksp",
+      "group": "With points",
+      "label": "pgr_withPointsKSP",
+      "sql": [
+        "-- The three cheapest routes from point 1 to point 2, one colour per path_id.",
+        "SELECT * FROM pgr_withPointsKSP('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT pid, edge_id, fraction, side FROM pointsofinterest', -1, -2, 3, 'r');"
+      ]
+    },
+    {
       "id": "bd-dijkstra",
       "group": "Bidirectional Dijkstra",
       "label": "pgr_bdDijkstra",
@@ -116,6 +153,61 @@
       "sql": [
         "-- Bidirectional search over every ordered pair.",
         "SELECT * FROM pgr_bdDijkstraCostMatrix('SELECT id, source, target, cost, reverse_cost FROM edges', [5, 7, 12, 16]);"
+      ]
+    },
+    {
+      "id": "astar",
+      "group": "A*",
+      "label": "pgr_aStar",
+      "sql": [
+        "-- A* from 5 to 12, steered by the straight-line distance to the goal; compare pgr_dijkstra.",
+        "-- The edges carry their end-point coordinates (x1, y1, x2, y2).",
+        "SELECT * FROM pgr_aStar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 5, 12);"
+      ]
+    },
+    {
+      "id": "astar-cost",
+      "group": "A*",
+      "label": "pgr_aStarCost",
+      "sql": [
+        "-- A*, the total cost of each route only.",
+        "SELECT * FROM pgr_aStarCost('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', [5, 3], [12, 17]);"
+      ]
+    },
+    {
+      "id": "astar-cost-matrix",
+      "group": "A*",
+      "label": "pgr_aStarCostMatrix",
+      "sql": [
+        "-- A* costs between every ordered pair of the listed vertices.",
+        "SELECT * FROM pgr_aStarCostMatrix('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', [5, 7, 12, 16]);"
+      ]
+    },
+    {
+      "id": "bd-astar",
+      "group": "A*",
+      "label": "pgr_bdAstar",
+      "sql": [
+        "-- Bidirectional A*: from both ends at once.",
+        "SELECT * FROM pgr_bdAstar('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', 5, 12);"
+      ]
+    },
+    {
+      "id": "bd-astar-cost",
+      "group": "A*",
+      "label": "pgr_bdAstarCost",
+      "sql": [
+        "-- Bidirectional A*, cost only.",
+        "SELECT * FROM pgr_bdAstarCost('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', [5, 3], [12, 17]);"
+      ]
+    },
+    {
+      "id": "bd-astar-cost-matrix",
+      "group": "A*",
+      "label": "pgr_bdAstarCostMatrix",
+      "sql": [
+        "-- Bidirectional A* over every ordered pair.",
+        "SELECT * FROM pgr_bdAstarCostMatrix('SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges', [5, 7, 12, 16]);"
       ]
     },
     {
@@ -157,6 +249,100 @@
         "          CASE WHEN id % 2 = 0 THEN 0 ELSE 1 END AS reverse_cost",
         "   FROM edges',",
         "  5, 12);"
+      ]
+    },
+    {
+      "id": "johnson",
+      "group": "All pairs",
+      "label": "pgr_johnson",
+      "sql": [
+        "-- The cost between every pair of vertices that can reach each other (table only).",
+        "-- Johnson's algorithm suits sparse graphs.",
+        "SELECT * FROM pgr_johnson('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "floyd-warshall",
+      "group": "All pairs",
+      "label": "pgr_floydWarshall",
+      "sql": [
+        "-- The same all-pairs costs by Floyd-Warshall, which suits dense graphs (table only).",
+        "SELECT * FROM pgr_floydWarshall('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "ksp",
+      "group": "K shortest paths",
+      "label": "pgr_ksp",
+      "sql": [
+        "-- The three cheapest routes from 6 to 17 (Yen's algorithm), one colour per path_id.",
+        "SELECT * FROM pgr_ksp('SELECT id, source, target, cost, reverse_cost FROM edges', 6, 17, 3);"
+      ]
+    },
+    {
+      "id": "trsp",
+      "group": "Turn restrictions",
+      "label": "pgr_trsp",
+      "sql": [
+        "-- From 1 to 8 without the turns the restrictions table forbids (each path costs extra to take).",
+        "SELECT * FROM pgr_trsp('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT path, cost FROM restrictions', 1, 8);"
+      ]
+    },
+    {
+      "id": "trsp-with-points",
+      "group": "Turn restrictions",
+      "label": "pgr_trsp_withPoints",
+      "sql": [
+        "-- The same turn restrictions, from point 1 to vertex 10.",
+        "SELECT * FROM pgr_trsp_withPoints('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT path, cost FROM restrictions', 'SELECT pid, edge_id, fraction, side FROM pointsofinterest', -1, 10);"
+      ]
+    },
+    {
+      "id": "trsp-via",
+      "group": "Turn restrictions",
+      "label": "pgr_trspVia",
+      "sql": [
+        "-- A route through 5, 7, 1, 8 and 15 that obeys the turn restrictions.",
+        "SELECT * FROM pgr_trspVia('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT path, cost FROM restrictions', [5, 7, 1, 8, 15]);"
+      ]
+    },
+    {
+      "id": "trsp-via-with-points",
+      "group": "Turn restrictions",
+      "label": "pgr_trspVia_withPoints",
+      "sql": [
+        "-- Through point 6, vertex 15 and point 5, obeying the turn restrictions.",
+        "SELECT * FROM pgr_trspVia_withPoints('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT path, cost FROM restrictions', 'SELECT pid, edge_id, fraction, side FROM pointsofinterest', [-6, 15, -5]);"
+      ]
+    },
+    {
+      "id": "turn-restricted-path",
+      "group": "Turn restrictions",
+      "label": "pgr_turnRestrictedPath",
+      "sql": [
+        "-- Up to three routes from 3 to 8 that take no restricted turn, ignoring edge direction;",
+        "-- on this graph only one exists.",
+        "SELECT * FROM pgr_turnRestrictedPath('SELECT id, source, target, cost, reverse_cost FROM edges', 'SELECT path, cost FROM restrictions', 3, 8, 3, directed => false);"
+      ]
+    },
+    {
+      "id": "tsp",
+      "group": "Traveling salesperson",
+      "label": "pgr_TSP",
+      "sql": [
+        "-- A round trip from 5 through 6, 10 and 15, from a matrix of shortest-path costs.",
+        "SELECT * FROM pgr_TSP(",
+        "  $$SELECT * FROM pgr_dijkstraCostMatrix('SELECT id, source, target, cost, reverse_cost FROM edges', [5, 6, 10, 15], directed => false)$$,",
+        "  start_id => 5);"
+      ]
+    },
+    {
+      "id": "tsp-euclidean",
+      "group": "Traveling salesperson",
+      "label": "pgr_TSPeuclidean",
+      "sql": [
+        "-- A round trip over every vertex by straight-line distance, from vertex 1.",
+        "SELECT * FROM pgr_TSPeuclidean('SELECT id, x, y FROM vertices', start_id => 1);"
       ]
     },
     {
