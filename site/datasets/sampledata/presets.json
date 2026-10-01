@@ -346,6 +346,105 @@
       ]
     },
     {
+      "id": "driving-distance",
+      "group": "Driving distance & traversal",
+      "label": "pgr_drivingDistance",
+      "sql": [
+        "-- Everything within a cost of 2 from vertices 5 and 15, one colour per start.",
+        "SELECT * FROM pgr_drivingDistance('SELECT id, source, target, cost, reverse_cost FROM edges', [5, 15], 2.0);"
+      ]
+    },
+    {
+      "id": "breadth-first-search",
+      "group": "Driving distance & traversal",
+      "label": "pgr_breadthFirstSearch",
+      "sql": [
+        "-- Breadth-first search from 6 and 15, two levels deep, one colour per root.",
+        "SELECT * FROM pgr_breadthFirstSearch('SELECT id, source, target, cost, reverse_cost FROM edges', [6, 15], max_depth => 2);"
+      ]
+    },
+    {
+      "id": "depth-first-search",
+      "group": "Driving distance & traversal",
+      "label": "pgr_depthFirstSearch",
+      "sql": [
+        "-- Depth-first search from 6 and 15, one colour per root.",
+        "SELECT * FROM pgr_depthFirstSearch('SELECT id, source, target, cost, reverse_cost FROM edges', [6, 15]);"
+      ]
+    },
+    {
+      "id": "kruskal",
+      "group": "Spanning trees",
+      "label": "pgr_kruskal",
+      "sql": [
+        "-- A minimum spanning forest by Kruskal's algorithm: one tree per component.",
+        "SELECT * FROM pgr_kruskal('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "kruskal-bfs",
+      "group": "Spanning trees",
+      "label": "pgr_kruskalBFS",
+      "sql": [
+        "-- Kruskal's forest walked breadth-first from 6 and 13, one colour per root.",
+        "SELECT * FROM pgr_kruskalBFS('SELECT id, source, target, cost, reverse_cost FROM edges', [6, 13]);"
+      ]
+    },
+    {
+      "id": "kruskal-dfs",
+      "group": "Spanning trees",
+      "label": "pgr_kruskalDFS",
+      "sql": [
+        "-- Kruskal's forest walked depth-first from 6 and 13.",
+        "SELECT * FROM pgr_kruskalDFS('SELECT id, source, target, cost, reverse_cost FROM edges', [6, 13]);"
+      ]
+    },
+    {
+      "id": "kruskal-dd",
+      "group": "Spanning trees",
+      "label": "pgr_kruskalDD",
+      "sql": [
+        "-- The part of Kruskal's forest within a cost of 3.5 from 6 and 13.",
+        "SELECT * FROM pgr_kruskalDD('SELECT id, source, target, cost, reverse_cost FROM edges', [6, 13], 3.5);"
+      ]
+    },
+    {
+      "id": "prim",
+      "group": "Spanning trees",
+      "label": "pgr_prim",
+      "sql": [
+        "-- A minimum spanning forest by Prim's algorithm.",
+        "SELECT * FROM pgr_prim('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "prim-bfs",
+      "group": "Spanning trees",
+      "label": "pgr_primBFS",
+      "sql": [
+        "-- Prim's forest walked breadth-first from 6 and 13, one colour per root.",
+        "SELECT * FROM pgr_primBFS('SELECT id, source, target, cost, reverse_cost FROM edges', [6, 13]);"
+      ]
+    },
+    {
+      "id": "prim-dfs",
+      "group": "Spanning trees",
+      "label": "pgr_primDFS",
+      "sql": [
+        "-- Prim's forest walked depth-first from 6 and 13.",
+        "SELECT * FROM pgr_primDFS('SELECT id, source, target, cost, reverse_cost FROM edges', [6, 13]);"
+      ]
+    },
+    {
+      "id": "prim-dd",
+      "group": "Spanning trees",
+      "label": "pgr_primDD",
+      "sql": [
+        "-- The part of Prim's forest within a cost of 3.5 from 6 and 13.",
+        "SELECT * FROM pgr_primDD('SELECT id, source, target, cost, reverse_cost FROM edges', [6, 13], 3.5);"
+      ]
+    },
+    {
       "id": "connected-components",
       "group": "Components",
       "label": "pgr_connectedComponents",
@@ -353,6 +452,141 @@
         "-- Which vertices can reach each other, ignoring direction: the sample graph falls into three pieces,",
         "-- each named after its smallest vertex.",
         "SELECT * FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "strong-components",
+      "group": "Components",
+      "label": "pgr_strongComponents",
+      "sql": [
+        "-- Groups of vertices that can all reach each other along edge directions.",
+        "SELECT * FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "biconnected-components",
+      "group": "Components",
+      "label": "pgr_biconnectedComponents",
+      "sql": [
+        "-- Groups of edges that stay connected when any one vertex is removed.",
+        "SELECT * FROM pgr_biconnectedComponents('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "articulation-points",
+      "group": "Components",
+      "label": "pgr_articulationPoints",
+      "sql": [
+        "-- The vertices whose removal splits a component.",
+        "SELECT * FROM pgr_articulationPoints('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "bridges",
+      "group": "Components",
+      "label": "pgr_bridges",
+      "sql": [
+        "-- The edges whose removal splits a component.",
+        "SELECT * FROM pgr_bridges('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "make-connected",
+      "group": "Components",
+      "label": "pgr_makeConnected",
+      "sql": [
+        "-- Vertex pairs to join with new edges so the graph becomes one piece (table only).",
+        "SELECT * FROM pgr_makeConnected('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "sequential-vertex-coloring",
+      "group": "Coloring",
+      "label": "pgr_sequentialVertexColoring",
+      "sql": [
+        "-- Colours vertices so no two neighbours share one, one map colour per colour.",
+        "SELECT * FROM pgr_sequentialVertexColoring('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "bipartite",
+      "group": "Coloring",
+      "label": "pgr_bipartite",
+      "sql": [
+        "-- Splits the vertices into two sides with every edge between them (no rows when that is impossible).",
+        "SELECT * FROM pgr_bipartite('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "edge-coloring",
+      "group": "Coloring",
+      "label": "pgr_edgeColoring",
+      "sql": [
+        "-- Colours edges so no two edges at a vertex share one.",
+        "SELECT * FROM pgr_edgeColoring('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "cuthill-mckee-ordering",
+      "group": "Ordering",
+      "label": "pgr_cuthillMckeeOrdering",
+      "sql": [
+        "-- A vertex order that keeps neighbours close (reverse Cuthill-McKee); read it in the table.",
+        "SELECT * FROM pgr_cuthillMckeeOrdering('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "king-ordering",
+      "group": "Ordering",
+      "label": "pgr_kingOrdering",
+      "sql": [
+        "-- King's vertex order, another bandwidth-reducing order.",
+        "SELECT * FROM pgr_kingOrdering('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "sloan-ordering",
+      "group": "Ordering",
+      "label": "pgr_sloanOrdering",
+      "sql": [
+        "-- Sloan's vertex order, which reduces the profile.",
+        "SELECT * FROM pgr_sloanOrdering('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "topological-sort",
+      "group": "Ordering",
+      "label": "pgr_topologicalSort",
+      "sql": [
+        "-- Every edge goes forward in this order; only the forward edges, which form no cycle.",
+        "SELECT * FROM pgr_topologicalSort('SELECT id, source, target, cost FROM edges WHERE cost >= 0');"
+      ]
+    },
+    {
+      "id": "betweenness-centrality",
+      "group": "Metrics",
+      "label": "pgr_betweennessCentrality",
+      "sql": [
+        "-- How often each vertex lies on a shortest path between two others (table only).",
+        "SELECT * FROM pgr_betweennessCentrality('SELECT id, source, target, cost, reverse_cost FROM edges');"
+      ]
+    },
+    {
+      "id": "bandwidth",
+      "group": "Metrics",
+      "label": "pgr_bandwidth",
+      "sql": [
+        "-- The graph's bandwidth under its current vertex numbering: a single value.",
+        "SELECT pgr_bandwidth('SELECT id, source, target, cost, reverse_cost FROM edges') AS bandwidth;"
+      ]
+    },
+    {
+      "id": "degree",
+      "group": "Metrics",
+      "label": "pgr_degree",
+      "sql": [
+        "-- How many edges meet at each vertex.",
+        "SELECT * FROM pgr_degree('SELECT id, source, target FROM edges');"
       ]
     },
     {
