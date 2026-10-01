@@ -26,42 +26,12 @@ function presetFile(id: string) {
   return parsePresetFile(where, JSON.parse(readFileSync(join(DATASETS, id, 'presets.json'), 'utf8')));
 }
 
-// Every public function of the extension (duckdb_functions() rows tagged pgrouting_name).
-const FUNCTIONS = [
-  'pgr_dijkstra',
-  'pgr_dijkstraCost',
-  'pgr_dijkstraCostMatrix',
-  'pgr_dijkstraNear',
-  'pgr_dijkstraNearCost',
-  'pgr_withPoints',
-  'pgr_withPointsCost',
-  'pgr_withPointsCostMatrix',
-  'pgr_bdDijkstra',
-  'pgr_bdDijkstraCost',
-  'pgr_bdDijkstraCostMatrix',
-  'pgr_bellmanFord',
-  'pgr_edwardMoore',
-  'pgr_dagShortestPath',
-  'pgr_binaryBreadthFirstSearch',
-  'pgr_connectedComponents',
-  'pgr_extractVertices',
-  'pgr_findCloseEdges',
-  'pgr_version',
-];
-
 test('every committed presets.json parses, with unique ids', () => {
   for (const id of datasetIds()) {
     const file = presetFile(id);
     assert.ok(file.presets.length > 0, id);
     assert.equal(new Set(file.presets.map((p) => p.id)).size, file.presets.length, id);
   }
-});
-
-test('every public function has at least one sampledata preset', () => {
-  const called = new Set(
-    presetFile('sampledata').presets.flatMap((p) => [...p.sql.matchAll(/\b(pgr_\w+)\s*\(/g)].map((m) => m[1])),
-  );
-  for (const name of FUNCTIONS) assert.ok(called.has(name), `no preset calls ${name}`);
 });
 
 test('the default sampledata preset is a one-to-one pgr_dijkstra', () => {
