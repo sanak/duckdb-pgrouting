@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Query results as plain values: the table renders them, and the map highlights the edge and node
-// ids they contain, one colour per path.
+// ids they contain, one colour per path, component, colour class or tree root.
 
 export type Plain = null | boolean | number | string | Plain[];
 
@@ -63,21 +63,37 @@ export function highlightOf(result: ResultSet): Highlight {
   const edges = new Map<number, number>();
   const nodes = new Map<number, number>();
   const at = (name: string) => result.columns.indexOf(name);
-  const [edge = -1, node = -1, pathId = -1, start = -1, end = -1] = [
+  const [edge = -1, node = -1, pathId = -1, start = -1, end = -1, component = -1, color = -1] = [
     'edge',
     'node',
     'path_id',
     'start_vid',
     'end_vid',
+    'component',
+    'color',
   ].map(at);
   if (edge === -1 && node === -1) return { edges, nodes };
 
+  // Flow functions report each edge's ends as start_vid/end_vid; keyed by them, every edge would
+  // get a colour of its own. Their edges are one flow, so they share one colour.
+  const flow = edge !== -1 && at('flow') !== -1 && at('residual_capacity') !== -1;
+  const by =
+    (column: number, prefix: string) =>
+    (row: Plain[]): string =>
+      `${prefix}${row[column]}`;
+  // One colour per path, then per component or colour class, then per root of a tree result.
   const pathKey =
     pathId !== -1
-      ? (row: Plain[]) => `p${row[pathId]}`
-      : start !== -1 && end !== -1
+      ? by(pathId, 'p')
+      : start !== -1 && end !== -1 && !flow
         ? (row: Plain[]) => `${row[start]}>${row[end]}`
-        : () => '';
+        : component !== -1
+          ? by(component, 'c')
+          : color !== -1
+            ? by(color, 'k')
+            : start !== -1 && end === -1
+              ? by(start, 's')
+              : () => '';
   const paths = new Map<string, number>();
 
   for (const row of result.rows) {

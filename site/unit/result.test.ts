@@ -200,3 +200,153 @@ test('edgeOf selects nothing for the final row of a path, NULL, or a result with
 test('edgeOf ignores an edge column that holds text', () => {
   assert.equal(edgeOf({ columns: ['edge'], rows: [] }, ['7']), null);
 });
+
+test('components colour each component: vertex rows and edge rows', () => {
+  const vertices = highlightOf(
+    path(
+      ['seq', 'component', 'node'],
+      [
+        [1, 1, 1],
+        [2, 1, 3],
+        [3, 2, 2],
+        [4, 13, 14],
+      ],
+    ),
+  );
+  assert.deepEqual(
+    [...vertices.nodes],
+    [
+      [1, 0],
+      [3, 0],
+      [2, 1],
+      [14, 2],
+    ],
+  );
+  const edges = highlightOf(
+    path(
+      ['seq', 'component', 'edge'],
+      [
+        [1, 1, 1],
+        [2, 2, 2],
+        [3, 2, 3],
+      ],
+    ),
+  );
+  assert.deepEqual(
+    [...edges.edges],
+    [
+      [1, 0],
+      [2, 1],
+      [3, 1],
+    ],
+  );
+});
+
+test('colourings colour each colour class', () => {
+  const h = highlightOf(
+    path(
+      ['node', 'color'],
+      [
+        [1, 1],
+        [2, 1],
+        [3, 2],
+      ],
+    ),
+  );
+  assert.deepEqual(
+    [...h.nodes],
+    [
+      [1, 0],
+      [2, 0],
+      [3, 1],
+    ],
+  );
+  const e = highlightOf(
+    path(
+      ['edge', 'color'],
+      [
+        [1, 3],
+        [2, 2],
+        [3, 3],
+      ],
+    ),
+  );
+  assert.deepEqual(
+    [...e.edges],
+    [
+      [1, 0],
+      [2, 1],
+      [3, 0],
+    ],
+  );
+});
+
+test('tree rows without end_vid colour each root', () => {
+  const h = highlightOf(
+    path(
+      ['seq', 'depth', 'start_vid', 'pred', 'node', 'edge', 'cost', 'agg_cost'],
+      [
+        [1, 0, 5, 5, 5, -1, 0, 0],
+        [2, 1, 5, 5, 6, 1, 1, 1],
+        [3, 0, 15, 15, 15, -1, 0, 0],
+        [4, 1, 15, 15, 16, 17, 1, 1],
+      ],
+    ),
+  );
+  assert.deepEqual(
+    [...h.edges],
+    [
+      [1, 0],
+      [17, 1],
+    ],
+  );
+  assert.deepEqual(
+    [...h.nodes],
+    [
+      [5, 0],
+      [6, 0],
+      [15, 1],
+      [16, 1],
+    ],
+  );
+});
+
+test('flow results are one colour: their start_vid/end_vid are each edge’s ends, not a path', () => {
+  const h = highlightOf(
+    path(
+      ['seq', 'edge', 'start_vid', 'end_vid', 'flow', 'residual_capacity'],
+      [
+        [1, 7, 3, 7, 50, 0],
+        [2, 1, 6, 5, 130, 0],
+        [3, 4, 7, 6, 50, 0],
+      ],
+    ),
+  );
+  assert.deepEqual(
+    [...h.edges],
+    [
+      [7, 0],
+      [1, 0],
+      [4, 0],
+    ],
+  );
+});
+
+test('a minimum-cost flow (edge ends as source/target) is one colour', () => {
+  const h = highlightOf(
+    path(
+      ['seq', 'edge', 'source', 'target', 'flow', 'residual_capacity', 'cost', 'agg_cost'],
+      [
+        [1, 7, 3, 7, 50, 0, 50, 50],
+        [2, 1, 6, 5, 130, 0, 130, 180],
+      ],
+    ),
+  );
+  assert.deepEqual(
+    [...h.edges],
+    [
+      [7, 0],
+      [1, 0],
+    ],
+  );
+});
