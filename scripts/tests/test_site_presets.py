@@ -6,6 +6,7 @@ queries in presets.json. A preset that stopped working would otherwise surface o
 browser. This test builds each dataset the way the page does -- an in-memory catalog attached
 under the dataset's id and selected with USE, then the table SQL -- with the release binary, and
 runs every preset in file order, each one twice, because a reader may run any preset again.
+Every function with a pgrouting_name tag must also appear in at least one preset.
 The table SQL names files "<id>/<file>", relative to test/data, which is where the data lives.
 Skips when the binary is absent; spatial datasets and presets skip where spatial cannot be
 installed (PGROUTING_NO_SPATIAL=1), and a dataset that reads from third-party servers runs only
@@ -129,6 +130,11 @@ def read_json(dataset_id, name):
     return json.loads((DATASETS / dataset_id / name).read_text())
 
 
+def preset_functions(presets):
+    """The pgr_* identifiers the presets' SQL names, lower-cased: DuckDB matches names case-insensitively."""
+    return {name.lower() for preset in presets for name in re.findall(r"\bpgr_\w+", preset_sql(preset))}
+
+
 class TestChainSql(unittest.TestCase):
     """The script shape; needs no binary."""
 
@@ -199,6 +205,11 @@ class TestChainSql(unittest.TestCase):
         with mock.patch.dict(os.environ, {NETWORK_ENV: "1", gen.NO_SPATIAL_ENV: "1"}):
             self.assertIn(gen.NO_SPATIAL_ENV, skip_reason({"network": True, "spatial": True}))
 
+    def test_preset_functions_are_whole_identifiers_in_lower_case(self):
+        presets = [{"id": "a", "sql": ["-- pgr_dijkstra is not called here", "SELECT * FROM pgr_trsp_withPoints('q');"]},
+                   {"id": "b", "sql": "SELECT pgr_maxFlow('q', 1, 2) AS max_flow;"}]
+        self.assertEqual({"pgr_dijkstra", "pgr_trsp_withpoints", "pgr_maxflow"}, preset_functions(presets))
+
 
 @unittest.skipUnless(BINARY.exists(), "build/release/duckdb not built")
 class TestSitePresets(unittest.TestCase):
@@ -225,6 +236,27 @@ class TestSitePresets(unittest.TestCase):
                 except duckdbcli.DuckDBError as error:
                     self.fail("{}: the last 'preset'/'again' line names the failing preset\n{}".format(
                         dataset_id, error))
+
+
+@unittest.skipUnless(BINARY.exists(), "build/release/duckdb not built")
+class TestPresetCoverage(unittest.TestCase):
+    """Every function with a pgrouting_name tag can be tried from at least one preset.
+
+    The set of functions is read from duckdb_functions(), never listed here, so a new function
+    fails this test until a preset names it.
+    """
+
+    def test_every_tagged_function_has_a_preset(self):
+        rows = duckdbcli.DuckDB(str(BINARY)).query(
+            "SELECT DISTINCT tags['pgrouting_name'] FROM duckdb_functions() "
+            "WHERE tags['pgrouting_name'] IS NOT NULL ORDER BY 1"
+        ).rows
+        self.assertTrue(rows)
+        named = set()
+        for dataset_id in committed_datasets():
+            named |= preset_functions(read_json(dataset_id, "presets.json")["presets"])
+        missing = [row[0] for row in rows if row[0].lower() not in named]
+        self.assertEqual([], missing, "add a preset to site/datasets/<id>/presets.json for each")
 
 
 class TestOvertureFiles(unittest.TestCase):

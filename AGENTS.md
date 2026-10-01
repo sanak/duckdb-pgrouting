@@ -134,7 +134,9 @@ function carries a catalog description and an example (`duckdb_functions().descr
   Release's Wasm builds into `site/public/` before a dev server or build.
   `scripts/tests/test_site_presets.py` runs every preset natively, in order and twice; a
   `"network": true` dataset only with `PGROUTING_NETWORK_TESTS=1` (a release step), though its
-  presets after the network steps also run in Checks against made-up segments.
+  presets after the network steps also run in Checks against made-up segments. Every
+  `pgrouting_name`-tagged function needs at least one preset; the same file fails when one has
+  none.
 - `docs/RELEASE.md` — how a release is cut; `docs/UPSTREAM_SYNC.md` — how pgRouting is bumped.
 
 ## Build and test
