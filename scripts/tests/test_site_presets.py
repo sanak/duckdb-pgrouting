@@ -6,7 +6,7 @@ queries in presets.json. A preset that stopped working would otherwise surface o
 browser. This test builds each dataset the way the page does -- an in-memory catalog attached
 under the dataset's id and selected with USE, then the table SQL -- with the release binary, and
 runs every preset in file order, each one twice, because a reader may run any preset again.
-Every function with a pgrouting_name tag must also appear in at least one preset.
+Every function with a pgrouting_name tag must also be called by at least one preset.
 The table SQL names files "<id>/<file>", relative to test/data, which is where the data lives.
 Skips when the binary is absent; spatial datasets and presets skip where spatial cannot be
 installed (PGROUTING_NO_SPATIAL=1), and a dataset that reads from third-party servers runs only
@@ -131,8 +131,13 @@ def read_json(dataset_id, name):
 
 
 def preset_functions(presets):
-    """The pgr_* identifiers the presets' SQL names, lower-cased: DuckDB matches names case-insensitively."""
-    return {name.lower() for preset in presets for name in re.findall(r"\bpgr_\w+", preset_sql(preset))}
+    """The pgr_* functions the presets' SQL calls, lower-cased: DuckDB matches names case-insensitively.
+
+    A name in a -- comment, or one not followed by its argument list, is not a call: it cannot be
+    tried from that preset.
+    """
+    calls = (re.findall(r"\b(pgr_\w+)\s*\(", re.sub(r"--[^\n]*", "", preset_sql(preset))) for preset in presets)
+    return {name.lower() for names in calls for name in names}
 
 
 class TestChainSql(unittest.TestCase):
@@ -205,10 +210,10 @@ class TestChainSql(unittest.TestCase):
         with mock.patch.dict(os.environ, {NETWORK_ENV: "1", gen.NO_SPATIAL_ENV: "1"}):
             self.assertIn(gen.NO_SPATIAL_ENV, skip_reason({"network": True, "spatial": True}))
 
-    def test_preset_functions_are_whole_identifiers_in_lower_case(self):
-        presets = [{"id": "a", "sql": ["-- pgr_dijkstra is not called here", "SELECT * FROM pgr_trsp_withPoints('q');"]},
-                   {"id": "b", "sql": "SELECT pgr_maxFlow('q', 1, 2) AS max_flow;"}]
-        self.assertEqual({"pgr_dijkstra", "pgr_trsp_withpoints", "pgr_maxflow"}, preset_functions(presets))
+    def test_preset_functions_are_called_whole_identifiers_in_lower_case(self):
+        presets = [{"id": "a", "sql": ["-- pgr_dijkstra() is only named here", "SELECT * FROM pgr_trsp_withPoints('q');"]},
+                   {"id": "b", "sql": "SELECT pgr_maxFlow ('q', 1, 2) AS max_flow; -- compare pgr_edmondsKarp"}]
+        self.assertEqual({"pgr_trsp_withpoints", "pgr_maxflow"}, preset_functions(presets))
 
 
 @unittest.skipUnless(BINARY.exists(), "build/release/duckdb not built")
