@@ -83,10 +83,21 @@ After DuckDB publishes a new v1.5.x:
 
 1. On `main`, change the stable job's `duckdb_version` in `MainDistributionPipeline.yml` to the
    new version, and move the `duckdb/` submodule to the new release tag (`git -C duckdb checkout
-   vX.Y.Z` and commit the pointer), by pull request.
-2. Cut a new release (a new patch tag) as above. Keep the older Releases: users of the older DuckDB
-   version still need them, and DuckDB-Wasm often embeds an older DuckDB version than the newest
-   native release.
+   vX.Y.Z` and commit the pointer), by pull request. Check whether the new tag still writes the
+   `--match` pattern in quotes (`duckdb/extension/extension_build_tools.cmake`); while it does,
+   `cmake/extension_version.cmake` stays.
+2. In a second pull request, move the `@duckdb/duckdb-wasm` pin of `site/package.json` and
+   `test/w2/package.json` together (`site/unit/pin.test.ts` keeps them equal) to a build that
+   embeds the new DuckDB version (check with `SELECT version()` under Node). Do not merge it yet:
+   `Pages.yml` deploys every push to `main`, and the Playground loads
+   `wasm/<its DuckDB version>/…`, which exists only once a Release for that version is published.
+3. Cut a new release (a new patch tag) as above, except that W2's `artifact` and `release` runs
+   (steps 2 and 4) use `--ref <the pin pull request's branch>` instead of `--ref main`, since
+   `main`'s W2 still pins the old DuckDB-Wasm. After publishing, merge the pin pull request instead
+   of dispatching `Pages.yml`: its push redeploys the Playground with the new Wasm builds; then run
+   W2 in `site` mode from `main`.
+4. Keep the older Releases: users of the older DuckDB version still need them, and DuckDB-Wasm
+   often embeds an older DuckDB version than the newest native release.
 
 ## Community extensions (later)
 
