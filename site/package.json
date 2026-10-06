@@ -16,7 +16,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@duckdb/duckdb-wasm": "1.33.1-dev64.0",
+    "@duckdb/duckdb-wasm": "1.33.1-dev65.0",
     "maplibre-gl": "6.11.2",
     "tabulator-tables": "6.5.3"
   },

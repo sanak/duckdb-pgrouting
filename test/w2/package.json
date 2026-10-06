@@ -10,7 +10,7 @@
     "test": "npm run build && playwright test"
   },
   "dependencies": {
-    "@duckdb/duckdb-wasm": "1.33.1-dev64.0"
+    "@duckdb/duckdb-wasm": "1.33.1-dev65.0"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
