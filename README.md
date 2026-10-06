@@ -20,7 +20,7 @@ allowed. Do that only if you trust this project.
 ```sql
 -- Start the CLI with: duckdb -unsigned
 -- (other clients: set allow_unsigned_extensions = true in the connection configuration)
-SELECT version();   -- your DuckDB version, e.g. v1.5.5
+SELECT version();   -- your DuckDB version, e.g. v1.5.6
 PRAGMA platform;    -- your platform, e.g. osx_arm64
 
 INSTALL 'https://github.com/sanak/duckdb-pgrouting/releases/download/<tag>/pgrouting.<duckdb version>.<platform>.duckdb_extension.gz';
@@ -203,7 +203,7 @@ own origin under the name `pgrouting.duckdb_extension.wasm` (DuckDB takes the ex
 the file name) and load it with `allowUnsignedExtensions: true`:
 
 ```sql
-LOAD 'https://example.org/wasm/v1.5.5/wasm_eh/pgrouting.duckdb_extension.wasm';
+LOAD 'https://example.org/wasm/v1.5.6/wasm_eh/pgrouting.duckdb_extension.wasm';
 ```
 
 Memory is the limit in the browser: wasm32 caps the heap at 4 GB, and browsers usually allow
