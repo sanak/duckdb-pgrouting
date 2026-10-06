@@ -4,10 +4,10 @@
 # DuckDB derives it in duckdb_extension_generate_version from
 # `git describe --tags --always --match <pattern>`: the tag when that is exactly vX.Y.Z[-suffix],
 # the short commit hash otherwise. DuckDB v1.5.x writes the pattern in single quotes, which CMake
-# passes to git literally, so no tag ever matches and a tagged v1.5 build reports its hash; DuckDB
-# fixed the quoting on its main branch, but no v1.5 release up to v1.5.6 has the fix. This
-# function applies the same rule with the pattern unquoted and returns the tag, or an empty
-# string, which leaves the version to DuckDB (the commit hash).
+# passes to git literally, so no tag ever matches and a tagged v1.5 build reports its hash. DuckDB
+# fixed the quoting in c095c18838 ("ci: fix version tag quoting"), so a DuckDB checkout without
+# that commit needs this function. It applies the same rule with the pattern unquoted and returns
+# the tag, or an empty string, which leaves the version to DuckDB (the commit hash).
 function(pgrouting_extension_version OUTPUT_VAR WORKING_DIR)
     set(version "")
     if(NOT GIT_EXECUTABLE)
