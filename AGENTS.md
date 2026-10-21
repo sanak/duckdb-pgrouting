@@ -80,14 +80,14 @@ function carries a catalog description and an example (`duckdb_functions().descr
 
 ## Layout
 
-- `duckdb/` — DuckDB submodule: the latest v1.5 release tag on `main`, a `v2.0-cyanoptera`
-  commit on the `v2.0-cyanoptera` next branch.
+- `duckdb/` — DuckDB submodule: the latest v2.0 release tag.
 - `extension-ci-tools/` — DuckDB's extension build/CI tooling (submodule).
 - `third_party/pgrouting/` — pgRouting submodule, pinned to a release tag.
 - `cmake/pgrouting_sources.cmake` — explicit list of compiled upstream files; also reads the
   pgRouting version from upstream's `CMakeLists.txt`.
 - `cmake/extension_version.cmake` — the version a tagged build reports, passed to DuckDB from
-  `extension_config.cmake` because DuckDB v1.5's own derivation never matches a tag.
+  `extension_config.cmake` because DuckDB v1.5's own derivation never matched a tag; DuckDB
+  v2.0 derives the same version itself, and the file stays until a tagged v2.0 build confirms it.
 - `src/pgrouting_extension.cpp` — extension entry point (`LoadInternal`).
 - `src/pg_compat/` — PostgreSQL stub headers and the replaced upstream definitions. Compiled
   only into pg_compat and pgRouting translation units: the stub `postgres.h` defines `ERROR` as
@@ -178,22 +178,18 @@ asserted against `true` / `false`.
 Tests that need duckdb-spatial start with `tags spatial` and run `INSTALL spatial;` and
 `LOAD spatial;` as statements (network): spatial is not autoloadable, and `require spatial` only
 finds statically linked extensions. `--test-config test/configs/skip_spatial.json` skips them; the
-Wasm unittest always passes it, and on `v2.0-cyanoptera` the Makefile exports it as
-`DUCKDB_TEST_CONFIG`, because no spatial binary exists for an unreleased DuckDB.
+Wasm unittest always passes it.
 
 ## Release lines and releases
 
-Until DuckDB 2.0.0 ships there are two lines. `main` (stable) is built against the current
-DuckDB v1.5 release and is what users install; the `v2.0-cyanoptera` branch (next) is built
-against DuckDB's branch of that name. Every change lands on `main` only. The branch is `main`
-plus three commits: one for its submodule pins, the two `if: false` lines of
-`MainDistributionPipeline.yml` and the Makefile line that exports `DUCKDB_TEST_CONFIG`; one for
-its v2.0 source adaptations; and one for the extra test `test/sql/dijkstra_interrupt.test`. It
-is rebased onto `main` (and force-pushed) only before a release tag, when its DuckDB pin moves,
-and when DuckDB 2.0.0 ships, so it usually lags `main`; a rebase conflict is resolved by taking
-`main`'s side and re-applying the v2.0 API. No `#if` compatibility macros go on either line.
-When DuckDB 2.0.0 ships, a v1.5 maintenance branch is cut from `main`, `v2.0-cyanoptera` is
-rebased onto `main` a last time, and `main` is fast-forwarded to it.
+`main` is the only active line. It is built against the current DuckDB v2.0 release (DuckDB's
+`v2.0-cyanoptera` patch line) and is what users install; every change lands there. The
+`v1.5-variegata` branch holds the final DuckDB v1.5 state (`v0.4.1` plus its Wasm-pin docs) and
+is frozen: no workflow runs on it and it takes no commits. Should a v1.5 fix ever be needed,
+whether and how to build and release it from that branch is decided then, and the fix is ported
+to `main` by hand, never by merging the branch, which would bring back the v1.5 pins. A second
+line is opened only when DuckDB opens its next one and an API break forces it; no `#if`
+compatibility macros go into the code.
 
 Releases are tags on `main` only. A pushed `v*` tag runs the distribution pipeline, and
 its `Draft GitHub Release` job turns that run's nine artifacts into a draft Release:
@@ -232,9 +228,10 @@ their `unittest` suite. The test tools read upstream's committed fixtures and dr
   `test/sql/pgrouting/<category>/<name>.test`, executing every query so it can tell an equal-cost
   tie from a defect. `--check` regenerates and fails on any difference. Pages of a function tagged
   `pgrouting_requires = spatial` are generated with `tags spatial` and run with spatial loaded,
-  unless `PGROUTING_NO_SPATIAL=1` (set by `Checks.yml` on the next line), which keeps them
-  unchecked. Upstream's WKT cells are respelled as duckdb-spatial writes them (`POINT (1 2)`) and
-  its integer-array cells as DuckDB lists (`[4, 7]`). A driving-distance tie is asserted as each
+  unless `PGROUTING_NO_SPATIAL=1` (set by hand where spatial cannot be installed; no workflow
+  sets it), which keeps them unchecked. Upstream's WKT cells are respelled as duckdb-spatial
+  writes them (`POINT (1 2)`) and its integer-array cells as DuckDB lists (`[4, 7]`). A
+  driving-distance tie is asserted as each
   root's reached vertices and their costs, since which predecessor reached one is not guaranteed. A
   `pgr_kruskal*`/`pgr_prim*` block is always asserted through a spanning-forest invariant instead of
   upstream's exact rows, because which minimum spanning forest `pgr_kruskal*` builds among

@@ -119,9 +119,6 @@ the following checklist, in order. Every step either passes or tells you exactly
    same strings.
 7. Run the full suite: `make test_debug`, then push and let CI cover the remaining eight native
    platforms and the three Wasm variants.
-8. The bump lands on `main` only. The `v2.0-cyanoptera` next line picks it up at its next
-   rebase onto `main` (`docs/RELEASE.md`), where its three workflows must be green too, including
-   the Checks step that keeps its tests identical to `main`'s. A compile error there only, not on
-   `main`, means the new upstream code uses something the v2.0 adaptations do not cover.
+8. The bump lands on `main` only; the frozen `v1.5-variegata` branch does not take it.
 9. Update `AGENTS.md` if the bump changed build commands, layout or conventions.
 10. Users get the new pgRouting version only with a new release (`docs/RELEASE.md`).
