@@ -135,9 +135,8 @@ _WKT_TYPES = {
 # What a generated page whose function needs duckdb-spatial runs first (see prelude()).
 SPATIAL_SQL = "INSTALL spatial;\nLOAD spatial;\n"
 
-# Set to 1 where duckdb-spatial cannot be installed (Checks.yml sets it on the next line, whose
-# unreleased DuckDB has no published spatial binary). The spatial pages are then neither
-# regenerated nor compared; their committed files are kept as they are.
+# Set to 1 by hand where duckdb-spatial cannot be installed; no workflow sets it. The spatial
+# pages are then neither regenerated nor compared; their committed files are kept as they are.
 NO_SPATIAL_ENV = "PGROUTING_NO_SPATIAL"
 
 

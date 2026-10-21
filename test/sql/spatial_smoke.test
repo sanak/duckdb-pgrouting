@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # pgr_extractVertices and pgr_findCloseEdges call duckdb-spatial's ST_* functions at run time;
-# the extension never builds or links spatial. spatial is not autoloadable in DuckDB v1.5, and
+# the extension never builds or links spatial. spatial is not autoloadable in DuckDB, and
 # sqllogictest's `require spatial` only loads statically linked extensions, so every test that
 # needs spatial is tagged `spatial` and installs and loads it explicitly, from the network. Runs
 # that cannot (the Wasm unittest, and any DuckDB version without published extension binaries)

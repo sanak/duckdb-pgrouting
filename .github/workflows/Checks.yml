@@ -7,18 +7,18 @@
 name: Checks
 on:
   push:
-    branches: [main, v2.0-cyanoptera]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Same expression as MainDistributionPipeline.yml: it never cancels an in-flight run on either
-# release branch, so two quick pushes cannot drop the run that carries the all-three-variants
+# Same expression as MainDistributionPipeline.yml: it never cancels an in-flight run on main,
+# so two quick pushes cannot drop the run that carries the all-three-variants
 # guarantee.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ (github.ref != 'refs/heads/main' && github.ref != 'refs/heads/v2.0-cyanoptera') || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -34,10 +34,6 @@ jobs:
       # Pinned to duckdb-spatial's vcpkg commit on purpose, not extension-ci-tools' newer default:
       # this is the commit every local build here was validated against. Do not "fix" it.
       VCPKG_COMMIT: 84bab45d415d22042bd0b9081aea57f362da3f35
-      # The next line builds an unreleased DuckDB, for which no duckdb-spatial binary is
-      # published: there the generator keeps the spatial pages unchecked and the catalog-example
-      # test skips the spatial examples. Identical on both lines, like the rest of this file.
-      PGROUTING_NO_SPATIAL: ${{ (github.ref == 'refs/heads/v2.0-cyanoptera' || github.base_ref == 'v2.0-cyanoptera') && '1' || '' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -116,18 +112,3 @@ jobs:
       # that MainDistributionPipeline.yml already runs.
       - name: Layer 5 - no public name collides with another extension
         run: build/release/test/unittest test/sql/collisions.test
-
-      # The v2.0-cyanoptera branch is the next line: main's code ported to DuckDB's v2.0 branch.
-      # Its tests and test-control files must stay identical to main's, because a difference is
-      # either a porting defect or a real behaviour difference, and both want a human rather than
-      # a quiet edit. The one deliberate exception is dijkstra_interrupt.test, which exists only
-      # there: it needs the max_execution_time setting, which DuckDB v1.5 does not have.
-      # The branch is main plus a few commits, rebased only now and then, so it is compared with
-      # the main commit it was rebased onto, not with main's head, which may have moved on.
-      # checkout's fetch-depth 0 makes origin/main available.
-      - name: Test parity with main (v2.0 line only)
-        if: github.ref == 'refs/heads/v2.0-cyanoptera' || github.base_ref == 'v2.0-cyanoptera'
-        run: |
-          diff <(git diff --name-status "$(git merge-base origin/main HEAD)" HEAD -- test/sql test/pgrouting_skip.json \
-                   test/pgrouting_ties.json test/pgrouting_not_ported.json) \
-               <(printf 'A\ttest/sql/dijkstra_interrupt.test\n')

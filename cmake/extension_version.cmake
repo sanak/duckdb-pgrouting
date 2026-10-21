@@ -8,6 +8,9 @@
 # fixed the quoting in c095c18838 ("ci: fix version tag quoting"), so a DuckDB checkout without
 # that commit needs this function. It applies the same rule with the pattern unquoted and returns
 # the tag, or an empty string, which leaves the version to DuckDB (the commit hash).
+#
+# DuckDB v2.0.0 contains that commit, so this now returns what DuckDB derives itself. It is kept
+# as a guard until a tagged v2.0 build confirms that, and may be removed afterwards.
 function(pgrouting_extension_version OUTPUT_VAR WORKING_DIR)
     set(version "")
     if(NOT GIT_EXECUTABLE)
