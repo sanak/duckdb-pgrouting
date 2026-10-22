@@ -5,6 +5,15 @@ PROJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 EXT_NAME=pgrouting
 EXT_CONFIG=${PROJ_DIR}extension_config.cmake
 
+# DuckDB v2.0 no longer derives its version from `git describe`: unless DUCKDB_VERSION is set, a
+# build reports a dev version and looks for extensions (spatial) under its commit hash, where none
+# are published. The distribution workflow sets it; this does the same for every other build when
+# the duckdb submodule sits on a release tag.
+ifeq ($(DUCKDB_VERSION),)
+DUCKDB_VERSION := $(shell git -C $(PROJ_DIR)duckdb describe --tags --exact-match --match 'v*.*.*' 2>/dev/null)
+endif
+export DUCKDB_VERSION
+
 # Include the Makefile from extension-ci-tools
 include extension-ci-tools/makefiles/duckdb_extension.Makefile
 
