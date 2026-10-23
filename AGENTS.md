@@ -184,16 +184,20 @@ Wasm unittest always passes it.
 
 `main` is the only active line. It is built against the current DuckDB v2.0 release (DuckDB's
 `v2.0-cyanoptera` patch line) and is what users install; every change lands there. The
-`v1.5-variegata` branch holds the final DuckDB v1.5 state (`v0.4.1` plus its Wasm-pin docs) and
-is frozen: no workflow runs on it and it takes no commits. Should a v1.5 fix ever be needed,
-whether and how to build and release it from that branch is decided then, and the fix is ported
-to `main` by hand, never by merging the branch, which would bring back the v1.5 pins. A second
-line is opened only when DuckDB opens its next one and an API break forces it; no `#if`
-compatibility macros go into the code.
+`v1.5-variegata` branch holds the final DuckDB v1.5 state (`v0.4.1` plus its Wasm-pin docs) and is
+frozen: a push to it starts no workflow, and it takes no commit other than a v1.5 fix. Should one
+ever be needed, the fix lands on that branch by pull request, whose checks run the v1.5 jobs that
+branch's own workflows carry, and is then merged forward into `main`, the way duckdb-spatial carries
+a fix from an older line to a newer one. `v1.5-variegata` is an ancestor of `main`, so the merge
+brings only the fix; a v1.5 pin change made on that branch conflicts with `main`'s v2.0 pins there
+and is resolved by keeping `main`'s side. Whether such a fix also gets a v1.5 Release (a `v*` tag on
+that branch, which its own distribution workflow still drafts) is decided then. A second line is
+opened only when DuckDB opens its next one and an API break forces it; no `#if` compatibility macros
+go into the code.
 
-Releases are tags on `main` only. A pushed `v*` tag runs the distribution pipeline, and
-its `Draft GitHub Release` job turns that run's nine artifacts into a draft Release:
-`scripts/release_assets.py` names them
+Releases are tags on `main`, apart from such a v1.5 fix Release. A pushed `v*` tag runs the
+distribution pipeline, and its `Draft GitHub Release` job turns that run's nine artifacts into a
+draft Release: `scripts/release_assets.py` names them
 `pgrouting.<duckdb version>.<platform>.duckdb_extension.gz` / `…<variant>.duckdb_extension.wasm`,
 refuses a build whose reported version is not the tag, and writes `SHA256SUMS` and the notes. A
 person publishes the draft. W2 (`test/w2/`, run through `W2.yml`) checks the Wasm build in a real

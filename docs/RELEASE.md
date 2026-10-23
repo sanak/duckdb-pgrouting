@@ -9,8 +9,9 @@ a person.
 - **One line.** `main` is built against the current DuckDB v2.0 release; it is what users
   install, and every change lands there.
 - **v1.5 is frozen.** The `v1.5-variegata` branch holds the final DuckDB v1.5 state (`v0.4.1`
-  plus its Wasm-pin docs). No workflow runs on it and it takes no commits; Releases for DuckDB
-  v1.5 (up to `v0.4.1`) stay published.
+  plus its Wasm-pin docs) and takes no commit other than a v1.5 fix; Releases for DuckDB v1.5
+  (up to `v0.4.1`) stay published. A v1.5 fix, if one is ever needed, lands on that branch by
+  pull request and is merged forward into `main` (`AGENTS.md`, *Release lines and releases*).
 - **One DuckDB version per Release.** An extension loads only into the DuckDB version it was built
   for. Asset names carry that version after the first `.` (DuckDB names an extension after its
   file name up to the first `.`):
