@@ -3,8 +3,8 @@
 A release is a tag on `main` (a v1.5 fix Release, if one is ever cut, is a tag on
 `v1.5-variegata`; see *A v1.5 fix Release* below, and *A release whose Wasm pin cannot land
 apart from build changes* for a tag on a branch `main` then fast-forwards to). It produces a
-GitHub Release that holds the eight platform builds of the extension for one DuckDB version. The Release is created as a draft and
-published by a person.
+GitHub Release that holds the eight platform builds of the extension for one DuckDB version. The
+Release is created as a draft and published by a person.
 
 ## Background
 
@@ -43,8 +43,8 @@ published by a person.
    gh workflow run W2.yml --ref main -f mode=artifact -f run_id=<run id> -f bundle=base
    gh workflow run W2.yml --ref main -f mode=artifact -f run_id=<run id> -f bundle=threads
    ```
-   Both must pass. W2 checks `pgr_version()` against the pgRouting version of its own checkout, so it runs
-   from the line that built the binaries.
+   Both must pass. W2 checks `pgr_version()` against the pgRouting version of its own checkout,
+   so it runs from the line that built the binaries.
 3. **Tag the stable-line head** with an annotated tag and push it:
    ```bash
    git switch main && git pull --ff-only
@@ -61,8 +61,8 @@ published by a person.
    gh workflow run W2.yml --ref main -f mode=release -f tag=vX.Y.Z -f bundle=base
    gh workflow run W2.yml --ref main -f mode=release -f tag=vX.Y.Z -f bundle=threads
    ```
-   Both must pass; they also check that the Wasm build's embedded metadata names the tag as the extension version
-   (DuckDB-Wasm itself reports an empty version for an extension loaded by URL).
+   Both must pass; they also check that the Wasm build's embedded metadata names the tag as the
+   extension version (DuckDB-Wasm itself reports an empty version for an extension loaded by URL).
 5. **Publish** the draft on GitHub. Then, on one platform:
    ```sql
    -- duckdb -unsigned
