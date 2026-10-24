@@ -83,7 +83,8 @@ class CollectTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_collects_all_nine(self):
+    def test_collects_all_eight(self):
+        self.assertEqual(8, len(release_assets.PLATFORMS))
         make_artifacts(self.root)
         artifacts = release_assets.collect(self.root)
         self.assertEqual(sorted(release_assets.PLATFORMS), sorted(a.platform for a in artifacts))
@@ -100,6 +101,12 @@ class CollectTest(unittest.TestCase):
         with self.assertRaises(release_assets.ReleaseError) as caught:
             release_assets.collect(self.root)
         self.assertIn("linux_amd64_musl", str(caught.exception))
+
+    def test_collect_rejects_wasm_mvp(self):
+        make_artifacts(self.root, platforms=release_assets.PLATFORMS + ("wasm_mvp",))
+        with self.assertRaises(release_assets.ReleaseError) as caught:
+            release_assets.collect(self.root)
+        self.assertIn("wasm_mvp", str(caught.exception))
 
     def test_collect_rejects_mixed_versions(self):
         make_artifacts(self.root, platforms=release_assets.PLATFORMS[:4])
@@ -125,7 +132,7 @@ class WriteAssetsTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_writes_nine_named_assets(self):
+    def test_writes_eight_named_assets(self):
         paths = release_assets.write_assets(self.artifacts, self.root / "out")
         self.assertEqual(
             sorted(release_assets.asset_name("v1.5.5", p) for p in release_assets.PLATFORMS),
@@ -143,7 +150,7 @@ class WriteAssetsTest(unittest.TestCase):
     def test_wasm_assets_are_copied_as_built(self):
         paths = release_assets.write_assets(self.artifacts, self.root / "out")
         wasm = [p for p in paths if p.name.endswith(".wasm")]
-        self.assertEqual(3, len(wasm))
+        self.assertEqual(2, len(wasm))
         for path in wasm:
             platform = release_assets.parse_asset_name(path.name)[1]
             self.assertEqual("binary for {}".format(platform).encode(), path.read_bytes())
@@ -156,7 +163,7 @@ class WriteAssetsTest(unittest.TestCase):
     def test_sha256sums_lists_every_asset_sorted(self):
         paths = release_assets.write_assets(self.artifacts, self.root / "out")
         lines = release_assets.sha256sums(paths).splitlines()
-        self.assertEqual(9, len(lines))
+        self.assertEqual(8, len(lines))
         names = [line.split("  ", 1)[1] for line in lines]
         self.assertEqual(sorted(names), names)
         first = sorted(paths, key=lambda p: p.name)[0]
