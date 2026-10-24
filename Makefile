@@ -34,7 +34,7 @@ install-hooks:
 # builds the test runner itself. A per-triplet VCPKG_INSTALLED_DIR keeps the wasm32-emscripten
 # packages from being pruned by a native configure sharing one installed root.
 W1_VARIANT ?= wasm_eh
-W1_VARIANTS = wasm_eh wasm_mvp wasm_threads
+W1_VARIANTS = wasm_eh wasm_threads
 # An unknown variant would expand the per-variant flag variables to empty and DuckDB does not
 # validate DUCKDB_EXPLICIT_PLATFORM, so a typo would silently build the wrong thing. Expanded as
 # the first line of the W1 recipes, i.e. only when a W1 target actually runs.
@@ -51,8 +51,6 @@ W1_REQUIRE_CMAKE = $(if $(W1_CMAKE),,\
 W1_BUILD_DIR = build/$(W1_VARIANT)_unittest
 W1_CXX_FLAGS_wasm_eh = -fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_NO_THREADS=1
 W1_LINK_FLAGS_wasm_eh = -fwasm-exceptions
-W1_CXX_FLAGS_wasm_mvp = -fexceptions -DDUCKDB_NO_THREADS=1
-W1_LINK_FLAGS_wasm_mvp = -fexceptions
 W1_CXX_FLAGS_wasm_threads = -fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -pthread
 # -sPROXY_TO_PTHREAD moves main() off the Node main thread. DuckDB's unittest blocks there (the
 # task scheduler joins its workers, queries wait on condition variables), and Emscripten's manual

@@ -120,7 +120,7 @@ foreach(target ${EXTENSION_NAME} ${LOADABLE_EXTENSION_NAME})
   endif()
   # pgRouting relies on catching C++ exceptions (e.g. its Dijkstra stops the search by throwing).
   # Emscripten disables exception catching unless -fexceptions or -fwasm-exceptions is given,
-  # and the wasm_mvp build passes neither.
+  # and a build that passes neither (DuckDB-Wasm's former mvp variant did not) would lose it.
   if(EMSCRIPTEN AND NOT CMAKE_CXX_FLAGS MATCHES "-fwasm-exceptions")
     target_compile_options(${target} PRIVATE -fexceptions)
     target_link_options(${target} PRIVATE -fexceptions)
