@@ -1,8 +1,9 @@
 # Release procedure
 
-A release is a tag on `main`. It produces a GitHub Release that holds the nine platform
-builds of the extension for one DuckDB version. The Release is created as a draft and published by
-a person.
+A release is a tag on `main` (a v1.5 fix Release, if one is ever cut, is a tag on
+`v1.5-variegata`; see *A v1.5 fix Release* below). It produces a GitHub Release that holds the
+nine platform builds of the extension for one DuckDB version. The Release is created as a draft and
+published by a person.
 
 ## Background
 
@@ -10,8 +11,9 @@ a person.
   install, and every change lands there.
 - **v1.5 is frozen.** The `v1.5-variegata` branch holds the final DuckDB v1.5 state (`v0.4.1`
   plus its Wasm-pin docs) and takes no commit other than a v1.5 fix; Releases for DuckDB v1.5
-  (up to `v0.4.1`) stay published. A v1.5 fix, if one is ever needed, lands on that branch by
-  pull request and is merged forward into `main` (`AGENTS.md`, *Release lines and releases*).
+  (up to `v0.4.1`) stay published. A v1.5 fix, if one is ever needed, lands on that branch by a
+  pull request whose checks build against DuckDB v1.5, and is merged forward into `main`;
+  `AGENTS.md` (*Release lines and releases*) says which workflows run there and how to merge.
 - **One DuckDB version per Release.** An extension loads only into the DuckDB version it was built
   for. Asset names carry that version after the first `.` (DuckDB names an extension after its
   file name up to the first `.`):
@@ -90,6 +92,38 @@ After DuckDB publishes a new v2.0.x:
    W2 in `site` mode from `main`.
 4. Keep the older Releases: users of the older DuckDB version still need them, and DuckDB-Wasm
    often embeds an older DuckDB version than the newest native release.
+
+## A v1.5 fix Release
+
+Only when a v1.5 fix (see *Background*) is to be released to DuckDB v1.5 users. The steps of
+*Cutting a release* apply with `v1.5-variegata` in place of `main`; the differences:
+
+1. **The branch green.** The fix's pull request into `v1.5-variegata` passed its checks. A push
+   to the branch starts no workflow, so start a distribution run on the merged head by hand:
+   `gh workflow run MainDistributionPipeline.yml --ref v1.5-variegata`. Run the network presets
+   as in step 1 above, with a release build of that head.
+2. **W2** runs from the branch, whose W2 pins a DuckDB-Wasm of v1.5 (`main`'s pin moves to
+   v2.0 with its first Release for DuckDB v2.0):
+   `gh workflow run W2.yml --ref v1.5-variegata -f mode=artifact -f run_id=<that run's id>`.
+3. **Tag the branch head** with the next `v0.4.x` patch tag, so its number stays below `main`'s
+   Releases for DuckDB v2.0, which start at `v0.5.0`:
+   ```bash
+   git switch v1.5-variegata && git pull --ff-only
+   git tag -a v0.4.Z -m "v0.4.Z"
+   git push origin v0.4.Z
+   ```
+   The branch's own distribution workflow drafts the Release, as on `main`.
+4. **Review the draft** as above, running W2 with `--ref v1.5-variegata`.
+5. **Publish it without making it the latest**: untick *Set as the latest release* in the
+   publish form. GitHub otherwise marks the newly published Release as Latest, and whatever
+   follows `releases/latest` would hand DuckDB v2.0 users a build that does not load. If it was
+   marked anyway, mark `main`'s newest Release again: `gh release edit <its tag> --latest`. Verify
+   `INSTALL` in a DuckDB v1.5 CLI. The Playground copies the newest published Release for each
+   DuckDB version, so its next deployment serves this Release's Wasm builds for that DuckDB v1.5
+   version. While `main`'s Playground still pins a DuckDB-Wasm of v1.5, those are the builds it
+   runs: redeploy it and check it with W2 in `site` mode as in step 5 above. Once it pins v2.0,
+   nothing more is needed.
+6. **No community step**: the community descriptor follows `main`.
 
 ## Community extensions (later)
 

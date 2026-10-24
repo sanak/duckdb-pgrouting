@@ -185,13 +185,21 @@ Wasm unittest always passes it.
 `main` is the only active line. It is built against the current DuckDB v2.0 release (DuckDB's
 `v2.0-cyanoptera` patch line) and is what users install; every change lands there. The
 `v1.5-variegata` branch holds the final DuckDB v1.5 state (`v0.4.1` plus its Wasm-pin docs) and is
-frozen: a push to it starts no workflow, and it takes no commit other than a v1.5 fix. Should one
-ever be needed, the fix lands on that branch by pull request, whose checks run the v1.5 jobs that
-branch's own workflows carry, and is then merged forward into `main`, the way duckdb-spatial carries
-a fix from an older line to a newer one. `v1.5-variegata` is an ancestor of `main`, so the merge
-brings only the fix; a v1.5 pin change made on that branch conflicts with `main`'s v2.0 pins there
-and is resolved by keeping `main`'s side. Whether such a fix also gets a v1.5 Release (a `v*` tag on
-that branch, which its own distribution workflow still drafts) is decided then. A second line is
+frozen: it takes no commit other than a v1.5 fix. A branch push to it starts no workflow, but a
+`v*` tag pushed on it still runs its distribution pipeline, which drafts a Release, and a pull
+request into it runs that branch's own Checks, Wasm Tests and distribution workflows (and Pages,
+for the paths its `Pages.yml` lists), all built against DuckDB v1.5. That branch's own `AGENTS.md`
+and workflow comments predate the freeze and still describe it as `main`; this file governs it, and
+the first fix pull request into the branch also corrects them. Should a fix ever be
+needed, it lands on that branch by pull request and is then merged forward into `main` by a second
+pull request, whose checks run the v2.0 jobs, the way duckdb-spatial carries a fix from an older
+line to a newer one. `v1.5-variegata` is an ancestor of `main`, so the merge brings only the fix's
+commits, but nothing adapts them to v2.0: a change to lines `main` has not touched since the freeze
+applies without a conflict, so the merger reviews the whole merge diff, not only its conflicts, and
+adapts or drops anything v1.5-specific (a v1.5-only API, v1.5 wording, a v1.5 pin) in the merge
+commit. A conflict (in the DuckDB pins, or in the workflows and docs rewritten on `main` for v2.0)
+is resolved by keeping `main`'s side and re-applying the fix there in v2.0 terms. Whether such a fix
+also gets a v1.5 Release is decided then; `docs/RELEASE.md` says how to cut one. A second line is
 opened only when DuckDB opens its next one and an API break forces it; no `#if` compatibility macros
 go into the code.
 
