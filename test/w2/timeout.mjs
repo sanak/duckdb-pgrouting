@@ -9,3 +9,10 @@ export function withTimeout(promise, ms, what) {
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
+
+// One timeout per step, but never past an overall budget that ends before Playwright's own test
+// timeout: however many steps the page runs, a hang still ends as an error naming its step.
+export function stepper(stepMs, budgetMs, clock = () => Date.now()) {
+  const deadline = clock() + budgetMs;
+  return (promise, what) => withTimeout(promise, Math.max(0, Math.min(stepMs, deadline - clock())), what);
+}
