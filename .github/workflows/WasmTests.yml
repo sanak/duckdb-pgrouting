@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 # Same expression as MainDistributionPipeline.yml: it never cancels an in-flight run on main,
-# so two quick pushes cannot drop the run that carries the all-three-variants
+# so two quick pushes cannot drop the run that carries the both-variants
 # guarantee.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [wasm_eh, wasm_mvp, wasm_threads]
+        variant: [wasm_eh, wasm_threads]
     env:
       GEN: ninja
       VCPKG_TARGET_TRIPLET: wasm32-emscripten
@@ -43,9 +43,12 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      # The version extension-ci-tools builds the distributed Wasm extensions with, and DuckDB-Wasm's
+      # own: an extension is a side module and must match the main module's Emscripten. Move it with
+      # the ci-tools pin.
       - uses: emscripten-core/setup-emsdk@v16
         with:
-          version: 3.1.71
+          version: 6.0.9
 
       - uses: actions/setup-node@v7
         with:

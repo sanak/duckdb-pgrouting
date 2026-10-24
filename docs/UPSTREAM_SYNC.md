@@ -117,8 +117,8 @@ the following checklist, in order. Every step either passes or tells you exactly
    pgr_withPointsVia's, pgr_trsp_withPoints's and pgr_trspVia_withPoints's C entries call it as
    well, and `src/pg_compat/src/drivers_routes.cpp` and `drivers_trsp.cpp` pass their drivers the
    same strings.
-7. Run the full suite: `make test_debug`, then push and let CI cover the remaining eight native
-   platforms and the three Wasm variants.
+7. Run the full suite: `make test_debug`, then push and let CI cover the remaining
+   platforms and the two Wasm variants.
 8. The bump lands on `main` only; the frozen `v1.5-variegata` branch does not take it.
 9. Update `AGENTS.md` if the bump changed build commands, layout or conventions.
 10. Users get the new pgRouting version only with a new release (`docs/RELEASE.md`).

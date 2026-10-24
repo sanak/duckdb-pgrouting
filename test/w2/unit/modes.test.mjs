@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bundledPgroutingVersion, DEFAULT_SITE_URL, extensionSource, LOCAL_TEMPLATE } from '../modes.mjs';
+import {
+  bundledPgroutingVersion,
+  bundleOf,
+  DEFAULT_SITE_URL,
+  duckdbBundles,
+  EXPECTED_PLATFORM,
+  extensionSource,
+  LOCAL_TEMPLATE,
+} from '../modes.mjs';
 
 test('artifact is the default mode and is served locally', () => {
   assert.deepEqual(extensionSource({ W2_EXTENSION_DIR: '/tmp/ext' }), { mode: 'artifact', urlTemplate: LOCAL_TEMPLATE });
@@ -40,4 +48,16 @@ test('an unknown mode is an error', () => {
 test('reads the pgRouting version from its CMakeLists', () => {
   assert.equal(bundledPgroutingVersion('cmake_minimum_required(VERSION 3.12)\nproject(PGROUTING VERSION 4.0.2\n'), '4.0.2');
   assert.throws(() => bundledPgroutingVersion('project(OTHER VERSION 1.0.0)\n'), /PGROUTING VERSION/);
+});
+
+test('base is the default bundle; threads is accepted; anything else is an error', () => {
+  assert.equal(bundleOf({}), 'base');
+  assert.equal(bundleOf({ W2_BUNDLE: 'threads' }), 'threads');
+  assert.throws(() => bundleOf({ W2_BUNDLE: 'thread' }), /unknown W2_BUNDLE 'thread'/);
+});
+
+test('the base bundle offers DuckDB-Wasm no threads build', () => {
+  assert.deepEqual(Object.keys(duckdbBundles('base')), ['base']);
+  assert.equal(duckdbBundles('threads').threads.pthreadWorker, '/duckdb/duckdb-browser-threads.pthread.worker.js');
+  assert.deepEqual(EXPECTED_PLATFORM, { base: 'wasm_eh', threads: 'wasm_threads' });
 });

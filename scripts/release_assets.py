@@ -37,7 +37,6 @@ PLATFORMS = (
     "osx_arm64",
     "windows_amd64",
     "windows_amd64_mingw",
-    "wasm_mvp",
     "wasm_eh",
     "wasm_threads",
 )

@@ -2,8 +2,8 @@
 # The checks that the distribution pipeline has no place for: MainDistributionPipeline.yml's only
 # job is a `uses:` of DuckDB's reusable extension workflow, and a `uses:` job cannot carry steps.
 # One release build on one platform serves all of them - none of these checks is
-# platform-dependent, and the other two workflows already cover the nine build platforms and the
-# three Wasm variants.
+# platform-dependent, and the other two workflows already cover the eight build platforms and the
+# two Wasm variants.
 name: Checks
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 # Same expression as MainDistributionPipeline.yml: it never cancels an in-flight run on main,
-# so two quick pushes cannot drop the run that carries the all-three-variants
+# so two quick pushes cannot drop the run that carries the both-variants
 # guarantee.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}

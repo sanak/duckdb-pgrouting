@@ -8,12 +8,10 @@
 // ranged HEAD request with 206 (Overture's STAC catalogue behind CloudFront) is still read whole
 // rather than refused. Files registered from buffers are not HTTP files and are unaffected.
 import * as duckdb from '@duckdb/duckdb-wasm';
-import ehWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
-import mvpWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
-import ehModule from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
-import mvpModule from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
+import baseModule from '@duckdb/duckdb-wasm/dist/duckdb-base.wasm?url';
+import baseWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-base.worker.js?url';
 import { extensionPath } from './paths.ts';
-import { plainValue, type ResultSet, type Shape } from './result.ts';
+import { plainValue, platformOf, type ResultSet, type Shape } from './result.ts';
 
 // apache-arrow's Type ids; the enum is not imported so that arrow stays an indirect dependency.
 const ARROW_DECIMAL = 7;
@@ -43,9 +41,10 @@ function shapeOf(type: ArrowType, metadata?: Map<string, string>): Shape | undef
   return undefined;
 }
 
+// Only the base build: the threads build needs a cross-origin isolated page, and GitHub Pages
+// cannot send the COOP/COEP headers that make one.
 const BUNDLES: duckdb.DuckDBBundles = {
-  mvp: { mainModule: mvpModule, mainWorker: mvpWorker },
-  eh: { mainModule: ehModule, mainWorker: ehWorker },
+  base: { mainModule: baseModule, mainWorker: baseWorker },
 };
 
 export interface Session {
@@ -85,7 +84,6 @@ function toResultSet(table: Awaited<ReturnType<duckdb.AsyncDuckDBConnection['que
 
 export async function startSession(): Promise<Session> {
   const bundle = await duckdb.selectBundle(BUNDLES);
-  const variant = bundle.mainModule === ehModule ? 'wasm_eh' : 'wasm_mvp';
   if (!bundle.mainWorker) throw new Error('DuckDB-Wasm bundle has no worker');
   const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(bundle.mainWorker));
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
@@ -95,6 +93,7 @@ export async function startSession(): Promise<Session> {
   });
   const conn = await db.connect();
   const query = async (sql: string) => toResultSet(await conn.query(sql));
+  const variant = platformOf(await query('PRAGMA platform'));
 
   const duckdbVersion = String((await query('SELECT version()')).rows[0]?.[0]);
   const url =

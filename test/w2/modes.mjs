@@ -32,3 +32,31 @@ export function bundledPgroutingVersion(cmakeText) {
   if (!match) throw new Error("no 'project(PGROUTING VERSION x.y.z' line");
   return match[1];
 }
+
+// Which DuckDB-Wasm build the page starts. threads needs a cross-origin isolated page (the server
+// sends COOP/COEP for it), and a run that fell back to base must not pass as a threads run.
+export const EXPECTED_PLATFORM = { base: 'wasm_eh', threads: 'wasm_threads' };
+
+export function bundleOf(env) {
+  const bundle = env.W2_BUNDLE || 'base';
+  if (!Object.hasOwn(EXPECTED_PLATFORM, bundle)) {
+    throw new Error(`unknown W2_BUNDLE '${bundle}' (base, threads)`);
+  }
+  return bundle;
+}
+
+// The bundles offered to selectBundle: base offers no threads build at all, so a base run stays on
+// base even on a page that happens to be cross-origin isolated.
+export function duckdbBundles(bundle, prefix = '/duckdb/') {
+  const bundles = {
+    base: { mainModule: `${prefix}duckdb-base.wasm`, mainWorker: `${prefix}duckdb-browser-base.worker.js` },
+  };
+  if (bundle === 'threads') {
+    bundles.threads = {
+      mainModule: `${prefix}duckdb-threads.wasm`,
+      mainWorker: `${prefix}duckdb-browser-threads.worker.js`,
+      pthreadWorker: `${prefix}duckdb-browser-threads.pthread.worker.js`,
+    };
+  }
+  return bundles;
+}

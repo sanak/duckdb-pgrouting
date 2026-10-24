@@ -6,6 +6,7 @@ import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { bundleOf } from './modes.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -34,6 +35,14 @@ export function resolvePath(urlPath, roots) {
   return null;
 }
 
+// The threads bundle needs SharedArrayBuffer, which a browser grants only to a cross-origin
+// isolated page. Everything the page fetches from this server is same-origin, so require-corp asks
+// nothing more of it.
+export function isolationHeaders(bundle) {
+  if (bundle !== 'threads') return {};
+  return { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' };
+}
+
 function defaultRoots() {
   return {
     files: { '/': join(HERE, 'index.html'), '/harness.js': join(HERE, 'build/harness.js') },
@@ -47,6 +56,7 @@ function defaultRoots() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const roots = defaultRoots();
+  const isolation = isolationHeaders(bundleOf(process.env));
   const port = Number(process.env.W2_PORT || 4173);
   createServer((request, response) => {
     const file = resolvePath(new URL(request.url, 'http://localhost').pathname, roots);
@@ -57,7 +67,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       stat = null;
     }
     if (!stat || !stat.isFile()) {
-      response.writeHead(404, { 'Content-Type': 'text/plain' });
+      response.writeHead(404, { 'Content-Type': 'text/plain', ...isolation });
       response.end('not found');
       return;
     }
@@ -65,6 +75,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       'Content-Type': TYPES[extname(file)] || 'application/octet-stream',
       'Content-Length': stat.size,
       'Cache-Control': 'no-store',
+      ...isolation,
     });
     if (request.method === 'HEAD') {
       response.end();

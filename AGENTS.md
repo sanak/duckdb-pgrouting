@@ -142,9 +142,10 @@ function carries a catalog description and an example (`duckdb_functions().descr
 ## Build and test
 
 Prerequisites: CMake, Ninja, a C++17 compiler, Python 3.9 or newer, vcpkg (for Boost), and for
-Wasm: Emscripten
-3.1.71 and Node 24 (the version CI pins for the Wasm test workflow; Node 22.22.0 is also known to
-run all three Wasm unittest variants locally).
+Wasm: Emscripten 6.0.9 (the version extension-ci-tools builds the distributed Wasm extensions
+with, which the Wasm test workflow pins too: an extension is a side module and must match
+DuckDB-Wasm's Emscripten) and Node 24 (the version CI pins for the Wasm test workflow; Node
+22.22.0 is also known to run both Wasm unittest variants locally).
 
 ```bash
 git submodule update --init --recursive
@@ -163,7 +164,7 @@ Wasm (requires `source <emsdk>/emsdk_env.sh`, and `VCPKG_TOOLCHAIN_PATH` exporte
 
 ```bash
 GEN=ninja VCPKG_TARGET_TRIPLET=wasm32-emscripten make wasm_eh   # loadable extension
-GEN=ninja make wasm_unittest W1_VARIANT=wasm_eh   # unittest compiled to Wasm (also wasm_mvp, wasm_threads)
+GEN=ninja make wasm_unittest W1_VARIANT=wasm_eh   # unittest compiled to Wasm (also wasm_threads)
 make test_wasm_unittest W1_VARIANT=wasm_eh        # run test/* under Node
 ```
 
@@ -203,9 +204,11 @@ also gets a v1.5 Release is decided then; `docs/RELEASE.md` says how to cut one.
 opened only when DuckDB opens its next one and an API break forces it; no `#if` compatibility macros
 go into the code.
 
-Releases are tags on `main`, apart from such a v1.5 fix Release. A pushed `v*` tag runs the
-distribution pipeline, and its `Draft GitHub Release` job turns that run's nine artifacts into a
-draft Release: `scripts/release_assets.py` names them
+Releases are tags on `main`, apart from such a v1.5 fix Release, or on a branch `main` then
+fast-forwards to, when a Wasm pin move cannot land apart from build changes; see
+`docs/RELEASE.md`. A pushed `v*` tag runs the distribution pipeline, and its `Draft GitHub
+Release` job turns that run's eight artifacts into a draft Release: `scripts/release_assets.py`
+names them
 `pgrouting.<duckdb version>.<platform>.duckdb_extension.gz` / `…<variant>.duckdb_extension.wasm`,
 refuses a build whose reported version is not the tag, and writes `SHA256SUMS` and the notes. A
 person publishes the draft. W2 (`test/w2/`, run through `W2.yml`) checks the Wasm build in a real
@@ -217,7 +220,8 @@ W2 locally (downloads Playwright's Chromium once):
 cd test/w2 && npm ci && npx playwright install chromium
 gh run download <run id> -p 'pgrouting-*-extension-wasm_*' -D /tmp/w2-download
 node prepare-extension.mjs /tmp/w2-download /tmp/w2-ext
-W2_MODE=artifact W2_EXTENSION_DIR=/tmp/w2-ext npm test
+W2_MODE=artifact W2_EXTENSION_DIR=/tmp/w2-ext npm test                     # base bundle (wasm_eh)
+W2_MODE=artifact W2_EXTENSION_DIR=/tmp/w2-ext W2_BUNDLE=threads npm test   # threads (wasm_threads)
 ```
 
 ## Test tooling
@@ -297,7 +301,7 @@ Three JSON control files live under `test/`:
 CI has five workflows. `MainDistributionPipeline.yml` builds every DuckDB platform through
 DuckDB's reusable extension workflow, and for a pushed `v*` tag drafts the GitHub Release.
 `W2.yml` runs only by hand (`workflow_dispatch`), at release time. `WasmTests.yml` builds DuckDB's
-`unittest` for all three Wasm variants and runs the sqllogictests under Node. `Checks.yml` builds
+`unittest` for both Wasm variants and runs the sqllogictests under Node. `Checks.yml` builds
 release on linux_amd64 and runs the two generators in `--check` mode, the tooling's unit tests,
 the signature comparison and `test/sql/collisions.test`; a `--check` failure means the committed
 artifact is stale, an equal-cost tie has flipped, or something regressed, and all three want a
