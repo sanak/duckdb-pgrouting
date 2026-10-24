@@ -1,8 +1,9 @@
 # Release procedure
 
 A release is a tag on `main` (a v1.5 fix Release, if one is ever cut, is a tag on
-`v1.5-variegata`; see *A v1.5 fix Release* below). It produces a GitHub Release that holds the
-nine platform builds of the extension for one DuckDB version. The Release is created as a draft and
+`v1.5-variegata`; see *A v1.5 fix Release* below, and *A release whose Wasm pin cannot land
+apart from build changes* for a tag on a branch `main` then fast-forwards to). It produces a
+GitHub Release that holds the eight platform builds of the extension for one DuckDB version. The Release is created as a draft and
 published by a person.
 
 ## Background
@@ -37,9 +38,12 @@ published by a person.
    release build of the commit (a few minutes; reads Overture Maps' servers). A failure means
    Overture changed its data: fix the presets in `site/datasets/overture/` first.
 2. **W2 against the branch build.** Run the W2 workflow in `artifact` mode with the `main`
-   distribution run's id:
-   `gh workflow run W2.yml --ref main -f mode=artifact -f run_id=<run id>`. It must
-   pass. W2 checks `pgr_version()` against the pgRouting version of its own checkout, so it runs
+   distribution run's id, once per DuckDB-Wasm bundle:
+   ```bash
+   gh workflow run W2.yml --ref main -f mode=artifact -f run_id=<run id> -f bundle=base
+   gh workflow run W2.yml --ref main -f mode=artifact -f run_id=<run id> -f bundle=threads
+   ```
+   Both must pass. W2 checks `pgr_version()` against the pgRouting version of its own checkout, so it runs
    from the line that built the binaries.
 3. **Tag the stable-line head** with an annotated tag and push it:
    ```bash
@@ -47,13 +51,17 @@ published by a person.
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-   The tag's distribution run builds and tests all nine platforms again, then its `Draft GitHub
+   The tag's distribution run builds and tests all eight platforms again, then its `Draft GitHub
    Release` job verifies the linux_amd64 build in the released DuckDB CLI (the reported version
    must equal the tag, `pgr_version()` the bundled pgRouting version) and creates the draft.
-4. **Review the draft**: nine assets plus `SHA256SUMS`, the title names the DuckDB version, and
-   the notes list one `INSTALL` line per native platform. Then run W2 against the draft:
-   `gh workflow run W2.yml --ref main -f mode=release -f tag=vX.Y.Z`. It must pass; it
-   also checks that the Wasm build's embedded metadata names the tag as the extension version
+4. **Review the draft**: eight assets plus `SHA256SUMS`, the title names the DuckDB version, and
+   the notes list one `INSTALL` line per native platform. Then run W2 against the draft, once per
+   bundle:
+   ```bash
+   gh workflow run W2.yml --ref main -f mode=release -f tag=vX.Y.Z -f bundle=base
+   gh workflow run W2.yml --ref main -f mode=release -f tag=vX.Y.Z -f bundle=threads
+   ```
+   Both must pass; they also check that the Wasm build's embedded metadata names the tag as the extension version
    (DuckDB-Wasm itself reports an empty version for an extension loaded by URL).
 5. **Publish** the draft on GitHub. Then, on one platform:
    ```sql
@@ -64,7 +72,8 @@ published by a person.
    SELECT pgr_version();
    ```
    Then redeploy the Playground, which copies the Wasm builds of published Releases only, and
-   check it with W2:
+   check it with W2 (base only: GitHub Pages cannot serve the Playground cross-origin isolated,
+   so it runs the base bundle):
    ```bash
    gh workflow run Pages.yml --ref main          # wait for it to finish
    gh workflow run W2.yml --ref main -f mode=site
@@ -92,6 +101,25 @@ After DuckDB publishes a new v2.0.x:
    W2 in `site` mode from `main`.
 4. Keep the older Releases: users of the older DuckDB version still need them, and DuckDB-Wasm
    often embeds an older DuckDB version than the newest native release.
+
+## A release whose Wasm pin cannot land apart from build changes
+
+When the `@duckdb/duckdb-wasm` pin move must ship together with build or tooling changes that
+would break `main`'s Playground or Release if merged first (DuckDB-Wasm's v2.0 bundles, which
+dropped wasm_mvp, were one), the changes and the pin move live on one branch, CI runs through a
+draft pull request into `main`, and the release is cut from that branch:
+
+1. **Rebase and pin.** `git rebase --committer-date-is-author-date origin/main` (keeps the
+   commits' dates), force-push the branch, then move both pins to a build that embeds the DuckDB
+   version `main` builds (check with `SELECT version()` under Node), and push.
+2. **W2 against the branch build**, as in step 2 above but with `--ref <branch>` and the branch's
+   distribution run id, both bundles.
+3. **Tag the branch head** with an annotated tag, as in step 3 above but on the branch. Review the
+   draft (eight assets) and run W2 `release` with `--ref <branch>`, both bundles. A person
+   publishes it.
+4. **Fast-forward `main`**: `git push origin <branch>:main`, never a merge commit, so the tag's
+   commit becomes `main`'s. That push redeploys the Playground with the new Wasm builds; then run
+   W2 in `site` mode from `main`. GitHub marks the draft pull request merged.
 
 ## A v1.5 fix Release
 

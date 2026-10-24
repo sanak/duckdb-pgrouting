@@ -32,7 +32,7 @@ Every Release's notes list the ready-to-paste `INSTALL` line for each platform. 
 `releases/latest/download/`: the latest Release may be built for a newer DuckDB version than yours.
 
 Platforms: `linux_amd64`, `linux_arm64`, `osx_amd64`, `osx_arm64`, `windows_amd64`,
-`windows_amd64_mingw`, and DuckDB-Wasm (`wasm_mvp`, `wasm_eh`, `wasm_threads`; see below).
+`windows_amd64_mingw`, and DuckDB-Wasm (`wasm_eh`, `wasm_threads`; see below).
 
 Releases are built from `main`, which targets the current DuckDB v2.0 release. The latest
 Release, `v0.4.1`, is still built for DuckDB v1.5.6; a Release for DuckDB v2.0.0 follows once
