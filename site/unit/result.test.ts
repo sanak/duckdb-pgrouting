@@ -8,6 +8,7 @@ import {
   highlightOf,
   type Plain,
   plainValue,
+  platformOf,
   type ResultSet,
   summarize,
 } from '../src/result.ts';
@@ -349,4 +350,10 @@ test('a minimum-cost flow (edge ends as source/target) is one colour', () => {
       [1, 0],
     ],
   );
+});
+
+test('platformOf reads the one value PRAGMA platform returns and refuses anything else', () => {
+  assert.equal(platformOf({ columns: ['platform'], rows: [['wasm_eh']] }), 'wasm_eh');
+  assert.throws(() => platformOf({ columns: ['platform'], rows: [] }), /PRAGMA platform returned no platform/);
+  assert.throws(() => platformOf({ columns: ['platform'], rows: [[null]] }), /PRAGMA platform returned no platform/);
 });

@@ -11,7 +11,7 @@ import * as duckdb from '@duckdb/duckdb-wasm';
 import baseModule from '@duckdb/duckdb-wasm/dist/duckdb-base.wasm?url';
 import baseWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-base.worker.js?url';
 import { extensionPath } from './paths.ts';
-import { plainValue, type ResultSet, type Shape } from './result.ts';
+import { plainValue, platformOf, type ResultSet, type Shape } from './result.ts';
 
 // apache-arrow's Type ids; the enum is not imported so that arrow stays an indirect dependency.
 const ARROW_DECIMAL = 7;
@@ -93,8 +93,7 @@ export async function startSession(): Promise<Session> {
   });
   const conn = await db.connect();
   const query = async (sql: string) => toResultSet(await conn.query(sql));
-  // The platform DuckDB itself reports (one row, one column), which names the extension build.
-  const variant = String((await query('PRAGMA platform')).rows[0]?.[0]);
+  const variant = platformOf(await query('PRAGMA platform'));
 
   const duckdbVersion = String((await query('SELECT version()')).rows[0]?.[0]);
   const url =

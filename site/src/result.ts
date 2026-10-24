@@ -134,3 +134,11 @@ export function edgeOf(result: ResultSet, row: Plain[]): number | null {
   const edge = at === -1 ? null : row[at];
   return typeof edge === 'number' && edge >= 0 ? edge : null;
 }
+
+// The platform DuckDB reports (one row, one column); it names the extension build to load, so a
+// missing value is an error rather than the string "undefined" in a URL.
+export function platformOf(result: ResultSet): string {
+  const platform = result.rows[0]?.[0];
+  if (typeof platform !== 'string' || platform === '') throw new Error('PRAGMA platform returned no platform');
+  return platform;
+}
