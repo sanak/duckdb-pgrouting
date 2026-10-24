@@ -7,8 +7,7 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
 
 const BUNDLES = {
-  mvp: { mainModule: '/duckdb/duckdb-mvp.wasm', mainWorker: '/duckdb/duckdb-browser-mvp.worker.js' },
-  eh: { mainModule: '/duckdb/duckdb-eh.wasm', mainWorker: '/duckdb/duckdb-browser-eh.worker.js' },
+  base: { mainModule: '/duckdb/duckdb-base.wasm', mainWorker: '/duckdb/duckdb-browser-base.worker.js' },
 };
 
 const EDGES = 'SELECT id, source, target, cost, reverse_cost FROM edges';
@@ -30,11 +29,11 @@ window.runW2 = async function runW2(source) {
   const out = {};
   try {
     const bundle = await duckdb.selectBundle(BUNDLES);
-    out.variant = bundle.mainModule === BUNDLES.eh.mainModule ? 'wasm_eh' : 'wasm_mvp';
     const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(bundle.mainWorker));
     await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
     await db.open({ allowUnsignedExtensions: true });
     const conn = await db.connect();
+    out.variant = (await rows(conn, 'PRAGMA platform'))[0].platform;
     out.duckdbVersion = (await rows(conn, 'SELECT version() AS v'))[0].v;
 
     if (source.community) {
