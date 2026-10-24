@@ -6,7 +6,7 @@
 
 import * as duckdb from '@duckdb/duckdb-wasm';
 import { duckdbBundles } from './modes.mjs';
-import { stepper } from './timeout.mjs';
+import { errorText, stepper } from './timeout.mjs';
 
 // Every DuckDB call is a step: a hang (a threaded extension load has hung before) ends as an error
 // naming it. The budget ends before Playwright's 120 s test timeout, which would name nothing.
@@ -176,10 +176,7 @@ window.runW2 = async function runW2(source, bundleName) {
       "SELECT edge_id, fraction, side FROM pgr_findCloseEdges('SELECT id, geom FROM edges', 'POINT(2.9 1.8)'::GEOMETRY, 0.5)",
     );
   } catch (error) {
-    out.error = String(error?.message ?? error);
-    if (bundleName === 'threads') {
-      out.error += ' (bundle threads; a threads hang on extension load is duckdb/duckdb-wasm#2288)';
-    }
+    out.error = errorText(error, bundleName);
   }
   return out;
 };
