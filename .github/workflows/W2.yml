@@ -3,6 +3,8 @@
 # a smoke query on the sample graph. A release-time check run by hand (docs/RELEASE.md), not a
 # per-push one. artifact tests a distribution run's build, release a tag's Release (drafts
 # included), site the deployed documentation site, community DuckDB's community repository.
+# bundle picks DuckDB-Wasm's base build (wasm_eh) or its threads build (wasm_threads); the page is
+# served cross-origin isolated (COOP/COEP) for threads, which needs SharedArrayBuffer.
 name: W2
 on:
   workflow_dispatch:
@@ -24,6 +26,11 @@ on:
         description: "site: the site's base URL"
         type: string
         default: https://sanak.github.io/duckdb-pgrouting
+      bundle:
+        description: Which DuckDB-Wasm bundle runs (threads is served cross-origin isolated)
+        type: choice
+        options: [base, threads]
+        default: base
 
 permissions:
   actions: read     # gh run download
@@ -31,7 +38,7 @@ permissions:
 
 jobs:
   w2:
-    name: W2 (${{ inputs.mode }})
+    name: W2 (${{ inputs.mode }}, ${{ inputs.bundle }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -80,6 +87,7 @@ jobs:
       - name: Run W2
         env:
           W2_MODE: ${{ inputs.mode }}
+          W2_BUNDLE: ${{ inputs.bundle }}
           W2_SITE_URL: ${{ inputs.site_url }}
           W2_EXPECT_EXTENSION_VERSION: ${{ inputs.mode == 'release' && inputs.tag || '' }}
         run: npm test

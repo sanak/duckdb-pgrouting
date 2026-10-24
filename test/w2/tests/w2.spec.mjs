@@ -13,23 +13,28 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { readFooter } from '../metadata.mjs';
-import { bundledPgroutingVersion, extensionSource } from '../modes.mjs';
+import { bundledPgroutingVersion, bundleOf, EXPECTED_PLATFORM, extensionSource } from '../modes.mjs';
 
 const PGROUTING_CMAKELISTS = new URL('../../../third_party/pgrouting/CMakeLists.txt', import.meta.url);
 
 test('pgrouting loads and routes in DuckDB-Wasm', async ({ page }) => {
   const source = extensionSource(process.env);
+  const bundle = bundleOf(process.env);
   await page.goto('/');
   await page.waitForFunction(() => typeof window.runW2 === 'function');
-  const result = await page.evaluate((s) => window.runW2(s), source);
+  const result = await page.evaluate(([s, b]) => window.runW2(s, b), [source, bundle]);
   test.info().annotations.push(
+    { type: 'w2-bundle', description: bundle },
     { type: 'bundle', description: String(result.variant) },
     { type: 'duckdb', description: String(result.duckdbVersion) },
     { type: 'extension', description: String(result.extensionUrl ?? source.mode) },
   );
   // The list reporter does not print annotations; this line shows the same facts in a CI log.
-  console.log(`W2 bundle=${result.variant} duckdb=${result.duckdbVersion} reported=${JSON.stringify(result.extensionVersion)}`);
+  console.log(`W2 bundle=${bundle} variant=${result.variant} duckdb=${result.duckdbVersion} reported=${JSON.stringify(result.extensionVersion)}`);
 
+  // First, so that a threads run that silently started base fails as such.
+  expect(result.variant, `bundle ${bundle} ran as ${result.variant}${result.error ? `: ${result.error}` : ''}`).toBe(EXPECTED_PLATFORM[bundle]);
+  if (bundle === 'threads') expect(result.crossOriginIsolated, 'threads needs a cross-origin isolated page').toBe(true);
   expect(result.error, result.error).toBeUndefined();
   expect(result.pgrVersion).toBe(bundledPgroutingVersion(readFileSync(PGROUTING_CMAKELISTS, 'utf8')));
   // A locally served build is checked through its own metadata: DuckDB-Wasm reports an empty

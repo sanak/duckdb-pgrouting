@@ -5,10 +5,11 @@
 // apache-arrow by bare specifier, which a browser cannot resolve on its own.
 
 import * as duckdb from '@duckdb/duckdb-wasm';
+import { duckdbBundles } from './modes.mjs';
+import { withTimeout } from './timeout.mjs';
 
-const BUNDLES = {
-  base: { mainModule: '/duckdb/duckdb-base.wasm', mainWorker: '/duckdb/duckdb-browser-base.worker.js' },
-};
+// Each step that has hung before, or fetches a module, ends as an error naming it instead.
+const STEP_TIMEOUT_MS = 60_000;
 
 const EDGES = 'SELECT id, source, target, cost, reverse_cost FROM edges';
 const EDGES_XY = 'SELECT id, source, target, cost, reverse_cost, x1, y1, x2, y2 FROM edges';
@@ -25,24 +26,26 @@ async function rows(conn, sql) {
   return (await conn.query(sql)).toArray().map(plain);
 }
 
-window.runW2 = async function runW2(source) {
+window.runW2 = async function runW2(source, bundleName) {
   const out = {};
+  const step = (promise, what) => withTimeout(promise, STEP_TIMEOUT_MS, what);
   try {
-    const bundle = await duckdb.selectBundle(BUNDLES);
+    const bundle = await duckdb.selectBundle(duckdbBundles(bundleName));
+    out.crossOriginIsolated = globalThis.crossOriginIsolated === true;
     const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(bundle.mainWorker));
-    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    await step(db.instantiate(bundle.mainModule, bundle.pthreadWorker), 'DuckDB-Wasm instantiate');
     await db.open({ allowUnsignedExtensions: true });
     const conn = await db.connect();
     out.variant = (await rows(conn, 'PRAGMA platform'))[0].platform;
     out.duckdbVersion = (await rows(conn, 'SELECT version() AS v'))[0].v;
 
     if (source.community) {
-      await conn.query('INSTALL pgrouting FROM community');
-      await conn.query('LOAD pgrouting');
+      await step(conn.query('INSTALL pgrouting FROM community'), 'INSTALL pgrouting FROM community');
+      await step(conn.query('LOAD pgrouting'), 'LOAD pgrouting');
     } else {
       const path = source.urlTemplate.replaceAll('{version}', out.duckdbVersion).replaceAll('{variant}', out.variant);
       out.extensionUrl = new URL(path, location.href).href;
-      await conn.query(`LOAD '${out.extensionUrl}'`);
+      await step(conn.query(`LOAD '${out.extensionUrl}'`), `LOAD '${out.extensionUrl}'`);
     }
     out.extensionVersion = (
       await rows(conn, "SELECT extension_version AS v FROM duckdb_extensions() WHERE extension_name = 'pgrouting'")
@@ -163,7 +166,7 @@ window.runW2 = async function runW2(source) {
       `SELECT string_agg(node || ':' || degree, ',' ORDER BY node) AS degrees FROM pgr_degree('SELECT id, source, target FROM edges')`,
     );
     // DuckDB-Wasm installs spatial from extensions.duckdb.org on LOAD.
-    await conn.query('LOAD spatial');
+    await step(conn.query('LOAD spatial'), 'LOAD spatial');
     out.vertices = await rows(conn, "SELECT count(*) AS n FROM pgr_extractVertices('SELECT id, geom FROM edges')");
     out.closeEdges = await rows(
       conn,
@@ -171,6 +174,9 @@ window.runW2 = async function runW2(source) {
     );
   } catch (error) {
     out.error = String(error?.message ?? error);
+    if (bundleName === 'threads') {
+      out.error += ' (bundle threads; a threads hang on extension load is duckdb/duckdb-wasm#2288)';
+    }
   }
   return out;
 };

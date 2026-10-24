@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { resolvePath } from '../server.mjs';
+import { isolationHeaders, resolvePath } from '../server.mjs';
 
 const roots = { files: { '/': '/w2/index.html' }, prefixes: [['/ext/', '/tmp/ext'], ['/data/', '/repo/test/data/sampledata']] };
 
@@ -23,4 +23,12 @@ test('a prefix without a directory does not resolve', () => {
 
 test('a malformed escape does not resolve', () => {
   assert.equal(resolvePath('/ext/%E0%A4%A', roots), null);
+});
+
+test('only the threads bundle is served cross-origin isolated', () => {
+  assert.deepEqual(isolationHeaders('base'), {});
+  assert.deepEqual(isolationHeaders('threads'), {
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Embedder-Policy': 'require-corp',
+  });
 });
