@@ -43,8 +43,10 @@ Release is created as a draft and published by a person.
    gh workflow run W2.yml --ref main -f mode=artifact -f run_id=<run id> -f bundle=base
    gh workflow run W2.yml --ref main -f mode=artifact -f run_id=<run id> -f bundle=threads
    ```
-   Both must pass. W2 checks `pgr_version()` against the pgRouting version of its own checkout,
-   so it runs from the line that built the binaries.
+   Both must pass, unless `README.md`'s *DuckDB-Wasm* section records that `wasm_threads` does
+   not load yet: then base must pass and threads must fail only at its `LOAD`. W2 checks
+   `pgr_version()` against the pgRouting version of its own checkout, so it runs from the line
+   that built the binaries.
 3. **Tag the stable-line head** with an annotated tag and push it:
    ```bash
    git switch main && git pull --ff-only
@@ -61,8 +63,10 @@ Release is created as a draft and published by a person.
    gh workflow run W2.yml --ref main -f mode=release -f tag=vX.Y.Z -f bundle=base
    gh workflow run W2.yml --ref main -f mode=release -f tag=vX.Y.Z -f bundle=threads
    ```
-   Both must pass; they also check that the Wasm build's embedded metadata names the tag as the
-   extension version (DuckDB-Wasm itself reports an empty version for an extension loaded by URL).
+   They must pass as in step 2; they also check that the Wasm build's embedded metadata names the
+   tag as the extension version (DuckDB-Wasm itself reports an empty version for an extension
+   loaded by URL). While `wasm_threads` does not load, add that to the draft's notes with the
+   README's issue links.
 5. **Publish** the draft on GitHub. Then, on one platform:
    ```sql
    -- duckdb -unsigned

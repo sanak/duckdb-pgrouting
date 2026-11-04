@@ -34,10 +34,9 @@ Every Release's notes list the ready-to-paste `INSTALL` line for each platform. 
 Platforms: `linux_amd64`, `linux_arm64`, `osx_amd64`, `osx_arm64`, `windows_amd64`,
 `windows_amd64_mingw`, and DuckDB-Wasm (`wasm_eh`, `wasm_threads`; see below).
 
-Releases are built from `main`, which targets the current DuckDB v2.0 release. The latest
-Release, `v0.4.1`, is still built for DuckDB v1.5.6; a Release for DuckDB v2.0.0 follows once
-DuckDB-Wasm for v2.0 is published. The final DuckDB v1.5 state is kept on the `v1.5-variegata`
-branch.
+Releases are built from `main`, which targets the current DuckDB v2.0 release; the latest
+Release, `v0.5.0`, is built for DuckDB v2.0.0. `v0.4.1` is the last Release for DuckDB v1.5.6,
+whose final state is kept on the `v1.5-variegata` branch.
 
 ## Example
 
@@ -212,6 +211,14 @@ Memory is the limit in the browser: wasm32 caps the heap at 4 GB, and browsers u
 1–2 GB, which is on the order of one to two million edges. Beyond that a query fails with an
 out-of-memory error rather than crashing the page. `wasm_threads` needs a page served with
 cross-origin isolation (COOP/COEP headers); `wasm_eh` is the usual choice.
+
+The `wasm_threads` build does not load yet. DuckDB's extension build tooling links every Wasm
+extension against non-shared memory, which DuckDB-Wasm's threads build cannot load
+([duckdb/extension-ci-tools#453](https://github.com/duckdb/extension-ci-tools/issues/453)), and
+DuckDB-Wasm loses the reason a threaded load fails
+([duckdb/duckdb-wasm#2288](https://github.com/duckdb/duckdb-wasm/issues/2288)). DuckDB's own
+`wasm_threads` extensions are affected the same way. The asset is still published, and a later
+Release rebuilds it once both are fixed; use `wasm_eh` until then.
 
 ## Building from source
 
