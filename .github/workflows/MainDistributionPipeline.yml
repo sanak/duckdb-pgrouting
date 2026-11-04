@@ -76,8 +76,9 @@ jobs:
       - name: Download the matching DuckDB CLI
         run: |
           DUCKDB_VERSION=$(python3 scripts/release_assets.py duckdb-version --artifacts "$RUNNER_TEMP/artifacts")
-          gh release download "$DUCKDB_VERSION" -R duckdb/duckdb -p duckdb_cli-linux-amd64.zip -D "$RUNNER_TEMP/cli"
-          unzip -q "$RUNNER_TEMP/cli/duckdb_cli-linux-amd64.zip" -d "$RUNNER_TEMP/cli"
+          # DuckDB v2.0 names its CLI archives duckdb-cli-<platform>.tar.gz (v1.5: duckdb_cli-….zip).
+          gh release download "$DUCKDB_VERSION" -R duckdb/duckdb -p duckdb-cli-linux-amd64.tar.gz -D "$RUNNER_TEMP/cli"
+          tar -xzf "$RUNNER_TEMP/cli/duckdb-cli-linux-amd64.tar.gz" -C "$RUNNER_TEMP/cli"
           echo "DUCKDB_VERSION=$DUCKDB_VERSION" >> "$GITHUB_ENV"
 
       - name: Verify the build and prepare the assets
